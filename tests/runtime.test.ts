@@ -88,6 +88,17 @@ describe('createTypedDb.query', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('runs identically when the strict option is enabled', async () => {
+    const sampleRows = [{ id: 1, name: 'ada' }];
+    const { executor, calls } = executorReturning(sampleRows);
+    const db = createTypedDb<DB, { strict: true }>(executor, { strict: true });
+
+    const result = await db.query('select id, name from users');
+
+    expect(isOk(result)).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
   it('returns EXECUTOR_FAILED preserving the original cause when the executor throws', async () => {
     const boom = new Error('connection lost');
     const { executor } = executorThrowing(boom);

@@ -33,5 +33,11 @@ export type StripQualifier<S extends string> = S extends `${string}.${infer Rest
   ? StripQualifier<Rest>
   : S;
 
+export type Qualifier<S extends string> = S extends `${infer Head}.${string}` ? Head : '';
+
+export type DropFirstWord<S extends string> = S extends `${string} ${infer Rest}`
+  ? Rest
+  : '';
+
 export type IsKeyword<Token extends string, Keyword extends string> =
   Lowercase<Token> extends Lowercase<Keyword> ? true : false;

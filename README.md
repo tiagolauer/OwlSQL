@@ -30,6 +30,11 @@ if (result.status === ResultStatus.Ok) {
   - [3. Run queries and handle the Result](#3-run-queries-and-handle-the-result)
   - [4. Aliases, `*`, and qualified columns](#4-aliases--and-qualified-columns)
   - [5. Type-only usage (no client)](#5-type-only-usage-no-client)
+  - [6. Aggregates and functions](#6-aggregates-and-functions)
+  - [7. INSERT / UPDATE / DELETE with RETURNING](#7-insert--update--delete-with-returning)
+  - [8. Strict mode — turn typos into type errors](#8-strict-mode--turn-typos-into-type-errors)
+  - [9. Joins](#9-joins)
+  - [10. Typed parameters](#10-typed-parameters)
 - [Driver recipes](#driver-recipes)
 - [API reference](#api-reference)
 - [Supported SQL subset](#supported-sql-subset)
@@ -165,7 +170,9 @@ type DB = {
 ```
 
 This type is the single source of truth for what your tables look like. It has
-no runtime cost — it is erased during compilation.
+no runtime cost — it is erased during compilation. Mark nullable columns with
+`| null` (e.g. `bio: string | null`) and that nullability flows straight into
+your query results.
 
 ### 2. Create a typed client
 
@@ -285,6 +292,118 @@ function renderUsers(rows: Query<DB, 'select id, name from users'>) {
 `Row<DB, Q>` gives the single-row object (without the surrounding array) if you
 need it.
 
+### 6. Aggregates and functions
+
+Common SQL functions resolve to their return type, and the output column is
+named after the function (or its alias):
+
+```ts
+const stats = await db.query('select count(*) from users');
+//     stats.value ^? { count: number }[]
+
+const named = await db.query('select count(*) as total, max(age) as oldest from users');
+//     named.value ^? { total: number; oldest: number }[]
+
+const shout = await db.query('select id, upper(name) as name from users');
+//     shout.value ^? { id: number; name: string }[]
+```
+
+Recognized: `count`, `sum`, `avg`, `min`, `max`, `length`, `char_length`,
+`octet_length`, `abs`, `ceil`, `floor`, `round` → `number`; `lower`, `upper`,
+`trim`, `ltrim`, `rtrim`, `concat` → `string`; `coalesce` → `unknown`. Anything
+else resolves to `unknown`.
+
+### 7. INSERT / UPDATE / DELETE with RETURNING
+
+`RETURNING` is typed exactly like a `SELECT` projection against the target
+table:
+
+```ts
+const created = await db.query(
+  'insert into users (name, email) values ($1, $2) returning id, name',
+);
+//     created.value ^? { id: number; name: string }[]
+
+const updated = await db.query('update users set active = $1 where id = $2 returning *');
+//     updated.value ^? { id: number; name: string; email: string; active: boolean }[]
+```
+
+A write without `RETURNING` resolves to `Record<string, never>[]` (no row
+columns).
+
+### 8. Strict mode — turn typos into type errors
+
+By default an unknown column or table resolves to `unknown` (permissive). Pass
+`{ strict: true }` and the result instead becomes a `QueryTypeError` carrying a
+human-readable message, so a typo is impossible to ignore:
+
+```ts
+const db = createTypedDb<DB>(executor, { strict: true });
+
+const ok = await db.query('select id, name from users');
+//     ok.value ^? { id: number; name: string }[]
+
+const typo = await db.query('select naem from users');
+//     typo.value ^? QueryTypeError<'unknown column: naem'>[]
+```
+
+The error type propagates wherever you use the rows, surfacing the message in
+hovers and breaking any code that treats them as real data.
+
+### 9. Joins
+
+`INNER JOIN`, `LEFT [OUTER] JOIN`, and `CROSS JOIN` are supported, with table
+aliases and any number of joins. Qualified columns (`alias.column`) resolve to
+the aliased table; unqualified columns are searched across every joined table.
+
+```ts
+const rows = await db.query(
+  'select u.name, p.title from users u join posts p on u.id = p.user_id',
+);
+//     rows.value ^? { name: string; title: string }[]
+```
+
+A `LEFT JOIN` makes the right-hand table's columns nullable, because those rows
+may not exist:
+
+```ts
+const rows = await db.query(
+  'select u.name, p.title from users u left join posts p on u.id = p.user_id',
+);
+//     rows.value ^? { name: string; title: string | null }[]
+```
+
+`select *` across a join merges the columns of every table (applying join
+nullability). In strict mode, an unknown alias becomes
+`QueryTypeError<'unknown alias: x'>`.
+
+### 10. Typed parameters
+
+Placeholders in the query are typed from the column they're compared against, so
+`query` checks the **number and types** of the arguments you pass:
+
+```ts
+await db.query('select id from users where id = $1', 1);
+//                                          ^ inferred [number]
+
+await db.query('select id from users where id = $1 and name = $2', 1, 'ada');
+//                                                          inferred [number, string]
+
+// @ts-expect-error wrong type — id is a number
+await db.query('select id from users where id = $1', 'oops');
+
+// @ts-expect-error wrong count — one param expected
+await db.query('select id from users where id = $1');
+```
+
+Both numbered (`$1`, `$2`) and positional (`?`) placeholders work, including
+across joins (`where p.views > $1` resolves against the aliased table). Use the
+`Params<DB, Q>` type to get the tuple on its own.
+
+For this to work, write the comparison **with spaces around the operator**
+(`id = $1`, not `id=$1`) — that is what lets the compiler see the column,
+operator, and placeholder as separate tokens.
+
 ## Driver recipes
 
 The executor is the only thing that touches your database, so any driver works.
@@ -336,11 +455,17 @@ const db = createTypedDb<DB>(async (text, params) => {
 
 | Export | Kind | Description |
 | ------ | ---- | ----------- |
-| `createTypedDb<DB>(executor)` | function | Build a schema-bound client. |
-| `TypedDb<DB>` | interface | The client; has `query<Q>(sql, ...params)`. |
+| `createTypedDb<DB>(executor, options?)` | function | Build a schema-bound client. `options.strict` enables [strict mode](#8-strict-mode--turn-typos-into-type-errors). |
+| `TypedDb<DB, Strict?>` | interface | The client; has `query<Q>(sql, ...params)`. |
+| `TypedDbOptions` | interface | `{ strict?: boolean }`. |
 | `Executor` | type | `(sql: string, params: readonly unknown[]) => Promise<unknown[]>`. |
 | `Query<DB, Q>` | type | Inferred result array for query `Q`. |
 | `Row<DB, Q>` | type | Inferred single-row object for query `Q`. |
+| `StrictQuery<DB, Q>` | type | Like `Query`, but unknown columns/tables become a `QueryTypeError`. |
+| `StrictRow<DB, Q>` | type | Single-row strict variant. |
+| `Params<DB, Q>` | type | Inferred parameter tuple for query `Q`. |
+| `QueryTypeError<Message>` | type | Branded compile-time error carrying `Message`. |
+| `FunctionReturnTypes` | interface | SQL-function → return-type registry. |
 | `Result<T, E>` | type | `Ok<T> \| Err<E>` discriminated union. |
 | `ResultStatus` | enum | `Ok` / `Error`. |
 | `ok` / `err` | function | Construct a success / error result. |
@@ -377,18 +502,37 @@ this.**
 | Case-insensitive keywords | `SELECT id FROM users` |
 | Newlines / messy whitespace | multi-line queries are normalized |
 | Trailing clauses (ignored) | `... where active = true order by id limit 10` |
+| Aggregates / functions | `select count(*) as total, lower(name) from users` |
+| `RETURNING` | `insert into users (name) values ($1) returning id` |
+| Nullable columns | `bio: string \| null` → `{ bio: string \| null }` |
+| Joins | `select u.name, p.title from users u join posts p on u.id = p.user_id` |
+| `LEFT JOIN` nullability | right-hand columns become `T \| null` |
+| Typed parameters | `where id = $1` → `query(sql, id: number)` |
+| Strict mode | `{ strict: true }` → unknown column becomes a `QueryTypeError` |
 
 ## Limitations
 
 This is a focused tool for the common read path, not a full SQL grammar:
 
-- **One table per query.** No `JOIN` result merging yet.
-- **`SELECT *` must be the only item.** `select *, extra` is not supported.
-- **Expressions and function calls** (`count(*)`, `lower(name)`) resolve to
-  `unknown`.
-- **Unknown columns or tables resolve to `unknown`**, not a type error — kept
-  permissive on purpose so a typo degrades gracefully rather than nuking the
-  whole row type.
+- **`SELECT *` must be the only item.** `select *, extra` and `alias.*` are not
+  supported.
+- **Function arguments must not contain spaces.** `count(*)`, `lower(name)`,
+  `sum(price)` work; `count(distinct id)` and `concat(a, b)` (space after the
+  comma) do not.
+- **Aggregates assume numeric output.** `min`/`max` resolve to `number` even
+  over a text column; unrecognized functions resolve to `unknown`.
+- **`RIGHT`/`FULL` joins are approximate.** They are parsed, but only the
+  right-hand table is made nullable — the left-hand nullability a `RIGHT`/`FULL`
+  join implies is not applied. `INNER`, `LEFT`, and `CROSS` are exact.
+- **`select *` across a join merges columns by name.** When two tables share a
+  column name (e.g. both have `id`), the types are intersected rather than kept
+  separate. Alias the columns to keep them distinct.
+- **Typed parameters need spaced operators.** `where id = $1` is typed;
+  `where id=$1` is not. `IN (...)` lists and parameters inside `INSERT ...
+  VALUES` are not typed (they fall back to a flexible `unknown[]`). Numbered
+  placeholders are assumed to appear in ascending order (`$1`, `$2`, ...).
+- **Unknown columns, tables, or aliases resolve to `unknown`** by default — pass
+  `{ strict: true }` to turn them into a `QueryTypeError` instead.
 
 These are deliberate scope choices; the [FAQ](#faq) covers how to work around
 them.

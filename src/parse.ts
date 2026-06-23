@@ -3,6 +3,7 @@ import type {
   Trim,
   FirstWord,
   StripQualifier,
+  Qualifier,
   IsKeyword,
 } from './string.js';
 import type {
@@ -10,10 +11,13 @@ import type {
   FunctionOutputName,
   FunctionReturnType,
 } from './functions.js';
+import type { Source, ParseFromClause } from './from.js';
 
 export type Schema = Record<string, Record<string, unknown>>;
 
 export type SchemaLike = object;
+
+export type { Source } from './from.js';
 
 export type QueryTypeError<Message extends string> = {
   readonly __sqlTypeError: Message;
@@ -56,9 +60,11 @@ type ReturningColumns<S extends string> = AfterKeyword<S, 'returning'> extends i
     : ''
   : '';
 
-export interface ParsedSelect {
+type SingleSource<Table extends string> = [{ table: Table; alias: Table; nullable: false }];
+
+export interface ParsedStatement {
   columns: string;
-  table: string;
+  sources: Source[];
 }
 
 type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer Body
@@ -67,7 +73,7 @@ type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer B
         columns: infer Columns extends string;
         afterFrom: infer AfterFrom extends string;
       }
-      ? { columns: Columns; table: FirstWord<AfterFrom> }
+      ? { columns: Columns; sources: ParseFromClause<AfterFrom> }
       : never
     : never
   : never;
@@ -76,11 +82,11 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
   ? IsKeyword<Keyword, 'select'> extends true
     ? ParseSelectBody<S>
     : IsKeyword<Keyword, 'insert'> extends true
-      ? { columns: ReturningColumns<S>; table: WordAfterKeyword<S, 'into'> }
+      ? { columns: ReturningColumns<S>; sources: SingleSource<WordAfterKeyword<S, 'into'>> }
       : IsKeyword<Keyword, 'update'> extends true
-        ? { columns: ReturningColumns<S>; table: WordAfterKeyword<S, 'update'> }
+        ? { columns: ReturningColumns<S>; sources: SingleSource<WordAfterKeyword<S, 'update'>> }
         : IsKeyword<Keyword, 'delete'> extends true
-          ? { columns: ReturningColumns<S>; table: WordAfterKeyword<S, 'from'> }
+          ? { columns: ReturningColumns<S>; sources: SingleSource<WordAfterKeyword<S, 'from'>> }
           : never
   : never;
 
@@ -105,47 +111,128 @@ type ParseColumnEntry<Entry extends string> =
       ? [Trim<Alias>, Trim<Expression>]
       : [OutputName<Trim<Entry>>, Trim<Entry>];
 
-type ResolveColumnType<
-  DB extends SchemaLike,
-  Table extends string,
-  Source extends string,
-  Strict extends boolean,
-> = IsFunctionCall<Source> extends true
-  ? FunctionReturnType<Source>
-  : Table extends keyof DB
-    ? StripQualifier<Source> extends keyof DB[Table]
-      ? DB[Table][StripQualifier<Source>]
-      : Strict extends true
-        ? QueryTypeError<`unknown column: ${Source}`>
-        : unknown
-    : Strict extends true
-      ? QueryTypeError<`unknown table: ${Table}`>
-      : unknown;
-
-type RowFromColumnEntries<
-  DB extends SchemaLike,
-  Table extends string,
-  Entries extends [string, string][],
-  Strict extends boolean,
-> = {
-  [Entry in Entries[number] as Entry[0]]: ResolveColumnType<DB, Table, Entry[1], Strict>;
-};
-
 type ParseColumnEntries<Columns extends string[]> = {
   [Index in keyof Columns]: ParseColumnEntry<Columns[Index]>;
 };
 
-type IsSelectAll<Columns extends string> = Trim<Columns> extends '*' ? true : false;
+type ApplyNull<T, Nullable extends boolean> = Nullable extends true ? T | null : T;
 
-type StarRow<
+type SourceColumnType<
   DB extends SchemaLike,
-  Table extends string,
+  S extends Source,
+  Column extends string,
+> = S['table'] extends keyof DB
+  ? Column extends keyof DB[S['table']]
+    ? ApplyNull<DB[S['table']][Column], S['nullable']>
+    : never
+  : never;
+
+type ResolveBareAcross<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Column extends string,
+> = Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
+  ? SourceColumnType<DB, Head, Column> extends infer Type
+    ? [Type] extends [never]
+      ? ResolveBareAcross<DB, Tail, Column>
+      : Type
+    : never
+  : never;
+
+type AnyKnownTable<DB extends SchemaLike, Sources extends Source[]> =
+  Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
+    ? Head['table'] extends keyof DB
+      ? true
+      : AnyKnownTable<DB, Tail>
+    : false;
+
+type FirstUnknownTable<DB extends SchemaLike, Sources extends Source[]> =
+  Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
+    ? Head['table'] extends keyof DB
+      ? FirstUnknownTable<DB, Tail>
+      : Head['table']
+    : '';
+
+type FirstSourceTable<Sources extends Source[]> = Sources extends [
+  infer Head extends Source,
+  ...Source[],
+]
+  ? Head['table']
+  : '';
+
+type BareColumnType<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Column extends string,
   Strict extends boolean,
-> = Table extends keyof DB
-  ? { [Column in keyof DB[Table]]: DB[Table][Column] }
-  : Strict extends true
-    ? QueryTypeError<`unknown table: ${Table}`>
-    : unknown;
+> = ResolveBareAcross<DB, Sources, Column> extends infer Type
+  ? [Type] extends [never]
+    ? Strict extends true
+      ? AnyKnownTable<DB, Sources> extends true
+        ? QueryTypeError<`unknown column: ${Column}`>
+        : QueryTypeError<`unknown table: ${FirstSourceTable<Sources>}`>
+      : unknown
+    : Type
+  : never;
+
+type FindSourceByName<Sources extends Source[], Name extends string> =
+  Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
+    ? IsKeyword<Head['alias'], Name> extends true
+      ? Head
+      : IsKeyword<Head['table'], Name> extends true
+        ? Head
+        : FindSourceByName<Tail, Name>
+    : never;
+
+type QualifiedColumnType<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Name extends string,
+  Column extends string,
+  Strict extends boolean,
+> = FindSourceByName<Sources, Name> extends infer Found
+  ? [Found] extends [never]
+    ? Strict extends true
+      ? QueryTypeError<`unknown alias: ${Name}`>
+      : unknown
+    : Found extends Source
+      ? Found['table'] extends keyof DB
+        ? Column extends keyof DB[Found['table']]
+          ? ApplyNull<DB[Found['table']][Column], Found['nullable']>
+          : Strict extends true
+            ? QueryTypeError<`unknown column: ${Column}`>
+            : unknown
+        : Strict extends true
+          ? QueryTypeError<`unknown table: ${Found['table']}`>
+          : unknown
+      : never
+  : never;
+
+type ResolveColumnType<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Expression extends string,
+  Strict extends boolean,
+> = IsFunctionCall<Expression> extends true
+  ? FunctionReturnType<Expression>
+  : Qualifier<Expression> extends ''
+    ? BareColumnType<DB, Sources, Expression, Strict>
+    : QualifiedColumnType<DB, Sources, Qualifier<Expression>, StripQualifier<Expression>, Strict>;
+
+export type ResolveColumnLoose<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Expression extends string,
+> = ResolveColumnType<DB, Sources, Expression, false>;
+
+type RowFromColumnEntries<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Entries extends [string, string][],
+  Strict extends boolean,
+> = {
+  [Entry in Entries[number] as Entry[0]]: ResolveColumnType<DB, Sources, Entry[1], Strict>;
+};
 
 type CollectRowErrors<Row> = {
   [Key in keyof Row]: Row[Key] extends QueryTypeError<infer Message>
@@ -157,12 +244,48 @@ type SurfaceErrors<Row> = [CollectRowErrors<Row>] extends [never] ? Row : Collec
 
 type BuildRow<
   DB extends SchemaLike,
-  Table extends string,
+  Sources extends Source[],
   Entries extends [string, string][],
   Strict extends boolean,
 > = Strict extends true
-  ? SurfaceErrors<RowFromColumnEntries<DB, Table, Entries, true>>
-  : RowFromColumnEntries<DB, Table, Entries, false>;
+  ? SurfaceErrors<RowFromColumnEntries<DB, Sources, Entries, true>>
+  : RowFromColumnEntries<DB, Sources, Entries, false>;
+
+type MergeSourceColumns<DB extends SchemaLike, S extends Source> = S['table'] extends keyof DB
+  ? { [Column in keyof DB[S['table']]]: ApplyNull<DB[S['table']][Column], S['nullable']> }
+  : unknown;
+
+type MergedStarColumns<DB extends SchemaLike, Sources extends Source[]> = Sources extends [
+  infer Head extends Source,
+  ...infer Tail extends Source[],
+]
+  ? MergeSourceColumns<DB, Head> & MergedStarColumns<DB, Tail>
+  : unknown;
+
+type Flatten<T> = { [Key in keyof T]: T[Key] };
+
+type AllKnownTables<DB extends SchemaLike, Sources extends Source[]> = Sources extends [
+  infer Head extends Source,
+  ...infer Tail extends Source[],
+]
+  ? Head['table'] extends keyof DB
+    ? AllKnownTables<DB, Tail>
+    : false
+  : true;
+
+type StarRow<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Strict extends boolean,
+> = Strict extends true
+  ? AllKnownTables<DB, Sources> extends true
+    ? Flatten<MergedStarColumns<DB, Sources>>
+    : QueryTypeError<`unknown table: ${FirstUnknownTable<DB, Sources>}`>
+  : AnyKnownTable<DB, Sources> extends true
+    ? Flatten<MergedStarColumns<DB, Sources>>
+    : unknown;
+
+type IsSelectAll<Columns extends string> = Trim<Columns> extends '*' ? true : false;
 
 type EmptyRow = Record<string, never>;
 
@@ -172,15 +295,15 @@ type InferRowWith<
   Strict extends boolean,
 > = ParseStatement<Q> extends {
   columns: infer Columns extends string;
-  table: infer Table extends string;
+  sources: infer Sources extends Source[];
 }
   ? Trim<Columns> extends ''
     ? EmptyRow
     : IsSelectAll<Columns> extends true
-      ? StarRow<DB, Table, Strict>
+      ? StarRow<DB, Sources, Strict>
       : BuildRow<
           DB,
-          Table,
+          Sources,
           ParseColumnEntries<SplitColumnList<Columns>> extends [string, string][]
             ? ParseColumnEntries<SplitColumnList<Columns>>
             : [],

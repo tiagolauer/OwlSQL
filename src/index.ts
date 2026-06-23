@@ -6,6 +6,7 @@ import type {
   InferResultStrict,
   InferRowStrict,
 } from './parse.js';
+import type { InferParams } from './params.js';
 import { type Result, ok, err } from './result.js';
 
 export type {
@@ -17,8 +18,9 @@ export type {
   InferRowStrict,
   QueryTypeError,
 } from './parse.js';
-export type { ParseSelect, ParseStatement, ParsedSelect } from './parse.js';
+export type { ParseSelect, ParseStatement, ParsedStatement, Source } from './parse.js';
 export type { FunctionReturnTypes } from './functions.js';
+export type { InferParams } from './params.js';
 export type { Result, Ok, Err } from './result.js';
 export { ResultStatus, ok, err, isOk, isErr } from './result.js';
 
@@ -29,6 +31,8 @@ export type Row<DB extends SchemaLike, Q extends string> = InferRow<DB, Q>;
 export type StrictQuery<DB extends SchemaLike, Q extends string> = InferResultStrict<DB, Q>;
 
 export type StrictRow<DB extends SchemaLike, Q extends string> = InferRowStrict<DB, Q>;
+
+export type Params<DB extends SchemaLike, Q extends string> = InferParams<DB, Q>;
 
 export enum QueryErrorKind {
   EmptyQuery = 'EMPTY_QUERY',
@@ -50,7 +54,7 @@ export interface TypedDbOptions {
 export interface TypedDb<DB extends SchemaLike, Strict extends boolean = false> {
   query<Q extends string>(
     sql: Q,
-    ...params: readonly unknown[]
+    ...params: InferParams<DB, Q>
   ): Promise<
     Result<Strict extends true ? InferResultStrict<DB, Q> : InferResult<DB, Q>, QueryError>
   >;
