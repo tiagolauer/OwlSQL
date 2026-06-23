@@ -35,8 +35,7 @@ if (result.status === ResultStatus.Ok) {
 - [Supported SQL subset](#supported-sql-subset)
 - [Limitations](#limitations)
 - [FAQ](#faq)
-- [Publishing](#publishing)
-- [Development](#development)
+- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -415,30 +414,10 @@ roadmap.
 sometimes; modelling that as a value (rather than an exception) forces callers
 to handle it and keeps error handling explicit and type-checked.
 
-## Publishing
+## Contributing
 
-The package ships compiled JavaScript + declarations from `dist/`. The build is
-wired into `prepublishOnly`, so a normal publish compiles for you:
-
-```bash
-npm version <patch|minor|major>
-npm publish            # runs test:types, then build, then publishes dist/
-```
-
-Before the first registry publish, the package is still usable via a local path
-(`npm i file:../sql-template-typed`), a tarball (`npm pack`), a workspace
-protocol, or a git URL.
-
-## Development
-
-```bash
-npm install
-npm run test:types   # tsc --noEmit over src + tests — the type assertions ARE the tests
-npm run build        # emit dist/ with .d.ts (run by you / CI, not during normal dev)
-```
-
-The test suite (`tests/types.test-d.ts`) is pure type assertions: if it
-compiles, the inference is correct.
+Building, testing, and publishing are documented in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
