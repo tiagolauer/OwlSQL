@@ -7,6 +7,9 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "sql-template-typed": "./dist/cli/index.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -50,6 +53,7 @@
   },
   "peerDependencies": {
     "kysely": ">=0.27.0",
+    "mssql": ">=10.0.0",
     "mysql2": ">=3.0.0",
     "pg": ">=8.0.0",
     "postgres": ">=3.0.0",
@@ -57,6 +61,9 @@
   },
   "peerDependenciesMeta": {
     "kysely": {
+      "optional": true
+    },
+    "mssql": {
       "optional": true
     },
     "mysql2": {
@@ -83,9 +90,11 @@
     "access": "public"
   },
   "devDependencies": {
+    "@types/mssql": "^12.3.0",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.20.0",
     "kysely": "^0.29.4",
+    "mssql": "^12.7.0",
     "mysql2": "^3.23.0",
     "pg": "^8.22.0",
     "postgres": "^3.4.9",
