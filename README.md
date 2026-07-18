@@ -408,52 +408,93 @@ operator, and placeholder as separate tokens.
 
 ## Driver recipes
 
-The executor is the only thing that touches your database, so any driver works.
-Each recipe is the same five lines, adapted to one client.
+The executor is the only thing that touches your database, so any driver
+works. For the most common drivers, `sql-template-typed` ships a ready-made
+adapter — import it from its own subpath and pass your existing client
+straight in. No dependency is pulled in unless you import that specific
+subpath (each driver is an optional peer dependency).
 
 **node-postgres (`pg`)**
 
 ```ts
 import { Pool } from 'pg';
-const pool = new Pool();
-const db = createTypedDb<DB>(async (sql, params) => {
-  const res = await pool.query(sql, params as unknown[]);
-  return res.rows;
-});
+import { createPgExecutor } from 'sql-template-typed/pg';
+
+const db = createTypedDb<DB>(createPgExecutor(new Pool()));
 ```
 
 **mysql2**
 
 ```ts
 import { createPool } from 'mysql2/promise';
-const pool = createPool({ /* ... */ });
-const db = createTypedDb<DB>(async (sql, params) => {
-  const [rows] = await pool.query(sql, params as unknown[]);
-  return rows as unknown[];
-});
-```
+import { createMysql2Executor } from 'sql-template-typed/mysql2';
 
-**better-sqlite3** (synchronous driver wrapped in a promise)
-
-```ts
-import Database from 'better-sqlite3';
-const sqlite = new Database('app.db');
-const db = createTypedDb<DB>(async (sql, params) => {
-  return sqlite.prepare(sql).all(...params);
-});
+const db = createTypedDb<DB>(createMysql2Executor(createPool({ /* ... */ })));
 ```
 
 **postgres.js**
 
 ```ts
 import postgres from 'postgres';
-const sql = postgres();
-const db = createTypedDb<DB>(async (text, params) => {
-  return sql.unsafe(text, params as unknown[]);
-});
+import { createPostgresJsExecutor } from 'sql-template-typed/postgres';
+
+const db = createTypedDb<DB>(createPostgresJsExecutor(postgres()));
 ```
 
-**mssql (SQL Server)**
+**node:sqlite** (Node's built-in SQLite module, no dependency to install — Node ≥22.5)
+
+```ts
+import { DatabaseSync } from 'node:sqlite';
+import { createNodeSqliteExecutor } from 'sql-template-typed/node-sqlite';
+
+const db = createTypedDb<DB>(createNodeSqliteExecutor(new DatabaseSync('app.db')));
+```
+
+**better-sqlite3** (synchronous driver wrapped in a promise — no dedicated
+adapter, the same one-liner works with `node:sqlite`'s adapter since both
+expose `prepare(sql).all(...params)`)
+
+```ts
+import Database from 'better-sqlite3';
+const sqlite = new Database('app.db');
+const db = createTypedDb<DB>(async (sql, params) => sqlite.prepare(sql).all(...params));
+```
+
+**Kysely**
+
+```ts
+import { Kysely, PostgresDialect } from 'kysely';
+import { createKyselyExecutor } from 'sql-template-typed/kysely';
+
+const kysely = new Kysely<KyselySchema>({ dialect: new PostgresDialect({ /* ... */ }) });
+const db = createTypedDb<DB>(createKyselyExecutor(kysely));
+```
+
+The adapter runs your query through `CompiledQuery.raw`, so it works
+regardless of which Kysely dialect (`PostgresDialect`, `MysqlDialect`,
+`SqliteDialect`, ...) you configured.
+
+**Drizzle (raw SQL)**
+
+Drizzle's own `sql.raw()` doesn't take a separate parameters array, so it
+can't be wired directly into an `Executor`. Instead, reach through Drizzle to
+the underlying driver client with [`db.$client`](https://orm.drizzle.team/docs/connect-overview)
+and reuse the matching adapter above — one extra line over the plain driver:
+
+```ts
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { createPgExecutor } from 'sql-template-typed/pg';
+
+const drizzleDb = drizzle(process.env.DATABASE_URL!);
+const db = createTypedDb<DB>(createPgExecutor(drizzleDb.$client));
+```
+
+Swap `createPgExecutor` for `createMysql2Executor`/`createPostgresJsExecutor`/
+`createNodeSqliteExecutor` depending on which Drizzle driver you're using —
+`$client` is always the native driver instance underneath.
+
+**mssql (SQL Server)** (no dedicated adapter — `mssql` binds parameters by
+name rather than by position, so the executor needs a couple of extra lines)
 
 ```ts
 import sql from 'mssql';
@@ -515,6 +556,17 @@ query shapes each engine is tested against.
 | `QueryErrorKind` | enum | `EMPTY_QUERY` / `EXECUTOR_FAILED`. |
 | `Schema` | type | Ideal schema shape (`table → column → type`). |
 | `defineSchema(obj)` | function | Optional identity helper (see below). |
+
+**Driver adapters** (each on its own subpath, so no unused peer dependency is
+ever required):
+
+| Export | Subpath | Description |
+| ------ | ------- | ----------- |
+| `createPgExecutor(pool)` | `sql-template-typed/pg` | `pg.Pool` → `Executor`. |
+| `createMysql2Executor(pool)` | `sql-template-typed/mysql2` | `mysql2/promise` `Pool` → `Executor`. |
+| `createPostgresJsExecutor(client)` | `sql-template-typed/postgres` | `postgres.Sql` → `Executor`. |
+| `createNodeSqliteExecutor(db)` | `sql-template-typed/node-sqlite` | `node:sqlite` `DatabaseSync` → `Executor`. |
+| `createKyselyExecutor(db)` | `sql-template-typed/kysely` | `Kysely<DB>` → `Executor`, via `CompiledQuery.raw`. |
 
 **`query` return type.** `query` resolves to
 `Result<Query<DB, Q>, QueryError>`. On success, `result.value` holds the typed
