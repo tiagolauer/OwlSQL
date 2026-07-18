@@ -175,6 +175,41 @@ no runtime cost — it is erased during compilation. Mark nullable columns with
 `| null` (e.g. `bio: string | null`) and that nullability flows straight into
 your query results.
 
+**Optional: generate a starting point with `sql-template-typed generate`.**
+Writing that type by hand is fine for a handful of tables, but you can also
+have it generated from a real database:
+
+```
+npx sql-template-typed generate --url postgres://user:pass@host/db --out schema.ts
+```
+
+This connects to your database, introspects the tables/columns/nullability,
+and writes a `schema.ts` with `export interface DB { ... }` — the exact shape
+from step 1 above. It's a **one-shot generator, not a codegen pipeline**: the
+library still parses your queries entirely at the type level with zero
+runtime codegen, same as always. The generated file is a normal `.ts` file —
+commit it, edit it by hand afterward, rename fields, anything. Running
+`generate` again just overwrites it with a fresh snapshot; nothing stays
+"synced" automatically.
+
+| Flag | Required | Description |
+| ---- | -------- | ----------- |
+| `--url` | yes | Connection string (or a file path for SQLite). |
+| `--out` | no | Output file. Defaults to `./schema.ts`. |
+| `--dialect` | no | `postgres` \| `mysql` \| `sqlite` \| `mssql`. Auto-detected from the URL scheme (`postgres://`/`postgresql://`, `mysql://`, `mssql://`/`sqlserver://`) — falls back to `sqlite` for a bare file path, so it's only needed when that's ambiguous. |
+| `--schema` | no | Schema/database name to introspect. Defaults to `public` (Postgres) or the connected database (MySQL). Not used for SQLite/SQL Server. |
+
+`generate` needs the matching driver installed as a real dependency (`pg`,
+`mysql2`, or `mssql` — SQLite uses the `node:sqlite` builtin, Node ≥22.5). It
+prints a clear error telling you which one to install if it's missing.
+
+**Type mapping is conservative on purpose.** Types where the default driver
+behavior can lose precision — `bigint`, `numeric`/`decimal`, `money` — are
+generated as `string`, not `number`, because that's what `pg`/`mysql2` (and,
+assumed by analogy, `mssql`) actually hand back by default. If your driver is
+configured differently (e.g. mysql2's `supportBigNumbers`), just edit the
+generated field by hand; it's a plain type after that point.
+
 ### 2. Create a typed client
 
 The library never touches your database. You hand `createTypedDb` an
