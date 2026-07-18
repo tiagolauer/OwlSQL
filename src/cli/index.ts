@@ -1,0 +1,72 @@
+#!/usr/bin/env node
+import type { Dialect } from './types.js';
+import { runGenerate } from './generate.js';
+
+const DIALECTS: Dialect[] = ['postgres', 'mysql', 'sqlite', 'mssql'];
+
+function parseFlags(args: string[]): Map<string, string> {
+  const flags = new Map<string, string>();
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg?.startsWith('--')) {
+      continue;
+    }
+
+    const name = arg.slice(2);
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith('--')) {
+      throw new Error(`Missing value for --${name}`);
+    }
+
+    flags.set(name, value);
+    index += 1;
+  }
+
+  return flags;
+}
+
+function parseDialect(raw: string | undefined): Dialect | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (!DIALECTS.includes(raw as Dialect)) {
+    throw new Error(`Unknown --dialect "${raw}". Expected one of: ${DIALECTS.join(', ')}`);
+  }
+
+  return raw as Dialect;
+}
+
+async function main(): Promise<void> {
+  const [command, ...rest] = process.argv.slice(2);
+
+  if (command !== 'generate') {
+    process.stderr.write(
+      'Usage: sql-template-typed generate --url <connection-string> [--out ./schema.ts] [--dialect postgres|mysql|sqlite|mssql] [--schema <name>]\n',
+    );
+    process.exitCode = command === undefined ? 0 : 1;
+    return;
+  }
+
+  const flags = parseFlags(rest);
+  const url = flags.get('url');
+  if (!url) {
+    throw new Error('--url is required, e.g. --url postgres://user:pass@host/db');
+  }
+
+  await runGenerate({
+    url,
+    out: flags.get('out') ?? './schema.ts',
+    dialect: parseDialect(flags.get('dialect')),
+    schema: flags.get('schema'),
+  });
+
+  process.stdout.write(`Wrote ${flags.get('out') ?? './schema.ts'}\n`);
+}
+
+main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`Error: ${message}\n`);
+  process.exitCode = 1;
+});
