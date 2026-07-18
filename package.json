@@ -93,11 +93,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tiagolauer/owlsql.git"
+    "url": "git+https://github.com/tiagolauer/OwlSQL.git"
   },
-  "homepage": "https://github.com/tiagolauer/owlsql#readme",
+  "homepage": "https://github.com/tiagolauer/OwlSQL#readme",
   "bugs": {
-    "url": "https://github.com/tiagolauer/owlsql/issues"
+    "url": "https://github.com/tiagolauer/OwlSQL/issues"
   },
   "publishConfig": {
     "access": "public"
