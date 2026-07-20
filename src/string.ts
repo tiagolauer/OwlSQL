@@ -25,8 +25,23 @@ type RemoveSemicolons<S extends string> = S extends `${infer Before};${infer Aft
   ? RemoveSemicolons<`${Before} ${After}`>
   : S;
 
+type SkipLiteralBody<S extends string> = S extends `${string}'${infer After}`
+  ? After extends `'${infer Rest}`
+    ? SkipLiteralBody<Rest>
+    : { rest: After }
+  : never;
+
+export type MaskStringLiterals<
+  S extends string,
+  Accumulated extends string = '',
+> = S extends `${infer Before}'${infer After}`
+  ? SkipLiteralBody<After> extends { rest: infer Rest extends string }
+    ? MaskStringLiterals<Rest, `${Accumulated}${Before}''`>
+    : `${Accumulated}${S}`
+  : `${Accumulated}${S}`;
+
 export type Normalize<S extends string> = Trim<
-  CollapseSpaces<WhitespaceToSpace<RemoveSemicolons<S>>>
+  CollapseSpaces<WhitespaceToSpace<RemoveSemicolons<MaskStringLiterals<S>>>>
 >;
 
 export type Unquote<S extends string> = S extends `"${infer Inner}"`
