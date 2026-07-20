@@ -2,6 +2,8 @@ import type * as ts from 'typescript';
 
 type TypeScript = typeof import('typescript');
 
+const TYPED_DB_BRAND_PROPERTY = '__owlsqlTypedDb';
+
 interface QueryLiteralMatch {
   literal: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral;
   dbType: ts.Type;
@@ -30,20 +32,49 @@ function isSqlLiteral(
   return typescript.isStringLiteral(node) || typescript.isNoSubstitutionTemplateLiteral(node);
 }
 
+function getQueryPropertyName(typescript: TypeScript, expression: ts.LeftHandSideExpression): string | null {
+  if (typescript.isPropertyAccessExpression(expression)) {
+    return expression.name.text;
+  }
+
+  if (
+    typescript.isElementAccessExpression(expression) &&
+    typescript.isStringLiteralLike(expression.argumentExpression)
+  ) {
+    return expression.argumentExpression.text;
+  }
+
+  return null;
+}
+
+function getReceiverExpression(typescript: TypeScript, call: ts.CallExpression): ts.Expression | null {
+  const expression = call.expression;
+  return typescript.isPropertyAccessExpression(expression) || typescript.isElementAccessExpression(expression)
+    ? expression.expression
+    : null;
+}
+
 function findEnclosingQueryCall(
   typescript: TypeScript,
   literal: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral,
 ): ts.CallExpression | null {
-  const call = literal.parent;
-  if (!call || !typescript.isCallExpression(call) || call.arguments[0] !== literal) {
+  let argumentNode: ts.Expression = literal;
+  let parent = argumentNode.parent;
+
+  while (parent && typescript.isParenthesizedExpression(parent)) {
+    argumentNode = parent;
+    parent = argumentNode.parent;
+  }
+
+  if (!parent || !typescript.isCallExpression(parent) || parent.arguments[0] !== argumentNode) {
     return null;
   }
 
-  if (!typescript.isPropertyAccessExpression(call.expression) || call.expression.name.text !== 'query') {
+  if (getQueryPropertyName(typescript, parent.expression) !== 'query') {
     return null;
   }
 
-  return call;
+  return parent;
 }
 
 function isTypeReference(typescript: TypeScript, type: ts.Type): type is ts.TypeReference {
@@ -53,11 +84,29 @@ function isTypeReference(typescript: TypeScript, type: ts.Type): type is ts.Type
   );
 }
 
-function isTypedDbQueryMethod(checker: ts.TypeChecker, call: ts.CallExpression): boolean {
-  const signature = checker.getResolvedSignature(call);
-  const declaration = signature?.declaration;
-  const parent = declaration?.parent;
-  return parent !== undefined && 'name' in parent && (parent as { name?: ts.Identifier }).name?.text === 'TypedDb';
+function hasTypedDbBrand(checker: ts.TypeChecker, type: ts.Type): boolean {
+  return checker.getPropertyOfType(type, TYPED_DB_BRAND_PROPERTY) !== undefined;
+}
+
+function findTypedDbTypeReference(
+  typescript: TypeScript,
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.TypeReference | null {
+  if (isTypeReference(typescript, type) && hasTypedDbBrand(checker, type)) {
+    return type;
+  }
+
+  if (type.isIntersection()) {
+    for (const constituent of type.types) {
+      const found = findTypedDbTypeReference(typescript, checker, constituent);
+      if (found) {
+        return found;
+      }
+    }
+  }
+
+  return null;
 }
 
 function matchQueryLiteral(
@@ -72,16 +121,22 @@ function matchQueryLiteral(
   }
 
   const call = findEnclosingQueryCall(typescript, node);
-  if (!call || !isTypedDbQueryMethod(checker, call)) {
+  if (!call) {
     return null;
   }
 
-  const objectExpression = (call.expression as ts.PropertyAccessExpression).expression;
-  const objectType = checker.getTypeAtLocation(objectExpression);
-  const dbType = isTypeReference(typescript, objectType)
-    ? checker.getTypeArguments(objectType)[0]
-    : undefined;
+  const receiver = getReceiverExpression(typescript, call);
+  if (!receiver) {
+    return null;
+  }
 
+  const receiverType = checker.getTypeAtLocation(receiver);
+  const typedDbRef = findTypedDbTypeReference(typescript, checker, receiverType);
+  if (!typedDbRef) {
+    return null;
+  }
+
+  const dbType = checker.getTypeArguments(typedDbRef)[0];
   if (!dbType) {
     return null;
   }

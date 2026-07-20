@@ -1,20 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import detectModule from '../src/ts-plugin/detect.cts';
 import schemaModule from '../src/ts-plugin/schema.cts';
 import sqlContext from '../src/ts-plugin/sql-context.cts';
+import { buildProgram } from './ts-plugin-test-helpers.js';
 
 const { matchQueryLiteral } = detectModule;
 const { getColumnType } = schemaModule;
 const { findFromTable, getWordAtOffset } = sqlContext;
 
 const FIXTURE = `
-interface TypedDb<DB> {
-  query(sql: string): Promise<unknown>;
-}
+import type { TypedDb } from '@owlsql/core';
 
 interface DB {
   users: { id: number; name: string; email: string | null };
@@ -26,26 +23,6 @@ declare const db: TypedDb<DB>;
 db.query(\`select id, name from users\`);
 db.query(\`select id from posts\`);
 `;
-
-function buildProgram(source: string): { program: ts.Program; sourceFile: ts.SourceFile; dir: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'owlsql-ts-plugin-hover-'));
-  const filePath = join(dir, 'fixture.ts');
-  writeFileSync(filePath, source, 'utf8');
-
-  const program = ts.createProgram([filePath], {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    strict: true,
-  });
-
-  const sourceFile = program.getSourceFile(filePath);
-  if (!sourceFile) {
-    throw new Error('fixture source file was not found in the program');
-  }
-
-  return { program, sourceFile, dir };
-}
 
 describe('getWordAtOffset', () => {
   it('finds the word the cursor sits inside', () => {
@@ -77,7 +54,7 @@ describe('ts-plugin hover: getColumnType against a real ts.Program', () => {
   });
 
   it('resolves the type of a column scoped to its FROM table', () => {
-    const { program, sourceFile, dir } = buildProgram(FIXTURE);
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-hover-');
     cleanupDir = dir;
     const checker = program.getTypeChecker();
 
@@ -100,7 +77,7 @@ describe('ts-plugin hover: getColumnType against a real ts.Program', () => {
   });
 
   it('resolves a nullable column type', () => {
-    const { program, sourceFile, dir } = buildProgram(FIXTURE);
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-hover-');
     cleanupDir = dir;
     const checker = program.getTypeChecker();
 
@@ -117,7 +94,7 @@ describe('ts-plugin hover: getColumnType against a real ts.Program', () => {
   });
 
   it('returns null for a word that is not a real column', () => {
-    const { program, sourceFile, dir } = buildProgram(FIXTURE);
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-hover-');
     cleanupDir = dir;
     const checker = program.getTypeChecker();
 
