@@ -1,20 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import detectModule from '../src/ts-plugin/detect.cts';
 import schemaModule from '../src/ts-plugin/schema.cts';
 import sqlContext from '../src/ts-plugin/sql-context.cts';
+import { buildProgram } from './ts-plugin-test-helpers.js';
 
 const { matchQueryLiteral } = detectModule;
 const { getColumnNames } = schemaModule;
 const { getSelectListContext, getWhereClauseContext, findFromTable } = sqlContext;
 
 const FIXTURE = `
-interface TypedDb<DB> {
-  query(sql: string): Promise<unknown>;
-}
+import type { TypedDb } from '@owlsql/core';
 
 interface DB {
   users: { id: number; name: string; email: string };
@@ -28,26 +25,6 @@ db.query(\`select id, na from posts\`);
 db.query(\`select id from users where na\`);
 `;
 
-function buildProgram(source: string): { program: ts.Program; sourceFile: ts.SourceFile; filePath: string; dir: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'owlsql-ts-plugin-'));
-  const filePath = join(dir, 'fixture.ts');
-  writeFileSync(filePath, source, 'utf8');
-
-  const program = ts.createProgram([filePath], {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    strict: true,
-  });
-
-  const sourceFile = program.getSourceFile(filePath);
-  if (!sourceFile) {
-    throw new Error('fixture source file was not found in the program');
-  }
-
-  return { program, sourceFile, filePath, dir };
-}
-
 describe('ts-plugin: detect + schema against a real ts.Program', () => {
   let cleanupDir: string | null = null;
 
@@ -59,7 +36,7 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
   });
 
   it('detects a db.query(...) call and resolves its DB type argument', () => {
-    const { program, sourceFile, dir } = buildProgram(FIXTURE);
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-completions-');
     cleanupDir = dir;
     const checker = program.getTypeChecker();
 
@@ -70,7 +47,7 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
   });
 
   it('suggests columns from the union of all tables when no FROM is typed yet', () => {
-    const { program, sourceFile, dir } = buildProgram(FIXTURE);
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-completions-');
     cleanupDir = dir;
     const checker = program.getTypeChecker();
 
@@ -95,7 +72,7 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
   });
 
   it('scopes columns to the FROM table once one is present', () => {
-    const { program, sourceFile, dir } = buildProgram(FIXTURE);
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-completions-');
     cleanupDir = dir;
     const checker = program.getTypeChecker();
 
@@ -116,7 +93,7 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
   });
 
   it('suggests columns after WHERE, scoped to the FROM table', () => {
-    const { program, sourceFile, dir } = buildProgram(FIXTURE);
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-completions-');
     cleanupDir = dir;
     const checker = program.getTypeChecker();
 
