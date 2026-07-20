@@ -356,6 +356,17 @@ type FirstSourceTable<Sources extends Source[]> = Sources extends [
   ? Head['table']
   : '';
 
+type CountBareMatches<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Column extends string,
+  Count extends unknown[] = [],
+> = Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
+  ? [SourceColumnType<DB, Head, Column>] extends [never]
+    ? CountBareMatches<DB, Tail, Column, Count>
+    : CountBareMatches<DB, Tail, Column, [...Count, unknown]>
+  : Count;
+
 type BareColumnType<
   DB extends SchemaLike,
   Sources extends Source[],
@@ -370,7 +381,11 @@ type BareColumnType<
           ? QueryTypeError<`unknown column: ${Column}`>
           : QueryTypeError<`unknown table: ${FirstSourceTable<Sources>}`>
       : unknown
-    : Type
+    : Strict extends true
+      ? CountBareMatches<DB, Sources, Column> extends [unknown, unknown, ...unknown[]]
+        ? QueryTypeError<`ambiguous column: ${Column}`>
+        : Type
+      : Type
   : never;
 
 type FindSourceByName<Sources extends Source[], Name extends string> =
@@ -459,6 +474,62 @@ type ScalarSubqueryType<
         : Row[keyof Row]
   : unknown;
 
+type StripDistinctPrefix<Arg extends string> = IsKeyword<FirstWord<Arg>, 'distinct'> extends true
+  ? Trim<DropFirstWord<Arg>>
+  : Arg;
+
+type FunctionArgError<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Arg extends string,
+> = Arg extends '' | '*' | `${string} ${string}` | `$${string}` | `@${string}` | '?'
+  ? never
+  : StripQualifier<Arg> extends '*'
+    ? never
+    : [LiteralType<Arg>] extends [never]
+      ? IsFunctionCall<Arg> extends true
+        ? FunctionCallError<DB, Sources, Arg>
+        : IsOperatorExpression<Arg> extends true
+          ? never
+          : ResolveColumnType<DB, Sources, Arg, true> extends QueryTypeError<infer Message>
+            ? QueryTypeError<Message>
+            : never
+      : never;
+
+type FirstFunctionArgError<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Args extends string[],
+> = Args extends [infer Head extends string, ...infer Tail extends string[]]
+  ? FunctionArgError<DB, Sources, StripDistinctPrefix<Trim<Head>>> extends infer Error
+    ? [Error] extends [never]
+      ? FirstFunctionArgError<DB, Sources, Tail>
+      : Error
+    : never
+  : never;
+
+type FunctionCallError<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Expression extends string,
+> = Expression extends `${string}(${infer AfterOpen}`
+  ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string }
+    ? Trim<Inner> extends ''
+      ? never
+      : FirstFunctionArgError<DB, Sources, SplitColumnList<Inner>>
+    : never
+  : never;
+
+type StrictFunctionType<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Expression extends string,
+> = FunctionCallError<DB, Sources, Expression> extends infer Error
+  ? [Error] extends [never]
+    ? FunctionReturnType<Expression>
+    : Error
+  : never;
+
 export type ResolveColumnType<
   DB extends SchemaLike,
   Sources extends Source[],
@@ -470,7 +541,9 @@ export type ResolveColumnType<
     : unknown
   : [ScalarSubqueryInner<Expression>] extends [never]
     ? IsFunctionCall<Expression> extends true
-      ? FunctionReturnType<Expression>
+      ? Strict extends true
+        ? StrictFunctionType<DB, Sources, Expression>
+        : FunctionReturnType<Expression>
       : [LiteralType<Expression>] extends [never]
         ? IsOperatorExpression<Expression> extends true
           ? unknown
@@ -558,7 +631,13 @@ type EntryContribution<
 > = Entry[1] extends '*'
   ? MergedStarColumns<DB, Sources>
   : StripQualifier<Entry[1]> extends '*'
-    ? StarColumnsForAlias<DB, Sources, Unquote<Qualifier<Entry[1]>>>
+    ? Strict extends true
+      ? [FindSourceByName<Sources, Unquote<Qualifier<Entry[1]>>>] extends [never]
+        ? {
+            [Key in Entry[1]]: QueryTypeError<`unknown alias: ${Unquote<Qualifier<Entry[1]>>}`>;
+          }
+        : StarColumnsForAlias<DB, Sources, Unquote<Qualifier<Entry[1]>>>
+      : StarColumnsForAlias<DB, Sources, Unquote<Qualifier<Entry[1]>>>
     : { [Key in Entry[0]]: ResolveColumnType<DB, Sources, Entry[1], Strict> };
 
 type BuildMixed<
