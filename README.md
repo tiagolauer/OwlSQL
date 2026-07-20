@@ -738,9 +738,6 @@ This is a focused tool for the common read path, not a full SQL grammar:
 - **Window `OVER (...)` clauses are only used as a boundary**, not parsed for
   their own typing — `PARTITION BY`/`ORDER BY` content inside `OVER (...)` is
   discarded, not validated.
-- **Function arguments must not contain spaces.** `count(*)`, `lower(name)`,
-  `sum(price)` work; `count(distinct id)` and `concat(a, b)` (space after the
-  comma) do not.
 - **Aggregates assume numeric output.** `min`/`max` resolve to `number` even
   over a text column; unrecognized functions resolve to `unknown`. `lag`,
   `lead`, `first_value`, `last_value`, `nth_value` resolve to `unknown` (their
