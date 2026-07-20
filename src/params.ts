@@ -252,9 +252,11 @@ type ContainsPlaceholderLikeChar<S extends string> = S extends
   ? true
   : false;
 
-type AnyCteBodyHasPlaceholder<Ctes extends [string, string][]> = Ctes extends [
-  infer Head extends [string, string],
-  ...infer Tail extends [string, string][],
+type CteScanEntry = [name: string, query: string, columns: string[] | null];
+
+type AnyCteBodyHasPlaceholder<Ctes extends CteScanEntry[]> = Ctes extends [
+  infer Head extends CteScanEntry,
+  ...infer Tail extends CteScanEntry[],
 ]
   ? ContainsPlaceholderLikeChar<Head[1]> extends true
     ? true
@@ -263,7 +265,7 @@ type AnyCteBodyHasPlaceholder<Ctes extends [string, string][]> = Ctes extends [
 
 type CteBodiesHavePlaceholder<Q extends string> = [ParseWithClause<Normalize<Q>>] extends [never]
   ? false
-  : ParseWithClause<Normalize<Q>> extends { ctes: infer Ctes extends [string, string][] }
+  : ParseWithClause<Normalize<Q>> extends { ctes: infer Ctes extends CteScanEntry[] }
     ? AnyCteBodyHasPlaceholder<Ctes>
     : false;
 

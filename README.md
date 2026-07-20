@@ -783,7 +783,8 @@ This is a focused tool for the common read path, not a full SQL grammar:
   literal). Schema-qualified tables (`public.users`) resolve by their final
   segment (`users`).
 - **`TOP` supports a plain count, `TOP N PERCENT`, `TOP N WITH TIES`, and
-  `TOP N PERCENT WITH TIES`** (any order of `PERCENT`/`WITH TIES`) — none of
+  `TOP N PERCENT WITH TIES`** (`PERCENT` before `WITH TIES`, the only order
+  T-SQL accepts) — none of
   these affect the inferred row shape, same as `LIMIT`/`OFFSET`. `OUTPUT`
   only recognizes the `inserted`/`deleted` pseudo-table prefixes (they
   resolve against the statement's single table); `OUTPUT ... INTO @table` is
