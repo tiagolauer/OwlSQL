@@ -26,14 +26,14 @@ type UnbalancedParenInsideLiteral = Expect<
 type CommaInsideLiteral = Expect<
   Equal<
     Query<DB, "select 'a, b' as label, id from users">,
-    { label: unknown; id: number }[]
+    { label: string; id: number }[]
   >
 >;
 
 type EscapedQuoteInsideLiteral = Expect<
   Equal<
     Query<DB, "select 'it''s, fine' as label, id from users">,
-    { label: unknown; id: number }[]
+    { label: string; id: number }[]
   >
 >;
 
@@ -65,7 +65,7 @@ type SemicolonInsideLiteralDoesNotSplit = Expect<
 type KeywordInsideLiteralIgnored = Expect<
   Equal<
     Query<DB, "select id, 'from users where' as fragment from users">,
-    { id: number; fragment: unknown }[]
+    { id: number; fragment: string }[]
   >
 >;
 

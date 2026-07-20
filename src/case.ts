@@ -50,27 +50,6 @@ type HasElseBranch<Segments extends CaseSegment[]> = Segments extends [
     : HasElseBranch<Tail>
   : false;
 
-type LiteralType<Expr extends string> = Trim<Expr> extends `'${string}'`
-  ? string
-  : Trim<Expr> extends `${number}`
-    ? number
-    : Lowercase<Trim<Expr>> extends 'true' | 'false'
-      ? boolean
-      : Lowercase<Trim<Expr>> extends 'null'
-        ? null
-        : never;
-
-type BranchValueType<
-  DB extends SchemaLike,
-  Sources extends Source[],
-  Expr extends string,
-  Strict extends boolean,
-> = LiteralType<Expr> extends infer Literal
-  ? [Literal] extends [never]
-    ? ResolveColumnType<DB, Sources, Trim<Expr>, Strict>
-    : Literal
-  : never;
-
 type BranchUnion<
   DB extends SchemaLike,
   Sources extends Source[],
@@ -78,7 +57,7 @@ type BranchUnion<
   Strict extends boolean,
 > = Segments extends [infer Head extends CaseSegment, ...infer Tail extends CaseSegment[]]
   ? Head['kind'] extends 'then' | 'else'
-    ? BranchValueType<DB, Sources, Head['text'], Strict> | BranchUnion<DB, Sources, Tail, Strict>
+    ? ResolveColumnType<DB, Sources, Trim<Head['text']>, Strict> | BranchUnion<DB, Sources, Tail, Strict>
     : BranchUnion<DB, Sources, Tail, Strict>
   : never;
 

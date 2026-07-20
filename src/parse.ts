@@ -379,6 +379,16 @@ type QualifiedColumnType<
       : never
   : never;
 
+export type LiteralType<Expression extends string> = Trim<Expression> extends `'${string}'`
+  ? string
+  : Trim<Expression> extends `${number}`
+    ? number
+    : Lowercase<Trim<Expression>> extends 'true' | 'false'
+      ? boolean
+      : Lowercase<Trim<Expression>> extends 'null'
+        ? null
+        : never;
+
 type ScalarSubqueryInner<Expression extends string> = Trim<Expression> extends `(${infer AfterOpen}`
   ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string; rest: infer Rest extends string }
     ? Trim<Rest> extends ''
@@ -417,15 +427,17 @@ export type ResolveColumnType<
   : [ScalarSubqueryInner<Expression>] extends [never]
     ? IsFunctionCall<Expression> extends true
       ? FunctionReturnType<Expression>
-      : Qualifier<Expression> extends ''
-        ? BareColumnType<DB, Sources, Unquote<StripQualifier<Expression>>, Strict>
-        : QualifiedColumnType<
-            DB,
-            Sources,
-            Unquote<Qualifier<Expression>>,
-            Unquote<StripQualifier<Expression>>,
-            Strict
-          >
+      : [LiteralType<Expression>] extends [never]
+        ? Qualifier<Expression> extends ''
+          ? BareColumnType<DB, Sources, Unquote<StripQualifier<Expression>>, Strict>
+          : QualifiedColumnType<
+              DB,
+              Sources,
+              Unquote<Qualifier<Expression>>,
+              Unquote<StripQualifier<Expression>>,
+              Strict
+            >
+        : LiteralType<Expression>
     : ScalarSubqueryType<DB, ScalarSubqueryInner<Expression>, Strict>;
 
 export type ResolveColumnLoose<
