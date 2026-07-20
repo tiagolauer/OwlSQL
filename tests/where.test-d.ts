@@ -36,6 +36,20 @@ type BetweenParams = Expect<
   Equal<Params<DB, 'select id from users where age between $1 and $2'>, [number, number]>
 >;
 
+type IsDistinctFromParam = Expect<
+  Equal<
+    Params<DB, 'select id from users where deleted_at is distinct from $1'>,
+    [string | null]
+  >
+>;
+
+type IsNotDistinctFromParam = Expect<
+  Equal<
+    Params<DB, 'select id from users where deleted_at is not distinct from $1'>,
+    [string | null]
+  >
+>;
+
 type IsNullDoesNotAffectArity = Expect<
   Equal<
     Params<DB, 'select id from users where deleted_at is null and id = $1'>,
@@ -102,6 +116,8 @@ export type WhereLock = [
   InListParams,
   NotInListParams,
   BetweenParams,
+  IsDistinctFromParam,
+  IsNotDistinctFromParam,
   IsNullDoesNotAffectArity,
   IsNotNullDoesNotAffectArity,
   IsDistinctFromParam,
