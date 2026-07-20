@@ -51,8 +51,11 @@ describe('groupMysqlColumns', () => {
 });
 
 describe('introspectMysql', () => {
-  it('aliases every information_schema column and groups the result', async () => {
-    const query = vi.fn().mockResolvedValue([UPPERCASE_ROWS]);
+  it('aliases every information_schema column, filters views and keeps empty tables', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([[{ TABLE_NAME: 'users' }, { TABLE_NAME: 'empty_t' }]])
+      .mockResolvedValueOnce([UPPERCASE_ROWS]);
     const end = vi.fn().mockResolvedValue(undefined);
     vi.doMock('mysql2/promise', () => ({
       createConnection: vi.fn().mockResolvedValue({ query, end }),
@@ -60,11 +63,15 @@ describe('introspectMysql', () => {
 
     const tables = await introspectMysql({ url: 'mysql://localhost/db' });
 
-    const sql = query.mock.calls[0]?.[0] as string;
+    const tablesSql = query.mock.calls[0]?.[0] as string;
+    const columnsSql = query.mock.calls[1]?.[0] as string;
+    expect(tablesSql).toContain("table_type = 'BASE TABLE'");
+    expect(columnsSql).toContain("table_type = 'BASE TABLE'");
     for (const column of ['table_name', 'column_name', 'data_type', 'column_type', 'is_nullable']) {
-      expect(sql).toContain(`${column} as ${column}`);
+      expect(columnsSql).toContain(`${column} as ${column}`);
     }
-    expect(tables[0]?.name).toBe('users');
+    expect(tables.map((table) => table.name)).toEqual(['users', 'empty_t']);
+    expect(tables[1]?.columns).toEqual([]);
     expect(end).toHaveBeenCalled();
 
     vi.doUnmock('mysql2/promise');
