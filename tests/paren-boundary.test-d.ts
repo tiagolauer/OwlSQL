@@ -15,14 +15,14 @@ interface DB {
 type ScalarSubqueryKeepsSiblingColumns = Expect<
   Equal<
     Query<DB, 'select (select max(id) from orders) as m, name from users'>,
-    { m: number; name: string }[]
+    { m: number | null; name: string }[]
   >
 >;
 
 type ScalarSubqueryNoAliasFallsBackToRawTextKey = Expect<
   Equal<
     Query<DB, 'select (select max(id) from orders), name from users'>,
-    { '(select max(id) from orders)': number; name: string }[]
+    { '(select max(id) from orders)': number | null; name: string }[]
   >
 >;
 

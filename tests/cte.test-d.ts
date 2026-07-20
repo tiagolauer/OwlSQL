@@ -60,17 +60,17 @@ type WithRecursiveResolvesInStrictModeToo = Expect<
   >
 >;
 
-type CteColumnListDoesNotBreakTheCteName = Expect<
+type CteColumnListRenamesTheColumn = Expect<
   Equal<
     Query<DB, 'with popular(x) as (select id from posts) select x from popular'>,
-    { x: unknown }[]
+    { x: number }[]
   >
 >;
 
-type CteMultiColumnListAlsoResolvesByName = Expect<
+type CteMultiColumnListRenamesPositionally = Expect<
   Equal<
     Query<DB, 'with popular(x, y) as (select id, title from posts) select x, y from popular'>,
-    { x: unknown; y: unknown }[]
+    { x: number; y: string }[]
   >
 >;
 
@@ -105,8 +105,8 @@ export type CteLock = [
   CteStrictUnknownColumnIsTypeError,
   WithRecursiveIsNotConfusedByTheKeyword,
   WithRecursiveResolvesInStrictModeToo,
-  CteColumnListDoesNotBreakTheCteName,
-  CteMultiColumnListAlsoResolvesByName,
+  CteColumnListRenamesTheColumn,
+  CteMultiColumnListRenamesPositionally,
   ParamAfterCteResolvesAgainstCteShape,
   ParamAfterMultipleCtesStillResolves,
   ParamInsideCteBodyFallsBackSafelyInsteadOfClaimingZeroParams,

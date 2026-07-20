@@ -60,11 +60,19 @@ type StripWithTies<S extends string> = IsKeyword<FirstWord<S>, 'with'> extends t
     : S
   : S;
 
+type HasTopCount<S extends string> = Trim<S> extends `(${string}`
+  ? true
+  : FirstWord<Trim<S>> extends `${number}`
+    ? true
+    : false;
+
 type StripTopClause<S extends string> = IsKeyword<FirstWord<Trim<S>>, 'top'> extends true
-  ? StripTopCount<DropFirstWord<Trim<S>>> extends infer AfterCount extends string
-    ? IsKeyword<FirstWord<AfterCount>, 'percent'> extends true
-      ? StripWithTies<Trim<DropFirstWord<AfterCount>>>
-      : StripWithTies<AfterCount>
+  ? HasTopCount<DropFirstWord<Trim<S>>> extends true
+    ? StripTopCount<DropFirstWord<Trim<S>>> extends infer AfterCount extends string
+      ? IsKeyword<FirstWord<AfterCount>, 'percent'> extends true
+        ? StripWithTies<Trim<DropFirstWord<AfterCount>>>
+        : StripWithTies<AfterCount>
+      : S
     : S
   : S;
 
@@ -303,6 +311,18 @@ type ParseColumnEntries<Columns extends string[]> = {
   [Index in keyof Columns]: ParseColumnEntry<Columns[Index]>;
 };
 
+type EntryKeyList<Entries extends [string, string][]> = {
+  [Index in keyof Entries]: Entries[Index][0];
+};
+
+export type SelectColumnKeys<Q extends string> = ParseStatementNormalized<Normalize<Q>> extends {
+  columns: infer Columns extends string;
+}
+  ? EntryKeyList<ParseColumnEntries<SplitColumnList<Columns>>> extends infer Keys extends string[]
+    ? Keys
+    : never
+  : never;
+
 type ApplyNull<T, Nullable extends boolean> = Nullable extends true ? T | null : T;
 
 type SourceColumnType<
@@ -460,6 +480,12 @@ type ScalarSubqueryInner<Expression extends string> = Trim<Expression> extends `
 
 type IsUnion<T, U = T> = T extends U ? ([U] extends [T] ? false : true) : never;
 
+type IsCountSubquery<Q extends string> = Lowercase<
+  FirstWord<DropFirstWord<Q>>
+> extends `count(${string}`
+  ? true
+  : false;
+
 type ScalarSubqueryType<
   DB extends SchemaLike,
   Q extends string,
@@ -471,7 +497,9 @@ type ScalarSubqueryType<
       ? Row
       : IsUnion<keyof Row> extends true
         ? unknown
-        : Row[keyof Row]
+        : IsCountSubquery<Q> extends true
+          ? Row[keyof Row]
+          : Row[keyof Row] | null
   : unknown;
 
 type StripDistinctPrefix<Arg extends string> = IsKeyword<FirstWord<Arg>, 'distinct'> extends true
@@ -669,7 +697,7 @@ export type ResolveCteContext<
 > = [ParseWithClause<Normalize<Q>>] extends [never]
   ? { db: DB; query: Normalize<Q> }
   : ParseWithClause<Normalize<Q>> extends {
-        ctes: infer Ctes extends [string, string][];
+        ctes: infer Ctes extends [string, string, string[] | null][];
         rest: infer Rest extends string;
       }
     ? { db: DB & BuildCteMap<DB, Ctes, Strict>; query: Rest }

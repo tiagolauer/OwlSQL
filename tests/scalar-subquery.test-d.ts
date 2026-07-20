@@ -25,7 +25,7 @@ type ScalarSubqueryFromTheIssueExample = Expect<
 type ScalarSubqueryAliasedColumnFromInnerTable = Expect<
   Equal<
     Query<DB, 'select id, (select views from posts) as v from users'>,
-    { id: number; v: number }[]
+    { id: number; v: number | null }[]
   >
 >;
 
