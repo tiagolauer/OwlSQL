@@ -52,6 +52,7 @@ export interface TypedDbOptions {
 }
 
 export interface TypedDb<DB extends SchemaLike, Strict extends boolean = false> {
+  readonly __owlsqlTypedDb?: true;
   query<Q extends string>(
     sql: Q,
     ...params: InferParams<DB, Q>

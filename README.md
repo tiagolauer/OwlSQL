@@ -643,7 +643,9 @@ otherwise).
 - Only plain string/template literals with **no interpolation**
   (`` db.query(`select ...`) ``) are recognized — which is the only form the
   library ever expects you to write, since parameters are SQL placeholders
-  (`$1`/`?`/`@name`), never JS template interpolation.
+  (`$1`/`?`/`@name`), never JS template interpolation. Interpolating
+  (`` db.query(`select ... ${x}`) ``) silently turns completions/hover off
+  for that call — there's no squiggle or warning telling you why.
 - Completions after `ORDER BY`/`GROUP BY`/`HAVING`/etc. aren't offered yet —
   only the `SELECT` column list and `WHERE` clause.
 - **Requires TypeScript < 7.** TypeScript 7's native (Go-based) compiler
