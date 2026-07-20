@@ -204,14 +204,32 @@ type OutputName<Expression extends string> = IsFunctionCall<Expression> extends 
   ? FunctionOutputName<Expression>
   : Unquote<StripQualifier<Expression>>;
 
+type OverAttachedParen<Token extends string> = Token extends `${infer Word}(${infer AfterOpen}`
+  ? IsKeyword<Word, 'over'> extends true
+    ? AfterOpen
+    : never
+  : never;
+
 type FindOverKeyword<S extends string, Accumulated extends string = ''> =
   S extends `${infer Head} ${infer Tail}`
     ? IsKeyword<Head, 'over'> extends true
       ? IsFunctionCall<Trim<Accumulated>> extends true
         ? { expr: Trim<Accumulated>; rest: Tail }
         : FindOverKeyword<Tail, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
-      : FindOverKeyword<Tail, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
-    : never;
+      : OverAttachedParen<Head> extends infer AfterOpen extends string
+        ? [AfterOpen] extends [never]
+          ? FindOverKeyword<Tail, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
+          : IsFunctionCall<Trim<Accumulated>> extends true
+            ? { expr: Trim<Accumulated>; rest: `(${AfterOpen} ${Tail}` }
+            : FindOverKeyword<Tail, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
+        : never
+    : OverAttachedParen<S> extends infer AfterOpen extends string
+      ? [AfterOpen] extends [never]
+        ? never
+        : IsFunctionCall<Trim<Accumulated>> extends true
+          ? { expr: Trim<Accumulated>; rest: `(${AfterOpen}` }
+          : never
+      : never;
 
 type StripLeadingOpenParen<S extends string> = Trim<S> extends `(${infer Rest}` ? Rest : never;
 
@@ -278,7 +296,9 @@ type ParseColumnEntry<Entry extends string> = IsCaseExpression<Entry> extends tr
         : [Trim<Entry>, Trim<Entry>]
       : [FindTopLevelAsKeyword<Entry>] extends [never]
       ? Entry extends `${infer Expression} ${infer Alias}`
-        ? [Unquote<Trim<Alias>>, Trim<Expression>]
+        ? IsOperatorExpression<Alias> extends true
+          ? [Trim<Entry>, Trim<Entry>]
+          : [Unquote<Trim<Alias>>, Trim<Expression>]
         : [OutputName<Trim<Entry>>, Trim<Entry>]
       : FindTopLevelAsKeyword<Entry> extends { expr: infer Expr extends string; alias: infer Alias extends string }
         ? [Unquote<Trim<Alias>>, Expr]
@@ -383,6 +403,19 @@ type QualifiedColumnType<
       : never
   : never;
 
+type OperatorChar = '*' | '+' | '-' | '/' | '%' | '|' | '<' | '>' | '=' | '^';
+
+type ContainsOperatorChar<S extends string> = S extends `${string}${OperatorChar}${string}`
+  ? true
+  : false;
+
+type IsOperatorExpression<S extends string> = S extends
+  | `${string}"${string}`
+  | `${string}[${string}`
+  | `${string}\`${string}`
+  ? false
+  : ContainsOperatorChar<S>;
+
 export type LiteralType<Expression extends string> = Trim<Expression> extends `'${string}'`
   ? string
   : Trim<Expression> extends `${number}`
@@ -432,15 +465,17 @@ export type ResolveColumnType<
     ? IsFunctionCall<Expression> extends true
       ? FunctionReturnType<Expression>
       : [LiteralType<Expression>] extends [never]
-        ? Qualifier<Expression> extends ''
-          ? BareColumnType<DB, Sources, Unquote<StripQualifier<Expression>>, Strict>
-          : QualifiedColumnType<
-              DB,
-              Sources,
-              Unquote<Qualifier<Expression>>,
-              Unquote<StripQualifier<Expression>>,
-              Strict
-            >
+        ? IsOperatorExpression<Expression> extends true
+          ? unknown
+          : Qualifier<Expression> extends ''
+            ? BareColumnType<DB, Sources, Unquote<StripQualifier<Expression>>, Strict>
+            : QualifiedColumnType<
+                DB,
+                Sources,
+                Unquote<Qualifier<Expression>>,
+                Unquote<StripQualifier<Expression>>,
+                Strict
+              >
         : LiteralType<Expression>
     : ScalarSubqueryType<DB, ScalarSubqueryInner<Expression>, Strict>;
 
