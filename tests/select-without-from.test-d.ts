@@ -1,4 +1,4 @@
-import type { Query, StrictQuery, QueryTypeError } from '../src/index.js';
+import type { Query, StrictQuery } from '../src/index.js';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2)
@@ -12,18 +12,15 @@ interface DB {
 }
 
 type LiteralAliasResolvesKey = Expect<
-  Equal<Query<DB, 'select 1 as one'>, { one: unknown }[]>
+  Equal<Query<DB, 'select 1 as one'>, { one: number }[]>
 >;
 
 type FunctionCallWithNoFromResolvesKey = Expect<
   Equal<Query<DB, 'select random_seed() as seed'>, { seed: unknown }[]>
 >;
 
-type StrictModeReportsNoFromClauseInsteadOfEmptyTableName = Expect<
-  Equal<
-    StrictQuery<DB, 'select 1 as one'>,
-    QueryTypeError<'no FROM clause: cannot resolve column "1"'>[]
-  >
+type StrictLiteralWithoutFromResolves = Expect<
+  Equal<StrictQuery<DB, 'select 1 as one'>, { one: number }[]>
 >;
 
 type OrdinaryFromQueryIsUnaffected = Expect<
@@ -37,7 +34,7 @@ type OrdinaryFromQueryStrictModeIsUnaffected = Expect<
 export type BehaviorLock = [
   LiteralAliasResolvesKey,
   FunctionCallWithNoFromResolvesKey,
-  StrictModeReportsNoFromClauseInsteadOfEmptyTableName,
+  StrictLiteralWithoutFromResolves,
   OrdinaryFromQueryIsUnaffected,
   OrdinaryFromQueryStrictModeIsUnaffected,
 ];
