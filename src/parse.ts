@@ -156,9 +156,25 @@ export type ParseStatement<S extends string> = ParseStatementNormalized<Normaliz
 
 export type ParseSelect<S extends string> = ParseSelectBody<Normalize<S>>;
 
-type SplitColumnList<S extends string> = S extends `${infer Head},${infer Tail}`
-  ? [Trim<Head>, ...SplitColumnList<Tail>]
-  : [Trim<S>];
+type ScanColumnList<
+  S extends string,
+  Depth extends unknown[],
+  Current extends string,
+> = S extends `${infer Char}${infer Rest}`
+  ? Char extends '('
+    ? ScanColumnList<Rest, [...Depth, unknown], `${Current}${Char}`>
+    : Char extends ')'
+      ? Depth extends [unknown, ...infer DepthRest extends unknown[]]
+        ? ScanColumnList<Rest, DepthRest, `${Current}${Char}`>
+        : ScanColumnList<Rest, Depth, `${Current}${Char}`>
+      : Char extends ','
+        ? Depth extends []
+          ? [Trim<Current>, ...ScanColumnList<Rest, Depth, ''>]
+          : ScanColumnList<Rest, Depth, `${Current}${Char}`>
+        : ScanColumnList<Rest, Depth, `${Current}${Char}`>
+  : [Trim<Current>];
+
+type SplitColumnList<S extends string> = ScanColumnList<S, [], ''>;
 
 type OutputName<Expression extends string> = IsFunctionCall<Expression> extends true
   ? FunctionOutputName<Expression>
