@@ -25,11 +25,32 @@ const POSTGRES_SCALAR_TYPES: Record<string, string> = {
   date: 'Date',
   time: 'string',
   timetz: 'string',
+  interval: 'string',
+  inet: 'string',
+  cidr: 'string',
+  macaddr: 'string',
+  macaddr8: 'string',
+  bit: 'string',
+  varbit: 'string',
+  tsvector: 'string',
+  tsquery: 'string',
+  oid: 'number',
 };
 
-export function mapPostgresType(udtName: string): string {
+function renderEnumUnion(labels: string[]): string {
+  return labels.map((label) => `'${label.replace(/'/g, "\\'")}'`).join(' | ');
+}
+
+export function mapPostgresType(udtName: string, enums?: Map<string, string[]>): string {
   const isArray = udtName.startsWith('_');
   const base = isArray ? udtName.slice(1) : udtName;
+
+  const labels = enums?.get(base);
+  if (labels && labels.length > 0) {
+    const union = renderEnumUnion(labels);
+    return isArray ? `(${union})[]` : union;
+  }
+
   const scalar = POSTGRES_SCALAR_TYPES[base] ?? 'unknown';
   return isArray ? `${scalar}[]` : scalar;
 }
@@ -39,6 +60,11 @@ interface PgColumnRow {
   column_name: string;
   udt_name: string;
   is_nullable: 'YES' | 'NO';
+}
+
+interface PgEnumRow {
+  typname: string;
+  enumlabel: string;
 }
 
 export async function introspectPostgres(connection: ConnectionInfo): Promise<TableSchema[]> {
@@ -55,6 +81,24 @@ export async function introspectPostgres(connection: ConnectionInfo): Promise<Ta
   const schema = connection.schema ?? 'public';
 
   try {
+    const tablesResult = await pool.query<{ table_name: string }>(
+      `select table_name
+       from information_schema.tables
+       where table_schema = $1 and table_type = 'BASE TABLE'
+       order by table_name`,
+      [schema],
+    );
+
+    const enumsResult = await pool.query<PgEnumRow>(
+      `select t.typname as typname, e.enumlabel as enumlabel
+       from pg_enum e
+       join pg_type t on t.oid = e.enumtypid
+       join pg_namespace n on n.oid = t.typnamespace
+       where n.nspname = $1
+       order by t.typname, e.enumsortorder`,
+      [schema],
+    );
+
     const result = await pool.query<PgColumnRow>(
       `select c.table_name, c.column_name, c.udt_name, c.is_nullable
        from information_schema.columns c
@@ -65,20 +109,44 @@ export async function introspectPostgres(connection: ConnectionInfo): Promise<Ta
       [schema],
     );
 
-    return groupColumns(result.rows);
+    return groupColumns(
+      result.rows,
+      tablesResult.rows.map((row) => row.table_name),
+      buildEnumMap(enumsResult.rows),
+    );
   } finally {
     await pool.end();
   }
 }
 
-function groupColumns(rows: PgColumnRow[]): TableSchema[] {
+function buildEnumMap(rows: PgEnumRow[]): Map<string, string[]> {
+  const enums = new Map<string, string[]>();
+
+  for (const row of rows) {
+    const labels = enums.get(row.typname) ?? [];
+    labels.push(row.enumlabel);
+    enums.set(row.typname, labels);
+  }
+
+  return enums;
+}
+
+function groupColumns(
+  rows: PgColumnRow[],
+  tableNames: string[],
+  enums: Map<string, string[]>,
+): TableSchema[] {
   const tables = new Map<string, TableSchema>();
+
+  for (const name of tableNames) {
+    tables.set(name, { name, columns: [] });
+  }
 
   for (const row of rows) {
     const table = tables.get(row.table_name) ?? { name: row.table_name, columns: [] };
     table.columns.push({
       name: row.column_name,
-      tsType: mapPostgresType(row.udt_name),
+      tsType: mapPostgresType(row.udt_name, enums),
       nullable: row.is_nullable === 'YES',
     });
     tables.set(row.table_name, table);

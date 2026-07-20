@@ -37,6 +37,19 @@ describe('mapPostgresType', () => {
   it('falls back to unknown for unrecognized types', () => {
     expect(mapPostgresType('some_custom_domain')).toBe('unknown');
   });
+
+  it('maps network, interval, bit and text-search types to string', () => {
+    expect(mapPostgresType('inet')).toBe('string');
+    expect(mapPostgresType('interval')).toBe('string');
+    expect(mapPostgresType('tsvector')).toBe('string');
+    expect(mapPostgresType('oid')).toBe('number');
+  });
+
+  it('maps enums to a label union when the enum map is provided', () => {
+    const enums = new Map([['mood', ['happy', 'sad']]]);
+    expect(mapPostgresType('mood', enums)).toBe("'happy' | 'sad'");
+    expect(mapPostgresType('_mood', enums)).toBe("('happy' | 'sad')[]");
+  });
 });
 
 describe('mapMysqlType', () => {
