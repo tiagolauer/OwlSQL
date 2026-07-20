@@ -101,27 +101,44 @@ export async function introspectMssql(connection: ConnectionInfo): Promise<Table
   const schema = connection.schema ?? 'dbo';
 
   try {
+    const tablesResult = await pool
+      .request()
+      .input('schema', schema)
+      .query<{ table_name: string }>(
+        `select t.name as table_name
+         from sys.tables t
+         where schema_name(t.schema_id) = @schema
+         order by t.name`,
+      );
+
     const result = await pool
       .request()
       .input('schema', schema)
       .query<MssqlColumnRow>(
-        `select t.name as table_name, c.name as column_name, ty.name as data_type,
+        `select t.name as table_name, c.name as column_name,
+                type_name(c.system_type_id) as data_type,
                 c.is_nullable as is_nullable
          from sys.tables t
          join sys.columns c on c.object_id = t.object_id
-         join sys.types ty on ty.user_type_id = c.user_type_id
          where schema_name(t.schema_id) = @schema
          order by t.name, c.column_id`,
       );
 
-    return groupColumns(result.recordset);
+    return groupColumns(
+      result.recordset,
+      tablesResult.recordset.map((row) => row.table_name),
+    );
   } finally {
     await pool.close();
   }
 }
 
-function groupColumns(rows: MssqlColumnRow[]): TableSchema[] {
+function groupColumns(rows: MssqlColumnRow[], tableNames: string[]): TableSchema[] {
   const tables = new Map<string, TableSchema>();
+
+  for (const name of tableNames) {
+    tables.set(name, { name, columns: [] });
+  }
 
   for (const row of rows) {
     const table = tables.get(row.table_name) ?? { name: row.table_name, columns: [] };

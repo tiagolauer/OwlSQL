@@ -68,30 +68,44 @@ export async function introspectMysql(connection: ConnectionInfo): Promise<Table
 
   const connectionHandle = await createConnection(connection.url);
 
+  const schemaFilter = connection.schema ? '?' : 'database()';
+  const schemaParams = connection.schema ? [connection.schema] : [];
+
   try {
-    const [rows] = await connectionHandle.query(
-      connection.schema
-        ? `select table_name as table_name, column_name as column_name, data_type as data_type,
-                  column_type as column_type, is_nullable as is_nullable
-           from information_schema.columns
-           where table_schema = ?
-           order by table_name, ordinal_position`
-        : `select table_name as table_name, column_name as column_name, data_type as data_type,
-                  column_type as column_type, is_nullable as is_nullable
-           from information_schema.columns
-           where table_schema = database()
-           order by table_name, ordinal_position`,
-      connection.schema ? [connection.schema] : [],
+    const [tableRows] = await connectionHandle.query(
+      `select table_name as table_name
+       from information_schema.tables
+       where table_schema = ${schemaFilter} and table_type = 'BASE TABLE'
+       order by table_name`,
+      schemaParams,
     );
 
-    return groupMysqlColumns(rows as unknown as MysqlColumnRow[]);
+    const [rows] = await connectionHandle.query(
+      `select c.table_name as table_name, c.column_name as column_name, c.data_type as data_type,
+              c.column_type as column_type, c.is_nullable as is_nullable
+       from information_schema.columns c
+       join information_schema.tables t
+         on t.table_schema = c.table_schema and t.table_name = c.table_name
+       where c.table_schema = ${schemaFilter} and t.table_type = 'BASE TABLE'
+       order by c.table_name, c.ordinal_position`,
+      schemaParams,
+    );
+
+    return groupMysqlColumns(
+      rows as unknown as MysqlColumnRow[],
+      (tableRows as unknown as MysqlColumnRow[]).map((row) => readField(row, 'table_name')),
+    );
   } finally {
     await connectionHandle.end();
   }
 }
 
-export function groupMysqlColumns(rows: MysqlColumnRow[]): TableSchema[] {
+export function groupMysqlColumns(rows: MysqlColumnRow[], tableNames: string[] = []): TableSchema[] {
   const tables = new Map<string, TableSchema>();
+
+  for (const name of tableNames) {
+    tables.set(name, { name, columns: [] });
+  }
 
   for (const row of rows) {
     const tableName = readField(row, 'table_name');
