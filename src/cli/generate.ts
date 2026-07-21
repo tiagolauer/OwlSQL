@@ -11,6 +11,8 @@ export interface GenerateOptions {
   out: string;
   dialect?: Dialect | undefined;
   schema?: string | undefined;
+  tables?: string[] | undefined;
+  exclude?: string[] | undefined;
 }
 
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
@@ -30,6 +32,10 @@ export function detectDialect(url: string): Dialect {
 
   if (url.startsWith('mysql://')) {
     return 'mysql';
+  }
+
+  if (url.startsWith('sqlite://') || url.startsWith('sqlite:') || url.startsWith('file:')) {
+    return 'sqlite';
   }
 
   if (url.startsWith('mssql://') || url.startsWith('sqlserver://')) {
@@ -56,16 +62,50 @@ const INTROSPECTORS: Record<Dialect, (connection: ConnectionInfo) => Promise<Tab
   mssql: introspectMssql,
 };
 
+function filterTables(tables: TableSchema[], options: GenerateOptions): TableSchema[] {
+  const include = options.tables?.map((name) => name.toLowerCase());
+  const exclude = options.exclude?.map((name) => name.toLowerCase());
+
+  return tables.filter((table) => {
+    const name = table.name.toLowerCase();
+    if (include && !include.includes(name)) {
+      return false;
+    }
+    if (exclude?.includes(name)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 export async function runGenerate(options: GenerateOptions): Promise<void> {
   const dialect = options.dialect ?? detectDialect(options.url);
   const connection: ConnectionInfo = { url: options.url, schema: options.schema };
 
-  const tables = await INTROSPECTORS[dialect](connection);
+  const introspected = await INTROSPECTORS[dialect](connection);
 
-  if (tables.length === 0) {
+  if (introspected.length === 0) {
     throw new Error('No tables found. Check the connection URL and --schema, if provided.');
   }
 
+  const tables = filterTables(introspected, options);
+
+  if (tables.length === 0) {
+    throw new Error(
+      `No tables left after filtering. Available tables: ${introspected
+        .map((table) => table.name)
+        .join(', ')}`,
+    );
+  }
+
   const source = renderSchema(tables);
-  await writeFile(options.out, source, 'utf8');
+
+  try {
+    await writeFile(options.out, source, 'utf8');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      throw new Error(`Cannot write "${options.out}": the directory does not exist.`);
+    }
+    throw error;
+  }
 }
