@@ -96,7 +96,7 @@ export async function introspectMysql(connection: ConnectionInfo): Promise<Table
       (tableRows as unknown as MysqlColumnRow[]).map((row) => readField(row, 'table_name')),
     );
   } finally {
-    await connectionHandle.end();
+    await connectionHandle.end().catch(() => undefined);
   }
 }
 

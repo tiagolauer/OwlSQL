@@ -115,7 +115,7 @@ export async function introspectPostgres(connection: ConnectionInfo): Promise<Ta
       buildEnumMap(enumsResult.rows),
     );
   } finally {
-    await pool.end();
+    await pool.end().catch(() => undefined);
   }
 }
 

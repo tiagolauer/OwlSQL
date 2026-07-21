@@ -129,7 +129,7 @@ export async function introspectMssql(connection: ConnectionInfo): Promise<Table
       tablesResult.recordset.map((row) => row.table_name),
     );
   } finally {
-    await pool.close();
+    await pool.close().catch(() => undefined);
   }
 }
 
