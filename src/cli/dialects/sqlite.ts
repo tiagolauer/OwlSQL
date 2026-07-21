@@ -44,6 +44,21 @@ function isRowidAlias(column: SqliteTableInfoRow, primaryKeyCount: number): bool
   );
 }
 
+const SQLITE_URL_PREFIXES = ['sqlite://', 'sqlite:', 'file://'];
+
+export function normalizeSqlitePath(url: string): string {
+  for (const prefix of SQLITE_URL_PREFIXES) {
+    if (url.startsWith(prefix)) {
+      return url.slice(prefix.length);
+    }
+  }
+  return url;
+}
+
+function isMemoryDatabase(path: string): boolean {
+  return path === ':memory:' || path.startsWith('file::memory:');
+}
+
 export async function introspectSqlite(connection: ConnectionInfo): Promise<TableSchema[]> {
   let DatabaseSyncCtor: typeof import('node:sqlite').DatabaseSync;
   try {
@@ -54,11 +69,15 @@ export async function introspectSqlite(connection: ConnectionInfo): Promise<Tabl
     );
   }
 
-  if (connection.url !== ':memory:' && !existsSync(connection.url)) {
-    throw new Error(`SQLite database file not found: "${connection.url}".`);
+  const path = connection.url.startsWith('file::memory:')
+    ? connection.url
+    : normalizeSqlitePath(connection.url);
+
+  if (!isMemoryDatabase(path) && !existsSync(path)) {
+    throw new Error(`SQLite database file not found: "${path}".`);
   }
 
-  const db = new DatabaseSyncCtor(connection.url);
+  const db = new DatabaseSyncCtor(path, { readOnly: !isMemoryDatabase(path) });
 
   try {
     const tableRows = db
