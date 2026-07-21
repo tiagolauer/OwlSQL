@@ -38,6 +38,32 @@ function executorThrowing(cause: unknown): RecordingExecutor {
 }
 
 describe('createTypedDb.query', () => {
+  it('surfaces executor metadata on the Ok result', async () => {
+    const executor: Executor = async () => ({ rows: [], meta: { rowCount: 3, lastInsertRowid: 9 } });
+    const db = createTypedDb<DB>(executor);
+
+    const result = await db.query('insert into users (name) values ($1)', 'ada');
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([]);
+      expect(result.meta).toEqual({ rowCount: 3, lastInsertRowid: 9 });
+    }
+  });
+
+  it('includes the driver message in EXECUTOR_FAILED errors', async () => {
+    const { executor } = executorThrowing(new Error('connection refused'));
+    const db = createTypedDb<DB>(executor);
+
+    const result = await db.query('select id from users');
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error.kind).toBe(QueryErrorKind.ExecutorFailed);
+      expect(result.error.message).toContain('connection refused');
+    }
+  });
+
   it('returns Ok with the rows from the executor on success', async () => {
     const sampleRows = [{ id: 1, name: 'ada' }];
     const { executor, calls } = executorReturning(sampleRows);

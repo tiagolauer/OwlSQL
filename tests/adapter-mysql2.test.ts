@@ -19,15 +19,14 @@ describe('createMysql2Executor', () => {
     expect(execute).toHaveBeenCalledWith('select id from users', []);
   });
 
-  it('returns an empty array instead of a ResultSetHeader for writes', async () => {
+  it('returns empty rows plus write metadata instead of a ResultSetHeader', async () => {
     const header = { affectedRows: 1, insertId: 7, fieldCount: 0 };
     const { pool } = fakePool(header);
 
     const executor = createMysql2Executor(pool);
     const result = await executor('insert into users (name) values (?)', ['ada']);
 
-    expect(result).toEqual([]);
-    expect(Array.isArray(result)).toBe(true);
+    expect(result).toEqual({ rows: [], meta: { rowCount: 1, lastInsertRowid: 7 } });
   });
 
   it('uses execute for server-side parameter binding', async () => {
