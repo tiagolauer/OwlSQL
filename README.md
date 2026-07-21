@@ -363,9 +363,11 @@ const shout = await db.query('select id, upper(name) as name from users');
 
 Recognized: `count`, `sum`, `avg`, `min`, `max`, `length`, `char_length`,
 `octet_length`, `abs`, `ceil`, `floor`, `round`, `power`, `mod`, `greatest`,
-`least` → `number`; `lower`, `upper`, `trim`, `ltrim`, `rtrim`, `concat` →
-`string`; `coalesce`, `nullif` → `unknown`; `now`, `current_timestamp`,
-`current_date` → `Date`. Anything else resolves to `unknown`.
+`least`, `row_number`, `rank`, `dense_rank`, `ntile`, `percent_rank`,
+`cume_dist` → `number`; `lower`, `upper`, `trim`, `ltrim`, `rtrim`, `concat` →
+`string`; `coalesce`, `nullif`, `lag`, `lead`, `first_value`, `last_value`,
+`nth_value` → `unknown`; `now`, `current_timestamp`, `current_date` → `Date`.
+Anything else resolves to `unknown`.
 
 ### 7. INSERT / UPDATE / DELETE with RETURNING
 
@@ -731,35 +733,42 @@ otherwise).
 
 | Export | Kind | Description |
 | ------ | ---- | ----------- |
-| `createTypedDb<DB>(executor, options?)` | function | Build a schema-bound client. `options.strict` enables [strict mode](#8-strict-mode--turn-typos-into-type-errors). |
-| `TypedDb<DB, Strict?>` | interface | The client; has `query<Q>(sql, ...params)`. |
-| `TypedDbOptions` | interface | `{ strict?: boolean }`. |
-| `Executor` | type | `(sql: string, params: readonly unknown[]) => Promise<unknown[]>`. |
+| `createTypedDb<DB>(executor, options?)` | function | Build a schema-bound client. `options.strict` enables [strict mode](#8-strict-mode--turn-typos-into-type-errors); `options.placeholders` enables [placeholder-style checking](#10-typed-parameters). |
+| `TypedDb<DB, Strict?, Style?>` | interface | The client; has `query<Q>(sql, ...params)`. |
+| `TypedDbOptions` | interface | `{ strict?: boolean; placeholders?: PlaceholderStyle }`. |
+| `Executor` | type | `(sql: string, params: readonly unknown[]) => Promise<ExecutorResult>`. |
+| `ExecutorResult` | type | `unknown[]` or `{ rows: unknown[]; meta?: QueryMeta }`. |
+| `QueryMeta` | interface | `{ rowCount?; lastInsertRowid? }`, surfaced on the Ok result. |
+| `PlaceholderStyle` | type | `'dollar' \| 'question' \| 'at'`. |
+| `DialectExecutor<Style>` | type | An `Executor` annotated with its placeholder style. |
 | `Query<DB, Q>` | type | Inferred result array for query `Q`. |
 | `Row<DB, Q>` | type | Inferred single-row object for query `Q`. |
 | `StrictQuery<DB, Q>` | type | Like `Query`, but unknown columns/tables become a `QueryTypeError`. |
 | `StrictRow<DB, Q>` | type | Single-row strict variant. |
-| `Params<DB, Q>` | type | Inferred parameter tuple for query `Q`. |
+| `InferResult<DB, Q>` / `InferRow<DB, Q>` | type | Underlying aliases of `Query` / `Row` (plus `InferResultStrict` / `InferRowStrict`). |
+| `Params<DB, Q>` / `InferParams<DB, Q>` | type | Inferred parameter tuple for query `Q`. |
 | `QueryTypeError<Message>` | type | Branded compile-time error carrying `Message`. |
 | `FunctionReturnTypes` | interface | SQL-function → return-type registry. |
-| `Result<T, E>` | type | `Ok<T> \| Err<E>` discriminated union. |
+| `Result<T, E>` | type | `Ok<T> \| Err<E>` discriminated union (`Ok` / `Err` are exported too). |
 | `ResultStatus` | enum | `Ok` / `Error`. |
 | `ok` / `err` | function | Construct a success / error result. |
 | `isOk` / `isErr` | function | Type-narrowing guards. |
 | `QueryError` | interface | `{ kind, message, cause? }`. |
 | `QueryErrorKind` | enum | `EMPTY_QUERY` / `EXECUTOR_FAILED`. |
-| `Schema` | type | Ideal schema shape (`table → column → type`). |
+| `Schema` / `SchemaLike` | type | Ideal schema shape (`table → column → type`) / the loosest accepted shape. |
 | `defineSchema(obj)` | function | Optional identity helper (see below). |
+| `ParseSelect` / `ParseStatement` / `ParsedStatement` / `Source` | type | Parser internals, exported for advanced tooling; not needed for normal use and more likely to change between minor versions. |
 
 **Driver adapters** (each on its own subpath, so no unused peer dependency is
 ever required):
 
 | Export | Subpath | Description |
 | ------ | ------- | ----------- |
-| `createPgExecutor(pool)` | `@owlsql/core/pg` | `pg.Pool` → `Executor`. |
-| `createMysql2Executor(pool)` | `@owlsql/core/mysql2` | `mysql2/promise` `Pool` → `Executor`. |
+| `createPgExecutor(client)` | `@owlsql/core/pg` | `pg` `Pool \| Client \| PoolClient` → `Executor`. |
+| `createMysql2Executor(connection)` | `@owlsql/core/mysql2` | `mysql2/promise` `Pool \| Connection` → `Executor`. |
 | `createPostgresJsExecutor(client)` | `@owlsql/core/postgres` | `postgres.Sql` → `Executor`. |
 | `createNodeSqliteExecutor(db)` | `@owlsql/core/node-sqlite` | `node:sqlite` `DatabaseSync` → `Executor`. |
+| `createMssqlExecutor(pool)` | `@owlsql/core/mssql` | `mssql` `ConnectionPool` → `Executor`, binding `@name` params. |
 | `createKyselyExecutor(db)` | `@owlsql/core/kysely` | `Kysely<DB>` → `Executor`, via `CompiledQuery.raw`. |
 
 **`query` return type.** `query` resolves to
@@ -818,7 +827,9 @@ This is a focused tool for the common read path, not a full SQL grammar:
 - **Scalar subqueries in the `SELECT` list are typed for the simple case** —
   a single-column, non-nested subquery (`select (select count(*) from posts
   where posts.user_id = users.id) as post_count from users`) resolves to
-  that column's type. A subquery selecting more than one column resolves to
+  that column's type, with `| null` added since a scalar subquery yields
+  NULL on zero rows (`count(...)` subqueries are exempt — they always
+  return a row). A subquery selecting more than one column resolves to
   `unknown` rather than picking one arbitrarily. Subqueries used as a value
   inside `WHERE` are not typed at all (`WHERE` isn't part of the typed
   structure — only scanned for parameter placeholders).
@@ -843,8 +854,9 @@ This is a focused tool for the common read path, not a full SQL grammar:
   bodies can't have their placeholders typed, and if one contains a
   parameter the whole query falls back to `unknown[]` rather than silently
   dropping that parameter — placeholders in the outer query (referencing a
-  CTE by name) are unaffected either way. Numbered placeholders are assumed
-  to appear in ascending order (`$1`, `$2`, ...).
+  CTE by name) are unaffected either way. Numbered placeholders bind by
+  their index (`$2` fills the second tuple slot even when it appears first);
+  a repeated `$n` occupies a single slot.
 - **Quoted identifiers** use `"..."` (standard), `[...]` (SQL Server), or
   `` `...` `` (MySQL — escape the backtick with `\`` inside the template
   literal). Schema-qualified tables (`public.users`) resolve by their final

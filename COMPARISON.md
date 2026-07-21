@@ -29,7 +29,7 @@ check the source link and open an issue.
 | You write | Raw SQL strings | Prisma's own query API | Builder method chains | Raw SQL (in `.sql` files or tags) | Builder-ish helpers or raw SQL via `db.sql` |
 | Build step required? | No (opt-in `generate` for schema only) | **Yes** — `prisma generate` | No (optional `kysely-codegen` for schema) | **Yes** — CLI codegen against a live DB | No (opt-in schema generation) |
 | Runtime SQL/query engine? | None — string passed through verbatim | Yes — TS query compiler (was a Rust binary) | Yes — compiles the builder chain to SQL every call | Minimal — executes an already-known, pre-extracted query | Yes — builds SQL from helper calls |
-| Bundle size (npm, min/gzip) | No dependencies; ~130 lines of runtime glue (`createTypedDb` + `Result` helpers) — erased type-level parser costs 0 bytes | ~1.6 MB / ~600 KB gzip (post-Rust, v6.16+/v7); was ~14 MB / ~7 MB gzip with the Rust engine | 189 KB / 38.7 KB gzip ([bundlephobia](https://bundlephobia.com/package/kysely)) | 399 KB / 85 KB gzip ([bundlephobia](https://bundlephobia.com/package/@pgtyped/runtime)) | Not resolvable on bundlephobia (build-tool/library hybrid); no bundled query engine beyond thin SQL-building helpers |
+| Bundle size (npm, min/gzip) | No dependencies; ~175 lines of runtime glue (`createTypedDb` + `Result` helpers) — erased type-level parser costs 0 bytes | ~1.6 MB / ~600 KB gzip (post-Rust, v6.16+/v7); was ~14 MB / ~7 MB gzip with the Rust engine | 189 KB / 38.7 KB gzip ([bundlephobia](https://bundlephobia.com/package/kysely)) | 399 KB / 85 KB gzip ([bundlephobia](https://bundlephobia.com/package/@pgtyped/runtime)) | Not resolvable on bundlephobia (build-tool/library hybrid); no bundled query engine beyond thin SQL-building helpers |
 
 ## Prisma
 
@@ -122,7 +122,7 @@ check the source link and open an issue.
 
 - **Build step**: none, ever, for queries — `Query<DB, 'select ...'>` is
   resolved by the same `tsc`/tsserver pass that already type-checks the rest
-  of your file. The optional `generate` CLI ([README](README.md#editor-autocomplete))
+  of your file. The optional `generate` CLI ([README](README.md#1-describe-your-schema))
   only produces the `DB` schema type, once, on demand — you can also just
   write that type by hand and never run it.
 - **Runtime**: the SQL string you write is handed to your executor
@@ -133,10 +133,10 @@ check the source link and open an issue.
   types don't exist at runtime.
 - **Bundle**: zero runtime dependencies (`package.json` has no
   `dependencies` field), and the runtime surface is `createTypedDb`,
-  `defineSchema`, and the `Result` helpers — about 130 lines of source
+  `defineSchema`, and the `Result` helpers — about 175 lines of source
   across [`src/index.ts`](src/index.ts) and [`src/result.ts`](src/result.ts)
   combined, most of which is type declarations erased at compile time. The
-  parser itself (~2,500 lines across `src/parse.ts`/`src/from.ts`/etc.) is
+  parser itself (~1,700 lines across `src/parse.ts`/`src/from.ts`/etc.) is
   100% types — it ships zero bytes to any runtime.
 - **DX trade-off, stated plainly**: this is the smallest surface area of
   the five because it does the least. No migrations, no relation loading, no
