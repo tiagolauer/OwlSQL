@@ -23,7 +23,7 @@ Two layers of tests:
   success path, param forwarding, the empty-query guard, and executor failure.
 
 CI (`.github/workflows/ci.yml`) runs the type tests against a matrix of
-TypeScript versions (5.0, 5.3, 5.6, latest) plus the runtime tests, so a
+TypeScript versions (5.0, 5.3, 5.6, 6.0) plus the runtime tests, so a
 template-literal behavior change in a new TypeScript release is caught early.
 
 ## Publishing
