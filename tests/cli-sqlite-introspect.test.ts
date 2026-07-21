@@ -2,19 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { introspectSqlite } from '../src/cli/dialects/sqlite';
+import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
 
 function withTempDatabase(setup: (db: DatabaseSync) => void): string {
   const dir = mkdtempSync(join(tmpdir(), 'owlsql-'));
   const file = join(dir, 'test.db');
-  const db = new DatabaseSync(file);
+  const db = new (loadSqlite())(file);
   setup(db);
   db.close();
   return file;
 }
 
-describe('introspectSqlite', () => {
+describe.skipIf(!sqliteAvailable)('introspectSqlite', () => {
   it('introspects columns, types, and nullability from a real database file', async () => {
     const file = withTempDatabase((db) => {
       db.exec(`

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { DatabaseSync } from 'node:sqlite';
 import { runGenerate, detectDialect } from '../src/cli/generate';
+import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
 
 describe('detectDialect', () => {
   it('detects postgres, mysql, and mssql from the URL scheme', () => {
@@ -27,14 +27,14 @@ describe('detectDialect', () => {
   });
 });
 
-describe('runGenerate (end to end against a real sqlite file)', () => {
+describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite file)', () => {
   it('introspects the database and writes the rendered schema to --out', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'owlsql-'));
     const dbFile = join(dir, 'app.db');
     const outFile = join(dir, 'schema.ts');
 
     try {
-      const db = new DatabaseSync(dbFile);
+      const db = new (loadSqlite())(dbFile);
       db.exec('create table users (id integer primary key, name text not null, bio text)');
       db.close();
 
@@ -60,7 +60,7 @@ describe('runGenerate (end to end against a real sqlite file)', () => {
     const dbFile = join(dir, 'empty.db');
 
     try {
-      const db = new DatabaseSync(dbFile);
+      const db = new (loadSqlite())(dbFile);
       db.close();
 
       await expect(
