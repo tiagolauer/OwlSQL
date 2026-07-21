@@ -3,9 +3,15 @@ export enum ResultStatus {
   Error = 'ERROR',
 }
 
+export interface QueryMeta {
+  rowCount?: number | bigint;
+  lastInsertRowid?: number | bigint;
+}
+
 export interface Ok<T> {
   status: ResultStatus.Ok;
   value: T;
+  meta?: QueryMeta;
 }
 
 export interface Err<E> {
@@ -15,8 +21,10 @@ export interface Err<E> {
 
 export type Result<T, E> = Ok<T> | Err<E>;
 
-export function ok<T>(value: T): Ok<T> {
-  return { status: ResultStatus.Ok, value };
+export function ok<T>(value: T, meta?: QueryMeta): Ok<T> {
+  return meta === undefined
+    ? { status: ResultStatus.Ok, value }
+    : { status: ResultStatus.Ok, value, meta };
 }
 
 export function err<E>(error: E): Err<E> {

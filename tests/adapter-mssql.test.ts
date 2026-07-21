@@ -21,7 +21,7 @@ describe('createMssqlExecutor', () => {
     const { pool, request } = fakePool({ recordset: [{ id: 1 }] });
     const executor = createMssqlExecutor(pool);
 
-    const rows = await executor('select id from users where name = @name and id = @id', [
+    const result = await executor('select id from users where name = @name and id = @id', [
       'ada',
       7,
     ]);
@@ -30,7 +30,7 @@ describe('createMssqlExecutor', () => {
       ['name', 'ada'],
       ['id', 7],
     ]);
-    expect(rows).toEqual([{ id: 1 }]);
+    expect(result).toEqual({ rows: [{ id: 1 }], meta: {} });
   });
 
   it('binds a repeated @name once', async () => {
@@ -51,12 +51,12 @@ describe('createMssqlExecutor', () => {
     expect(request.input).not.toHaveBeenCalled();
   });
 
-  it('returns an empty array when a write produces no recordset', async () => {
-    const { pool } = fakePool({ recordset: undefined });
+  it('returns empty rows and rowCount metadata when a write produces no recordset', async () => {
+    const { pool } = fakePool({ recordset: undefined, rowsAffected: [3] });
     const executor = createMssqlExecutor(pool);
 
-    const rows = await executor('update users set name = @name where id = @id', ['ada', 1]);
+    const result = await executor('update users set name = @name where id = @id', ['ada', 1]);
 
-    expect(rows).toEqual([]);
+    expect(result).toEqual({ rows: [], meta: { rowCount: 3 } });
   });
 });

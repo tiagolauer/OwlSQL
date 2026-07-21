@@ -1,10 +1,10 @@
 import type { ConnectionPool } from 'mssql';
-import type { Executor } from '../index.js';
+import type { DialectExecutor, QueryMeta } from '../index.js';
 import { collectNamedParameters } from './named-params.js';
 
 const MSSQL_PARAM_PREFIXES: ReadonlySet<string> = new Set(['@']);
 
-export function createMssqlExecutor(pool: ConnectionPool): Executor {
+export function createMssqlExecutor(pool: ConnectionPool): DialectExecutor<'at'> {
   return async (sql, params) => {
     const request = pool.request();
 
@@ -13,6 +13,10 @@ export function createMssqlExecutor(pool: ConnectionPool): Executor {
     });
 
     const result = await request.query(sql);
-    return result.recordset ?? [];
+    const meta: QueryMeta = {};
+    if (typeof result.rowsAffected?.[0] === 'number') {
+      meta.rowCount = result.rowsAffected[0];
+    }
+    return { rows: result.recordset ?? [], meta };
   };
 }
