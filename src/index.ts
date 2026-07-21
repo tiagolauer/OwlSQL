@@ -5,9 +5,10 @@ import type {
   InferRow,
   InferResultStrict,
   InferRowStrict,
+  QueryTypeError,
 } from './parse.js';
-import type { InferParams } from './params.js';
-import { type Result, ok, err } from './result.js';
+import type { InferParams, UsedPlaceholderStyles } from './params.js';
+import { type Result, type QueryMeta, ok, err } from './result.js';
 
 export type {
   Schema,
@@ -21,7 +22,7 @@ export type {
 export type { ParseSelect, ParseStatement, ParsedStatement, Source } from './parse.js';
 export type { FunctionReturnTypes } from './functions.js';
 export type { InferParams } from './params.js';
-export type { Result, Ok, Err } from './result.js';
+export type { Result, Ok, Err, QueryMeta } from './result.js';
 export { ResultStatus, ok, err, isOk, isErr } from './result.js';
 
 export type Query<DB extends SchemaLike, Q extends string> = InferResult<DB, Q>;
@@ -45,20 +46,55 @@ export interface QueryError {
   cause?: unknown;
 }
 
-export type Executor = (sql: string, params: readonly unknown[]) => Promise<unknown[]>;
+export type ExecutorResult = unknown[] | { rows: unknown[]; meta?: QueryMeta };
+
+export type Executor = (sql: string, params: readonly unknown[]) => Promise<ExecutorResult>;
+
+export type PlaceholderStyle = 'dollar' | 'question' | 'at';
+
+export type DialectExecutor<Style extends PlaceholderStyle = PlaceholderStyle> = Executor & {
+  readonly __placeholderStyle?: Style;
+};
+
+type ValidatePlaceholderStyle<
+  Q extends string,
+  Style extends PlaceholderStyle,
+> = PlaceholderStyle extends Style
+  ? unknown
+  : [UsedPlaceholderStyles<Q>] extends [never]
+    ? unknown
+    : [UsedPlaceholderStyles<Q>] extends [Style]
+      ? unknown
+      : QueryTypeError<'the query placeholder style does not match the executor dialect'>;
 
 export interface TypedDbOptions {
   strict?: boolean;
+  placeholders?: PlaceholderStyle;
 }
 
-export interface TypedDb<DB extends SchemaLike, Strict extends boolean = false> {
+type OptionsStyle<Options> = Options extends { placeholders: infer Style extends PlaceholderStyle }
+  ? Style
+  : PlaceholderStyle;
+
+export interface TypedDb<
+  DB extends SchemaLike,
+  Strict extends boolean = false,
+  Style extends PlaceholderStyle = PlaceholderStyle,
+> {
   readonly __owlsqlTypedDb?: true;
   query<Q extends string>(
-    sql: Q,
+    sql: Q & ValidatePlaceholderStyle<Q, Style>,
     ...params: InferParams<DB, Q>
   ): Promise<
     Result<Strict extends true ? InferResultStrict<DB, Q> : InferResult<DB, Q>, QueryError>
   >;
+}
+
+function describeCause(cause: unknown): string {
+  if (cause instanceof Error && cause.message.length > 0) {
+    return cause.message;
+  }
+  return String(cause);
 }
 
 export function createTypedDb<
@@ -67,7 +103,7 @@ export function createTypedDb<
 >(
   executor: Executor,
   options?: Options,
-): TypedDb<DB, Options extends { strict: true } ? true : false> {
+): TypedDb<DB, Options extends { strict: true } ? true : false, OptionsStyle<Options>> {
   void options;
   return {
     async query(sql, ...params) {
@@ -79,12 +115,14 @@ export function createTypedDb<
       }
 
       try {
-        const rows = await executor(sql, params);
-        return ok(rows as never);
+        const executed = await executor(sql, params);
+        const rows = Array.isArray(executed) ? executed : executed.rows;
+        const meta = Array.isArray(executed) ? undefined : executed.meta;
+        return ok(rows as never, meta);
       } catch (cause) {
         return err({
           kind: QueryErrorKind.ExecutorFailed,
-          message: 'The executor threw while running the query.',
+          message: `The executor threw while running the query: ${describeCause(cause)}`,
           cause,
         });
       }

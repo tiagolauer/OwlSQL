@@ -269,6 +269,17 @@ type CteBodiesHavePlaceholder<Q extends string> = [ParseWithClause<Normalize<Q>>
     ? AnyCteBodyHasPlaceholder<Ctes>
     : false;
 
+type StripDoubledAt<S extends string> = S extends `${infer Before}@@${infer After}`
+  ? StripDoubledAt<`${Before}${After}`>
+  : S;
+
+export type UsedPlaceholderStyles<Q extends string> = Normalize<Q> extends infer Text extends string
+  ?
+      | (Text extends `${string}?${string}` ? 'question' : never)
+      | (Text extends `${string}$${string}` ? 'dollar' : never)
+      | (StripDoubledAt<Text> extends `${string}@${string}` ? 'at' : never)
+  : never;
+
 export type InferParams<DB extends SchemaLike, Q extends string> =
   IsKeyword<FirstWord<Normalize<Q>>, 'insert'> extends true
     ? InsertParamTypes<DB, Normalize<Q>>

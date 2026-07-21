@@ -453,6 +453,26 @@ For this to work, write the comparison **with spaces around the operator**
 (`id = $1`, not `id=$1`) — that is what lets the compiler see the column,
 operator, and placeholder as separate tokens.
 
+**Placeholder-style checking (opt-in).** The type layer accepts `$n`, `?` and
+`@name` interchangeably, but each driver only understands its own style — `?`
+with the pg adapter is a runtime syntax error. Declare the style your executor
+expects and mismatches become compile errors:
+
+```ts
+const db = createTypedDb<DB, { placeholders: 'dollar' }>(createPgExecutor(pool));
+
+// @ts-expect-error '?' is not a pg placeholder — use $1
+await db.query('select id from users where id = ?', 1);
+```
+
+Styles: `'dollar'` (pg, postgres.js), `'question'` (mysql2), `'at'` (mssql).
+`node:sqlite` accepts all three, so leave the option off there.
+
+**Write metadata.** Adapters report driver metadata alongside the rows: on a
+successful `Result`, `result.meta?.rowCount` carries the affected-row count
+and `result.meta?.lastInsertRowid` the generated id (where the driver
+provides one), so an INSERT without `RETURNING` is no longer a black box.
+
 ### 11. Transactions
 
 There is no built-in transaction API yet — and there is a footgun to know
