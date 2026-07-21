@@ -6,27 +6,20 @@ action. This one is meant to be **opened in a real VSCode window and typed
 into** — unlike [`examples/playground`](../playground), which is meant for
 StackBlitz.
 
-> **⚠️ Not on npm yet.** The project was renamed from `sql-template-typed` to
-> `@owlsql/core` and hasn't been published under the new scoped name yet.
-> `npm install` in this folder won't give you a working plugin until the
-> first `@owlsql/core` publish lands. Until then, build from source and point
-> this demo at the local build instead (step 1 below).
-
 ## Setup
 
-1. From the repo root: `npm install && npm run build`.
-2. In this folder: `npm install ../.. typescript --no-save` (installs the
-   local build instead of waiting on npm; `--no-save` keeps this
-   directory's `package.json` clean for when the real package catches up).
-3. Open **this folder** (`examples/ts-plugin-demo`) in VSCode — not the
+1. In this folder: `npm install` (`@owlsql/core` is on npm; to test
+   unpublished changes instead, run `npm install && npm run build` at the
+   repo root and then `npm install ../.. typescript --no-save` here).
+2. Open **this folder** (`examples/ts-plugin-demo`) in VSCode — not the
    monorepo root, so the workspace TypeScript version resolves correctly.
-4. Command Palette → **"TypeScript: Select TypeScript Version" → "Use
+3. Command Palette → **"TypeScript: Select TypeScript Version" → "Use
    Workspace Version"**. This is the step that's easy to skip and makes the
    plugin silently do nothing.
-5. Trust the workspace if prompted (VSCode's Restricted Mode disables
+4. Trust the workspace if prompted (VSCode's Restricted Mode disables
    extensions/plugins in untrusted folders — this tripped up the very first
    attempt at recording this).
-6. Open `demo.ts`. Place your cursor right after `na` on the `select id, na`
+5. Open `demo.ts`. Place your cursor right after `na` on the `select id, na`
    line and delete/retype the last couple of characters — completions
    trigger on typing, not just on opening the file.
 
