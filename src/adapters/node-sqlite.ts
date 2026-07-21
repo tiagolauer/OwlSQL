@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Executor } from '../index.js';
+import type { DialectExecutor } from '../index.js';
 import { collectNamedParameters } from './named-params.js';
 
 type SqliteParam = null | number | bigint | string | NodeJS.ArrayBufferView;
@@ -19,7 +19,9 @@ function toSqliteValue(value: unknown): SqliteParam {
   return value as SqliteParam;
 }
 
-export function createNodeSqliteExecutor(db: DatabaseSync): Executor {
+export function createNodeSqliteExecutor(
+  db: DatabaseSync,
+): DialectExecutor<'question' | 'at' | 'dollar'> {
   return async (sql, params) => {
     const statement = db.prepare(sql);
     const values = params.map(toSqliteValue);

@@ -1,4 +1,4 @@
-import type { Executor } from '../src/index.js';
+import type { Executor, DialectExecutor } from '../src/index.js';
 import type { Pool as PgPool, Client as PgClient, PoolClient as PgPoolClient } from 'pg';
 import type { Pool as Mysql2Pool, Connection as Mysql2Connection } from 'mysql2/promise';
 import type postgres from 'postgres';
@@ -18,19 +18,22 @@ type Equal<A, B> =
 type Expect<T extends true> = T;
 
 type PgExecutorMatchesShape = Expect<
-  Equal<ReturnType<typeof createPgExecutor>, Executor>
+  Equal<ReturnType<typeof createPgExecutor>, DialectExecutor<'dollar'>>
 >;
 
 type Mysql2ExecutorMatchesShape = Expect<
-  Equal<ReturnType<typeof createMysql2Executor>, Executor>
+  Equal<ReturnType<typeof createMysql2Executor>, DialectExecutor<'question'>>
 >;
 
 type PostgresJsExecutorMatchesShape = Expect<
-  Equal<ReturnType<typeof createPostgresJsExecutor>, Executor>
+  Equal<ReturnType<typeof createPostgresJsExecutor>, DialectExecutor<'dollar'>>
 >;
 
 type NodeSqliteExecutorMatchesShape = Expect<
-  Equal<ReturnType<typeof createNodeSqliteExecutor>, Executor>
+  Equal<
+    ReturnType<typeof createNodeSqliteExecutor>,
+    DialectExecutor<'question' | 'at' | 'dollar'>
+  >
 >;
 
 type KyselyExecutorMatchesShape = Expect<
