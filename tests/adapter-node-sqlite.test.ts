@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { DatabaseSync } from 'node:sqlite';
 import { createTypedDb, isOk } from '../src/index';
 import { createNodeSqliteExecutor } from '../src/adapters/node-sqlite';
+import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
 
 interface DB {
   users: { id: number; name: string };
 }
 
-function seededDatabase(): DatabaseSync {
+function seededDatabase(): import('node:sqlite').DatabaseSync {
+  const DatabaseSync = loadSqlite();
   const db = new DatabaseSync(':memory:');
   db.exec('create table users (id integer primary key, name text not null)');
   db.prepare('insert into users (id, name) values (?, ?)').run(1, 'ada');
@@ -15,7 +16,7 @@ function seededDatabase(): DatabaseSync {
   return db;
 }
 
-describe('createNodeSqliteExecutor', () => {
+describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
   it('runs a real query against an in-memory node:sqlite database', async () => {
     const sqlite = seededDatabase();
     const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
@@ -73,6 +74,7 @@ describe('createNodeSqliteExecutor', () => {
   });
 
   it('coerces boolean and Date params to driver-supported values', async () => {
+    const DatabaseSync = loadSqlite();
     const sqlite = new DatabaseSync(':memory:');
     sqlite.exec('create table flags (id integer primary key, active integer, seen_at text)');
     const executor = createNodeSqliteExecutor(sqlite);

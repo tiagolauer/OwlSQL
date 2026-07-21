@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { DatabaseSync } from 'node:sqlite';
 import { detectDialect, runGenerate } from '../src/cli/generate.js';
+import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
 import { normalizeSqlitePath } from '../src/cli/dialects/sqlite.js';
 import { formatCliError } from '../src/cli/index.js';
 
 function createDatabase(): { dir: string; file: string } {
   const dir = mkdtempSync(join(tmpdir(), 'owlsql-'));
   const file = join(dir, 'app.db');
-  const db = new DatabaseSync(file);
+  const db = new (loadSqlite())(file);
   db.exec('create table users (id integer primary key, name text not null)');
   db.exec('create table posts (id integer primary key, title text not null)');
   db.close();
@@ -31,7 +31,7 @@ describe('sqlite URL forms', () => {
     expect(normalizeSqlitePath('./app.db')).toBe('./app.db');
   });
 
-  it('introspects through a sqlite:// URL', async () => {
+  it.skipIf(!sqliteAvailable)('introspects through a sqlite:// URL', async () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
@@ -42,7 +42,7 @@ describe('sqlite URL forms', () => {
   });
 });
 
-describe('table filtering', () => {
+describe.skipIf(!sqliteAvailable)('table filtering', () => {
   it('honors --table include lists', async () => {
     const { dir, file } = createDatabase();
     try {
@@ -84,7 +84,7 @@ describe('table filtering', () => {
   });
 });
 
-describe('write errors', () => {
+describe.skipIf(!sqliteAvailable)('write errors', () => {
   it('reports a missing output directory clearly', async () => {
     const { dir, file } = createDatabase();
     try {
