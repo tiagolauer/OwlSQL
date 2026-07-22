@@ -20,6 +20,13 @@ the editor tooling, not a promise of dates.
   databases.
 - `@owlsql/core/ts-plugin` — in-editor column-name autocomplete and
   hover info (resolved column type on hover).
+- `WHERE`-clause column validation in strict mode — the column immediately
+  before a comparison (`=`,`<>`,`<`,`>`,`<=`,`>=`), `LIKE`/`ILIKE`, `IN`,
+  `BETWEEN`, or `IS [NOT] NULL`/`IS [NOT] DISTINCT FROM` is now checked
+  against the query's sources, surfacing the same `unknown column`/
+  `unknown alias`/`ambiguous column` `QueryTypeError`s the `SELECT` list
+  already produces. See [README limitations](README.md#limitations) for the
+  exact scope (LHS-only, subqueries-as-values still skipped).
 - [COMPARISON.md](COMPARISON.md) — sourced comparison vs Prisma/Kysely/
   pgTyped/Zapatos on build step, runtime cost, bundle size, and DX.
 
@@ -28,10 +35,11 @@ the editor tooling, not a promise of dates.
 Bigger pieces that need real parser or compiler-API design work — not
 first-timer-sized, but open if you want to dig in:
 
-- **Scalar subqueries in `WHERE`** (still resolve to `unknown` — `WHERE`
-  isn't part of the typed structure at all right now, only scanned for
-  parameter placeholders). Single-column `SELECT`-list scalar subqueries are
-  typed now — see [README limitations](README.md#limitations). Multi-column
+- **Scalar subqueries in `WHERE`** (still resolve to `unknown` — used as a
+  value, they are not typed and are not part of the new column-validation
+  check above either, which only inspects the identifier immediately before
+  an operator). Single-column `SELECT`-list scalar subqueries are typed
+  now — see [README limitations](README.md#limitations). Multi-column
   `SELECT`-list subqueries still resolve to `unknown` too, by design.
 - **`ts-plugin` v2**: inline diagnostics for unknown columns/tables (reusing
   strict-mode's `QueryTypeError` logic but surfaced as a `tsserver`
