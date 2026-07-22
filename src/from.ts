@@ -35,21 +35,27 @@ type IsBoundary<Word extends string> = Lowercase<Word> extends ClauseBoundary
   ? true
   : false;
 
-type TakeFromClause<
+type SplitFromClauseBoundary<
   S extends string,
   Depth extends unknown[] = [],
   Accumulated extends string = '',
 > = S extends `${infer Head} ${infer Tail}`
   ? Depth extends []
     ? IsBoundary<Head> extends true
-      ? Trim<Accumulated>
-      : TakeFromClause<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
-    : TakeFromClause<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
+      ? { clause: Trim<Accumulated>; rest: Trim<`${Head} ${Tail}`> }
+      : SplitFromClauseBoundary<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
+    : SplitFromClauseBoundary<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
   : Depth extends []
     ? IsBoundary<S> extends true
-      ? Trim<Accumulated>
-      : Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>
-    : Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>;
+      ? { clause: Trim<Accumulated>; rest: Trim<S> }
+      : { clause: Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>; rest: '' }
+    : { clause: Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>; rest: '' };
+
+type TakeFromClause<S extends string> = SplitFromClauseBoundary<S>['clause'];
+
+export type RestAfterFromClause<AfterFrom extends string> = SplitFromClauseBoundary<AfterFrom>['rest'];
+
+export type TakeUntilClauseBoundary<S extends string> = SplitFromClauseBoundary<S>['clause'];
 
 type JoinAfterOuter<
   Tail extends string,

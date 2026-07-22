@@ -16,9 +16,10 @@ import type {
   FunctionOutputName,
   FunctionReturnType,
 } from './functions.js';
-import type { Source, ParseFromClause } from './from.js';
+import type { Source, ParseFromClause, RestAfterFromClause } from './from.js';
 import type { IsCaseExpression, SplitCaseExpression, CaseExpressionType } from './case.js';
 import type { ParseWithClause, BuildCteMap } from './cte.js';
+import type { ExtractSelectWhereText, ExtractUpdateDeleteWhereText, WhereClauseError } from './where.js';
 
 export type Schema = Record<string, Record<string, unknown>>;
 
@@ -170,6 +171,7 @@ type SingleSource<Table extends string> = [
 export interface ParsedStatement {
   columns: string;
   sources: Source[];
+  whereText: string;
 }
 
 type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer Body
@@ -179,8 +181,12 @@ type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer B
         afterFrom: infer AfterFrom;
       }
       ? AfterFrom extends string
-        ? { columns: Columns; sources: ParseFromClause<AfterFrom> }
-        : { columns: Columns; sources: [] }
+        ? {
+            columns: Columns;
+            sources: ParseFromClause<AfterFrom>;
+            whereText: ExtractSelectWhereText<RestAfterFromClause<AfterFrom>>;
+          }
+        : { columns: Columns; sources: []; whereText: '' }
       : never
     : never
   : never;
@@ -189,11 +195,23 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
   ? IsKeyword<Keyword, 'select'> extends true
     ? ParseSelectBody<S>
     : IsKeyword<Keyword, 'insert'> extends true
-      ? { columns: ReturningOrOutputColumns<S, 'values'>; sources: SingleSource<WordAfterKeyword<S, 'into'>> }
+      ? {
+          columns: ReturningOrOutputColumns<S, 'values'>;
+          sources: SingleSource<WordAfterKeyword<S, 'into'>>;
+          whereText: '';
+        }
       : IsKeyword<Keyword, 'update'> extends true
-        ? { columns: ReturningOrOutputColumns<S, 'where'>; sources: SingleSource<WordAfterKeyword<S, 'update'>> }
+        ? {
+            columns: ReturningOrOutputColumns<S, 'where'>;
+            sources: SingleSource<WordAfterKeyword<S, 'update'>>;
+            whereText: ExtractUpdateDeleteWhereText<S>;
+          }
         : IsKeyword<Keyword, 'delete'> extends true
-          ? { columns: ReturningOrOutputColumns<S, 'where'>; sources: SingleSource<WordAfterKeyword<S, 'from'>> }
+          ? {
+              columns: ReturningOrOutputColumns<S, 'where'>;
+              sources: SingleSource<WordAfterKeyword<S, 'from'>>;
+              whereText: ExtractUpdateDeleteWhereText<S>;
+            }
           : never
   : never;
 
@@ -722,6 +740,22 @@ type BuildDerivedSourceMap<
     : BuildDerivedSourceMap<DB, Tail, Strict, Accumulated>
   : Accumulated;
 
+type ApplyWhereCheck<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  WhereText extends string,
+  Strict extends boolean,
+  Row,
+> = Strict extends true
+  ? Row extends QueryTypeError<string>
+    ? Row
+    : Trim<WhereText> extends ''
+      ? Row
+      : [WhereClauseError<DB, Sources, WhereText>] extends [never]
+        ? Row
+        : WhereClauseError<DB, Sources, WhereText>
+  : Row;
+
 export type InferRowWith<
   DB extends SchemaLike,
   Q extends string,
@@ -733,20 +767,27 @@ export type InferRowWith<
   ? ParseStatementNormalized<EffectiveQuery> extends {
       columns: infer Columns extends string;
       sources: infer Sources extends Source[];
+      whereText: infer WhereText extends string;
     }
     ? (CteDB & BuildDerivedSourceMap<CteDB, Sources, Strict>) extends infer EffectiveDB extends SchemaLike
       ? Trim<Columns> extends ''
         ? EmptyRow
-        : IsSelectAll<Columns> extends true
-          ? StarRow<EffectiveDB, Sources, Strict>
-          : BuildSelection<
-              EffectiveDB,
-              Sources,
-              ParseColumnEntries<SplitColumnList<Columns>> extends [string, string][]
-                ? ParseColumnEntries<SplitColumnList<Columns>>
-                : [],
-              Strict
-            >
+        : ApplyWhereCheck<
+            EffectiveDB,
+            Sources,
+            WhereText,
+            Strict,
+            IsSelectAll<Columns> extends true
+              ? StarRow<EffectiveDB, Sources, Strict>
+              : BuildSelection<
+                  EffectiveDB,
+                  Sources,
+                  ParseColumnEntries<SplitColumnList<Columns>> extends [string, string][]
+                    ? ParseColumnEntries<SplitColumnList<Columns>>
+                    : [],
+                  Strict
+                >
+          >
       : never
     : never
   : never;
