@@ -39,7 +39,7 @@ type StripTrailingListPunctuation<S extends string> = S extends `${infer Rest})`
     ? StripTrailingListPunctuation<Rest>
     : S;
 
-type CleanScanToken<S extends string> = StripTrailingListPunctuation<StripLeadingParens<S>>;
+export type CleanScanToken<S extends string> = StripTrailingListPunctuation<StripLeadingParens<S>>;
 
 type CleanColumnToken<S extends string> = StripLeadingParens<S> extends infer Stripped extends string
   ? Stripped extends `${string}(${string}`
@@ -47,7 +47,7 @@ type CleanColumnToken<S extends string> = StripLeadingParens<S> extends infer St
     : StripTrailingListPunctuation<Stripped>
   : never;
 
-type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends '?'
+export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends '?'
   ? true
   : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@'
     ? false
