@@ -831,11 +831,23 @@ This is a focused tool for the common read path, not a full SQL grammar:
   NULL on zero rows (`count(...)` subqueries are exempt — they always
   return a row). A subquery selecting more than one column resolves to
   `unknown` rather than picking one arbitrarily. Subqueries used as a value
-  inside `WHERE` are not typed at all (`WHERE` isn't part of the typed
-  structure — only scanned for parameter placeholders).
+  inside `WHERE` are not typed at all, and are not validated either — see
+  the `WHERE` bullet below.
 - **`CASE` does not support nested `CASE`.** The parser looks for the first
   top-level `END`; a `CASE` nested inside another `CASE`'s branch is not
   supported.
+- **`WHERE` has no typed shape, but strict mode validates its column
+  references.** `WHERE` never contributes to the query's result row type —
+  only the column immediately before a comparison (`=`,`<>`,`<`,`>`,`<=`,
+  `>=`), `LIKE`/`ILIKE`, `IN`, `BETWEEN`, or `IS`/`IS NOT` (covering
+  `IS [NOT] NULL` and `IS [NOT] DISTINCT FROM`) is checked, in strict mode
+  only, producing the same `unknown column`/`unknown alias`/`ambiguous
+  column` `QueryTypeError`s the `SELECT` list already produces. The operand
+  on the *right* of these operators is not validated (usually a literal or
+  parameter). A parenthesized subquery used as a value (`where id in
+  (select ...)`) is skipped entirely rather than validated against the
+  outer query's sources — its own `WHERE`, if any, is still checked, just
+  against its own `FROM`, when it's itself a derived table or CTE body.
 - **Window `OVER (...)` clauses are only used as a boundary**, not parsed for
   their own typing — `PARTITION BY`/`ORDER BY` content inside `OVER (...)` is
   discarded, not validated.
