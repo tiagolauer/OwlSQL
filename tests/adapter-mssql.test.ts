@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ConnectionPool } from 'mssql';
+import type { ConnectionPool, Request, Transaction } from 'mssql';
 import { createMssqlExecutor } from '../src/adapters/mssql.js';
 
 interface FakeRequest {
@@ -7,13 +7,23 @@ interface FakeRequest {
   query: ReturnType<typeof vi.fn>;
 }
 
-function fakePool(result: unknown): { pool: ConnectionPool; request: FakeRequest } {
-  const request: FakeRequest = {
+function fakeRequest(result: unknown): FakeRequest {
+  return {
     input: vi.fn(),
     query: vi.fn().mockResolvedValue(result),
   };
+}
+
+function fakePool(result: unknown): { pool: ConnectionPool; request: FakeRequest } {
+  const request = fakeRequest(result);
   const pool = { request: () => request } as unknown as ConnectionPool;
   return { pool, request };
+}
+
+function fakeTransaction(result: unknown): { transaction: Transaction; request: FakeRequest } {
+  const request = fakeRequest(result);
+  const transaction = { request: () => request } as unknown as Transaction;
+  return { transaction, request };
 }
 
 describe('createMssqlExecutor', () => {
@@ -58,6 +68,26 @@ describe('createMssqlExecutor', () => {
     const result = await executor('update users set name = @name where id = @id', ['ada', 1]);
 
     expect(result).toEqual({ rows: [], meta: { rowCount: 3 } });
+  });
+
+  it('routes the query through an open transaction instead of a fresh pool request', async () => {
+    const { transaction, request } = fakeTransaction({ recordset: [{ id: 1 }] });
+    const executor = createMssqlExecutor(transaction);
+
+    const result = await executor('select id from users where id = @id', [1]);
+
+    expect(request.input.mock.calls).toEqual([['id', 1]]);
+    expect(result).toEqual({ rows: [{ id: 1 }], meta: {} });
+  });
+
+  it('accepts an already-bound Request directly, without calling .request() on it', async () => {
+    const request = fakeRequest({ recordset: [{ id: 1 }] }) as unknown as Request;
+    const executor = createMssqlExecutor(request);
+
+    const result = await executor('select id from users where id = @id', [1]);
+
+    expect((request as unknown as FakeRequest).input.mock.calls).toEqual([['id', 1]]);
+    expect(result).toEqual({ rows: [{ id: 1 }], meta: {} });
   });
 
   it('binds a repeated @name once, without misaligning the parameter after it', async () => {
