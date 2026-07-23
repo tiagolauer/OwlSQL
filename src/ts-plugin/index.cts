@@ -7,6 +7,7 @@ import diagnosticsModule = require('./diagnostics.cjs');
 const {
   getSelectListContext,
   getWhereClauseContext,
+  getFromClauseContext,
   findSources,
   findSourceByAlias,
   getQualifierBefore,
@@ -29,6 +30,33 @@ function resolveTableScope(
   }
 
   return sources.length > 0 ? sources.map((source) => source.table) : null;
+}
+
+function completionsFromNames(
+  names: string[],
+  prefix: string,
+  position: number,
+  kind: ts.ScriptElementKind,
+): ts.WithMetadata<ts.CompletionInfo> | null {
+  const lowerPrefix = prefix.toLowerCase();
+  const filtered = names.filter((name) => name.toLowerCase().startsWith(lowerPrefix));
+  if (filtered.length === 0) {
+    return null;
+  }
+
+  const replacementSpan = { start: position - prefix.length, length: prefix.length };
+
+  return {
+    isGlobalCompletion: false,
+    isMemberCompletion: false,
+    isNewIdentifierLocation: false,
+    entries: filtered.map((name) => ({
+      name,
+      kind,
+      sortText: '0',
+      replacementSpan,
+    })),
+  };
 }
 
 function init(modules: { typescript: typeof ts }) {
@@ -68,37 +96,33 @@ function init(modules: { typescript: typeof ts }) {
         const literalStart = match.literal.getStart(sourceFile) + 1;
         const textBeforeCursor = sourceFile.text.slice(literalStart, position);
         const context = getSelectListContext(textBeforeCursor) ?? getWhereClauseContext(textBeforeCursor);
-        if (!context) {
-          return native();
+        if (context) {
+          const fullLiteralText = match.literal.text;
+          const sources = findSources(fullLiteralText);
+          const table = resolveTableScope(sources, context.qualifier);
+          const columns = getColumnNames(checker, match.dbType, match.literal, table);
+          const response = completionsFromNames(
+            columns,
+            context.prefix,
+            position,
+            typescript.ScriptElementKind.memberVariableElement,
+          );
+          return response ?? native();
         }
 
-        const fullLiteralText = match.literal.text;
-        const sources = findSources(fullLiteralText);
-        const table = resolveTableScope(sources, context.qualifier);
-        const columns = getColumnNames(checker, match.dbType, match.literal, table);
-        const prefix = context.prefix.toLowerCase();
-        const filtered = columns.filter((name) => name.toLowerCase().startsWith(prefix));
-
-        if (filtered.length === 0) {
-          return native();
+        const tableContext = getFromClauseContext(textBeforeCursor);
+        if (tableContext) {
+          const tableNames = match.dbType.getProperties().map((symbol) => symbol.getName());
+          const response = completionsFromNames(
+            tableNames,
+            tableContext.prefix,
+            position,
+            typescript.ScriptElementKind.classElement,
+          );
+          return response ?? native();
         }
 
-        const replacementSpan = {
-          start: position - context.prefix.length,
-          length: context.prefix.length,
-        };
-
-        return {
-          isGlobalCompletion: false,
-          isMemberCompletion: false,
-          isNewIdentifierLocation: false,
-          entries: filtered.map((name) => ({
-            name,
-            kind: typescript.ScriptElementKind.memberVariableElement,
-            sortText: '0',
-            replacementSpan,
-          })),
-        };
+        return native();
       } catch {
         return native();
       }

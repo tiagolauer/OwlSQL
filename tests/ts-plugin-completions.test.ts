@@ -8,7 +8,8 @@ import { buildProgram } from './ts-plugin-test-helpers.js';
 
 const { matchQueryLiteral } = detectModule;
 const { getColumnNames } = schemaModule;
-const { getSelectListContext, getWhereClauseContext, findFromTable } = sqlContext;
+const { getSelectListContext, getWhereClauseContext, getFromClauseContext, findFromTable } =
+  sqlContext;
 
 const FIXTURE = `
 import type { TypedDb } from '@owlsql/core';
@@ -23,6 +24,7 @@ declare const db: TypedDb<DB>;
 db.query(\`select id, na\`);
 db.query(\`select id, na from posts\`);
 db.query(\`select id from users where na\`);
+db.query(\`select id from po\`);
 `;
 
 describe('ts-plugin: detect + schema against a real ts.Program', () => {
@@ -116,5 +118,30 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
     const filtered = columns.filter((name) => name.startsWith(context.prefix));
 
     expect(filtered).toEqual(['name']);
+  });
+
+  it('suggests table names right after FROM (issue #175 repro)', () => {
+    const { program, sourceFile, dir } = buildProgram(FIXTURE, 'owlsql-ts-plugin-completions-');
+    cleanupDir = dir;
+    const checker = program.getTypeChecker();
+
+    const queryText = 'select id from po';
+    const literalStart = sourceFile.text.indexOf(`\`${queryText}\``) + 1;
+    const cursor = sourceFile.text.indexOf(queryText) + queryText.length;
+    const match = matchQueryLiteral(ts, checker, sourceFile, cursor);
+    expect(match).not.toBeNull();
+    if (!match) return;
+
+    const textBeforeCursor = sourceFile.text.slice(literalStart, cursor);
+    expect(getSelectListContext(textBeforeCursor) ?? getWhereClauseContext(textBeforeCursor)).toBeNull();
+
+    const context = getFromClauseContext(textBeforeCursor);
+    expect(context).toEqual({ prefix: 'po', qualifier: null });
+    if (!context) return;
+
+    const tableNames = match.dbType.getProperties().map((symbol) => symbol.getName());
+    const filtered = tableNames.filter((name) => name.startsWith(context.prefix));
+
+    expect(filtered).toEqual(['posts']);
   });
 });
