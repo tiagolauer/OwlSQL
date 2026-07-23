@@ -25,7 +25,9 @@ const POSTGRES_SCALAR_TYPES: Record<string, string> = {
   date: 'Date',
   time: 'string',
   timetz: 'string',
-  interval: 'string',
+  // interval decodes to a structured { years, months, days, ... } object at
+  // both scalar and array positions (the `postgres-interval` package), not a
+  // string - see POSTGRES_SCALAR_TYPES lookup below, which special-cases it.
   inet: 'string',
   cidr: 'string',
   macaddr: 'string',
@@ -37,8 +39,55 @@ const POSTGRES_SCALAR_TYPES: Record<string, string> = {
   oid: 'number',
 };
 
+// pg only decodes an array column into a real JS array for the base types
+// pg-types has a static OID registered for (verified against every
+// register(...) call in pg-types/lib/textParsers.js). Everything else -
+// including enum arrays, whose OIDs are assigned per-database at CREATE TYPE
+// time and can never be statically registered - falls through to pg-types'
+// unregistered-OID fallback, which hands back the raw wire-format string
+// ("{happy,sad}"), not an array.
+const POSTGRES_ARRAY_SAFE_TYPES: ReadonlySet<string> = new Set([
+  'int2',
+  'int4',
+  'int8',
+  'oid',
+  'float4',
+  'float8',
+  'bool',
+  'text',
+  'varchar',
+  'bpchar',
+  'uuid',
+  'money',
+  'bytea',
+  'timestamp',
+  'timestamptz',
+  'date',
+  'time',
+  'timetz',
+  'inet',
+  'cidr',
+  'macaddr',
+  'json',
+  'jsonb',
+  'interval',
+]);
+
+// numeric[] decodes element-wise with parseFloat (real numbers), unlike the
+// scalar numeric mapping ('string', to avoid precision loss).
+const POSTGRES_ARRAY_TYPE_OVERRIDES: Record<string, string> = {
+  numeric: 'number',
+};
+
 function renderEnumUnion(labels: string[]): string {
   return labels.map((label) => `'${label.replace(/'/g, "\\'")}'`).join(' | ');
+}
+
+function scalarType(base: string): string {
+  if (base === 'interval') {
+    return 'unknown';
+  }
+  return POSTGRES_SCALAR_TYPES[base] ?? 'unknown';
 }
 
 export function mapPostgresType(udtName: string, enums?: Map<string, string[]>): string {
@@ -48,11 +97,19 @@ export function mapPostgresType(udtName: string, enums?: Map<string, string[]>):
   const labels = enums?.get(base);
   if (labels && labels.length > 0) {
     const union = renderEnumUnion(labels);
-    return isArray ? `(${union})[]` : union;
+    return isArray ? 'string' : union;
   }
 
-  const scalar = POSTGRES_SCALAR_TYPES[base] ?? 'unknown';
-  return isArray ? `${scalar}[]` : scalar;
+  if (!isArray) {
+    return scalarType(base);
+  }
+
+  const override = POSTGRES_ARRAY_TYPE_OVERRIDES[base];
+  if (override) {
+    return `${override}[]`;
+  }
+
+  return POSTGRES_ARRAY_SAFE_TYPES.has(base) ? `${scalarType(base)}[]` : 'string';
 }
 
 interface PgColumnRow {
