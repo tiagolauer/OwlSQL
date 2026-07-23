@@ -1,12 +1,31 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import { loadPlugin } from './ts-plugin-test-helpers.js';
+import { buildProgram, loadPlugin } from './ts-plugin-test-helpers.js';
 
 const { plugin, dir: transpileDir } = loadPlugin();
 
+const DIAGNOSTICS_FIXTURE = `
+import type { TypedDb } from '@owlsql/core';
+
+interface DB {
+  users: { id: number; name: string };
+}
+
+declare const db: TypedDb<DB>;
+
+db.query(\`select id from users\`);
+`;
+
+// Built once at module scope so the cost of ts.createProgram + the initial
+// getTypeChecker() (which loads lib.d.ts) is paid outside any individual
+// test's timeout budget, mirroring how loadPlugin() runs here.
+const diagnosticsBuild = buildProgram(DIAGNOSTICS_FIXTURE, 'owlsql-ts-plugin-proxy-');
+diagnosticsBuild.program.getTypeChecker();
+
 afterAll(() => {
   rmSync(transpileDir, { recursive: true, force: true });
+  rmSync(diagnosticsBuild.dir, { recursive: true, force: true });
 });
 
 const NATIVE_COMPLETIONS = {
@@ -90,10 +109,24 @@ describe('ts-plugin proxy error handling', () => {
   });
 
   it('computes native diagnostics lazily, only after the plugin path has run', () => {
+    // Drive the NORMAL plugin path (valid program + source file) so the plugin
+    // reaches query-literal scanning before resolving native diagnostics —
+    // rather than short-circuiting through the no-program early return.
+    const realProgram = diagnosticsBuild.program;
     const calls: string[] = [];
+    const program = {
+      getSourceFile: (name: string) => realProgram.getSourceFile(name),
+      // getTypeChecker is the entry point into the plugin's query-literal
+      // scanning; recording it proves native diagnostics resolve AFTER the
+      // plugin has begun inspecting the program, not before.
+      getTypeChecker: () => {
+        calls.push('getTypeChecker');
+        return realProgram.getTypeChecker();
+      },
+    } as unknown as ts.Program;
     const getProgram = vi.fn(() => {
       calls.push('getProgram');
-      return undefined;
+      return program;
     });
     const getSemanticDiagnostics = vi.fn(() => {
       calls.push('getSemanticDiagnostics');
@@ -101,12 +134,13 @@ describe('ts-plugin proxy error handling', () => {
     });
     const proxy = createProxy({ getProgram, getSemanticDiagnostics });
 
-    const result = proxy.getSemanticDiagnostics('file.ts');
+    const result = proxy.getSemanticDiagnostics(diagnosticsBuild.filePath);
 
     expect(result).toBe(NATIVE_DIAGNOSTICS);
-    // The native diagnostics must be resolved inside the try block (after the
-    // plugin inspects the program), never eagerly before it — an eager call
-    // outside the try/catch lets an underlying throw escape the proxy.
-    expect(calls).toEqual(['getProgram', 'getSemanticDiagnostics']);
+    // The native diagnostics must be resolved inside the try block AFTER the
+    // plugin has scanned the program (getTypeChecker → query-literal scan),
+    // never eagerly before it — an eager call lets an underlying throw escape
+    // the proxy, and evaluating it before the scan wastes work on every call.
+    expect(calls).toEqual(['getProgram', 'getTypeChecker', 'getSemanticDiagnostics']);
   });
 });
