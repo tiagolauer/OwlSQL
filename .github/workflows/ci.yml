@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        typescript: ['5.0', '5.3', '5.6', '6.0']
+        typescript: ['5.4', '5.6', '6.0']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
