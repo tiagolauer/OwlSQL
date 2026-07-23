@@ -1,4 +1,4 @@
-import type { Query } from '../src/index.js';
+import type { Query, StrictQuery } from '../src/index.js';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2)
@@ -44,9 +44,31 @@ type DerivedTableContainingItsOwnJoin = Expect<
   >
 >;
 
+type LateralJoinResolvesLikeAnyDerivedTable = Expect<
+  Equal<
+    Query<
+      DB,
+      'select u.name, p.top_views from users u join lateral (select max(views) as top_views from posts where posts.user_id = u.id) p on true'
+    >,
+    { name: string; top_views: number }[]
+  >
+>;
+
+type LateralJoinResolvesInStrictModeWithoutCorrelation = Expect<
+  Equal<
+    StrictQuery<
+      DB,
+      'select u.name, p.top_views from users u join lateral (select max(views) as top_views from posts) p on true'
+    >,
+    { name: string; top_views: number }[]
+  >
+>;
+
 export type DerivedTableLock = [
   SimpleDerivedTable,
   DerivedTableWithWhereClauseInside,
   DerivedTableJoinedWithRealTable,
   DerivedTableContainingItsOwnJoin,
+  LateralJoinResolvesLikeAnyDerivedTable,
+  LateralJoinResolvesInStrictModeWithoutCorrelation,
 ];
