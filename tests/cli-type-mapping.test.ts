@@ -29,26 +29,54 @@ describe('mapPostgresType', () => {
     expect(mapPostgresType('timetz')).toBe('string');
   });
 
-  it('maps array udt names (leading underscore) to T[]', () => {
+  it('maps array udt names (leading underscore) to T[] when pg actually decodes them as arrays', () => {
     expect(mapPostgresType('_int4')).toBe('number[]');
     expect(mapPostgresType('_text')).toBe('string[]');
+    expect(mapPostgresType('_bool')).toBe('boolean[]');
+    expect(mapPostgresType('_timestamptz')).toBe('Date[]');
   });
 
   it('falls back to unknown for unrecognized types', () => {
     expect(mapPostgresType('some_custom_domain')).toBe('unknown');
   });
 
-  it('maps network, interval, bit and text-search types to string', () => {
+  it('maps network, bit and text-search types to string', () => {
     expect(mapPostgresType('inet')).toBe('string');
-    expect(mapPostgresType('interval')).toBe('string');
     expect(mapPostgresType('tsvector')).toBe('string');
     expect(mapPostgresType('oid')).toBe('number');
+  });
+
+  it('maps interval to unknown, not string - pg decodes it to a structured object', () => {
+    expect(mapPostgresType('interval')).toBe('unknown');
+    expect(mapPostgresType('_interval')).toBe('unknown[]');
+  });
+
+  it('maps numeric[] to number[], unlike the scalar numeric mapping to string', () => {
+    expect(mapPostgresType('numeric')).toBe('string');
+    expect(mapPostgresType('_numeric')).toBe('number[]');
+  });
+
+  it('maps an array type with no registered pg-types array parser to the raw string pg returns, not T[]', () => {
+    // bit/varbit/macaddr8/name/xml/tsvector/tsquery/citext/single-char "char"
+    // have no array OID registered in pg-types - pg hands back the raw
+    // wire-format string ("{a,b}"), never an actual array.
+    expect(mapPostgresType('_bit')).toBe('string');
+    expect(mapPostgresType('_varbit')).toBe('string');
+    expect(mapPostgresType('_macaddr8')).toBe('string');
+    expect(mapPostgresType('_name')).toBe('string');
+    expect(mapPostgresType('_xml')).toBe('string');
+    expect(mapPostgresType('_tsvector')).toBe('string');
+    expect(mapPostgresType('_char')).toBe('string');
   });
 
   it('maps enums to a label union when the enum map is provided', () => {
     const enums = new Map([['mood', ['happy', 'sad']]]);
     expect(mapPostgresType('mood', enums)).toBe("'happy' | 'sad'");
-    expect(mapPostgresType('_mood', enums)).toBe("('happy' | 'sad')[]");
+  });
+
+  it('maps an enum array to the raw string pg returns - enum OIDs are dynamic and never registered as arrays', () => {
+    const enums = new Map([['mood', ['happy', 'sad']]]);
+    expect(mapPostgresType('_mood', enums)).toBe('string');
   });
 });
 
