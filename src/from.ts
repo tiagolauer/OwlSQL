@@ -146,8 +146,18 @@ type DerivedSegmentToSource<Segment extends string, Nullable extends boolean> = 
     : never
   : never;
 
-type SegmentToSource<Segment extends string, Nullable extends boolean> = Trim<Segment> extends `(${string}`
-  ? DerivedSegmentToSource<Segment, Nullable>
+// `LATERAL` attaches directly to a derived-table subquery ("join lateral
+// (select ...) alias on ..."), so it has to be stripped before the "does
+// this segment start with a paren" check below - otherwise the keyword
+// itself gets read as the table name and the real alias is lost.
+type StripLateral<Segment extends string> = Trim<Segment> extends `${infer Head} ${infer Rest}`
+  ? IsKeyword<Head, 'lateral'> extends true
+    ? Trim<Rest>
+    : Trim<Segment>
+  : Trim<Segment>;
+
+type SegmentToSource<Segment extends string, Nullable extends boolean> = StripLateral<Segment> extends `(${string}`
+  ? DerivedSegmentToSource<StripLateral<Segment>, Nullable>
   : CleanIdentifier<FirstWord<Segment>> extends infer Table extends string
     ? {
         table: Table;
