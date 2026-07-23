@@ -205,7 +205,8 @@ library still parses your queries entirely at the type level with zero
 runtime codegen, same as always. The generated file is a normal `.ts` file —
 commit it, edit it by hand afterward, rename fields, anything. Running
 `generate` again just overwrites it with a fresh snapshot; nothing stays
-"synced" automatically.
+"synced" automatically — unless you opt into checking for that in CI with
+`--check` (below).
 
 | Flag | Required | Description |
 | ---- | -------- | ----------- |
@@ -213,6 +214,14 @@ commit it, edit it by hand afterward, rename fields, anything. Running
 | `--out` | no | Output file. Defaults to `./schema.ts`. |
 | `--dialect` | no | `postgres` \| `mysql` \| `sqlite` \| `mssql`. Auto-detected from the URL scheme (`postgres://`/`postgresql://`, `mysql://`, `mssql://`/`sqlserver://`); an ADO `Server=...` string also routes to `mssql` — falls back to `sqlite` for a bare file path, so it's only needed when that's ambiguous. |
 | `--schema` | no | Schema/database name to introspect. Defaults to `public` (Postgres), the connected database (MySQL), or `dbo` (SQL Server). Not used for SQLite. |
+| `--table` | no | Comma-separated list (`--table users,posts`). Only introspect these tables, instead of every table in the schema. |
+| `--exclude` | no | Comma-separated list. Skip these tables even if `--table` would otherwise include them. |
+| `--check` | no | Don't write `--out` — introspect and render as usual, then compare against the existing file. Exits `0` with no output if they match, `1` with a message telling you where they first differ (or that the file doesn't exist yet) if they don't. `--table`/`--exclude`/`--schema` apply identically, so the comparison stays meaningful. Useful in CI to catch a migration that ran without anyone regenerating the committed schema. |
+
+```bash
+# CI: fail the build if schema.ts has drifted from the real database
+npx @owlsql/core generate --url "$DATABASE_URL" --out schema.ts --check
+```
 
 `generate` needs the matching driver installed as a real dependency (`pg`,
 `mysql2`, or `mssql` — SQLite uses the `node:sqlite` builtin, Node ≥22.5). It
