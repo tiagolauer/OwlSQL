@@ -49,7 +49,7 @@ export type FunctionName<Expr extends string> = Expr extends `${infer Name}(${st
   ? Trim<Name>
   : Expr;
 
-export type FunctionOutputName<Expr extends string> = Lowercase<FunctionName<Expr>>;
+export type FunctionOutputName<Expr extends string> = FunctionName<Expr>;
 
 export type FunctionReturnType<Expr extends string> =
   Lowercase<FunctionName<Expr>> extends keyof FunctionReturnTypes

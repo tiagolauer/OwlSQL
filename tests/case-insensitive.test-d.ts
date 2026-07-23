@@ -53,6 +53,14 @@ type UppercaseInsertParamsResolve = Expect<
   Equal<Params<DB, 'INSERT INTO USERS (NAME) VALUES ($1)'>, [string]>
 >;
 
+type UppercaseFunctionCallPreservesOutputCasing = Expect<
+  Equal<Query<DB, 'SELECT COUNT(*) FROM USERS'>, { COUNT: number }[]>
+>;
+
+type MixedCaseFunctionCallPreservesOutputCasing = Expect<
+  Equal<Query<DB, 'select Count(*) from users'>, { Count: number }[]>
+>;
+
 export type Assertions = [
   UppercaseTableAndColumnResolve,
   MixedCaseTableResolves,
@@ -63,4 +71,6 @@ export type Assertions = [
   StrictStillRejectsTrulyUnknownColumn,
   UppercaseParamColumnResolves,
   UppercaseInsertParamsResolve,
+  UppercaseFunctionCallPreservesOutputCasing,
+  MixedCaseFunctionCallPreservesOutputCasing,
 ];
