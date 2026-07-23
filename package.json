@@ -63,7 +63,7 @@
     "mysql2": ">=3.0.0",
     "pg": ">=8.0.0",
     "postgres": ">=3.0.0",
-    "typescript": ">=5.0.0 <8"
+    "typescript": ">=5.4.0 <8"
   },
   "peerDependenciesMeta": {
     "kysely": {
@@ -113,7 +113,7 @@
     "mysql2": "^3.23.0",
     "pg": "^8.22.0",
     "postgres": "^3.4.9",
-    "typescript": "^7.0.2",
+    "typescript": "^5.6.0",
     "vitest": "^4.1.10"
   }
 }
