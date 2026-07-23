@@ -72,7 +72,7 @@ describe('ts-plugin hover: getColumnType against a real ts.Program', () => {
     const table = findFromTable(match.literal.text);
     expect(table).toBe('users');
 
-    const columnType = getColumnType(checker, match.dbType, match.literal, table, word.word);
+    const columnType = getColumnType(ts, checker, match.dbType, match.literal, table, word.word);
     expect(columnType && checker.typeToString(columnType)).toBe('string');
   });
 
@@ -89,7 +89,7 @@ describe('ts-plugin hover: getColumnType against a real ts.Program', () => {
     if (!match) return;
 
     const table = findFromTable(match.literal.text);
-    const columnType = getColumnType(checker, match.dbType, match.literal, table, 'email');
+    const columnType = getColumnType(ts, checker, match.dbType, match.literal, table, 'email');
     expect(columnType && checker.typeToString(columnType)).toBe('string | null');
   });
 
@@ -106,7 +106,7 @@ describe('ts-plugin hover: getColumnType against a real ts.Program', () => {
     if (!match) return;
 
     const table = findFromTable(match.literal.text);
-    const columnType = getColumnType(checker, match.dbType, match.literal, table, 'nope');
+    const columnType = getColumnType(ts, checker, match.dbType, match.literal, table, 'nope');
     expect(columnType).toBeNull();
   });
 });
