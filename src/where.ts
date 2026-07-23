@@ -89,7 +89,15 @@ type WhereScan<
       : IsTransparentToken<Head> extends true
         ? WhereScan<DB, Sources, Tail, Prev>
         : WhereScan<DB, Sources, Tail, CleanColumnToken<Head>>
-  : never;
+  : // Terminal case: no trailing space left, so `S` is the final token of the
+    // clause. Earlier operands are validated by the operator *after* them, but
+    // the trailing operand has no following operator to trigger the check — so
+    // validate it here, mirroring the operator branch's `CleanColumnToken`
+    // handling (issue #128). `not` is transparent, and empty/placeholder
+    // operands are already short-circuited inside `ValidateWhereOperand`.
+    IsTransparentToken<S> extends true
+    ? never
+    : ValidateWhereOperand<DB, Sources, CleanColumnToken<S>>;
 
 export type WhereClauseError<
   DB extends SchemaLike,

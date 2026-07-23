@@ -158,6 +158,27 @@ type NonStrictModeIsUnaffectedByWhereTypos = Expect<
   Equal<Query<DB, "select id from users where naem = 'x'">, { id: number }[]>
 >;
 
+// Regression for #128: the trailing operand of a WHERE clause (the last word,
+// with no operator after it to trigger validation) must be validated too.
+// Symmetric to UnknownColumnOnComparisonLhs, but with the typo on the RHS.
+type UnknownColumnOnComparisonRhs = Expect<
+  Equal<
+    StrictQuery<DB, 'select id from users where age = naem'>,
+    QueryTypeError<'unknown column: naem'>[]
+  >
+>;
+
+// Lock: a VALID trailing operand (a real column as the final token) still
+// passes — the terminal-case validation must not reject good queries.
+type ValidTrailingColumnOperandResolves = Expect<
+  Equal<StrictQuery<DB, 'select id from users where age = id'>, { id: number }[]>
+>;
+
+// Lock: a trailing literal is not a column and must not be flagged.
+type ValidTrailingLiteralOperandResolves = Expect<
+  Equal<StrictQuery<DB, 'select id from users where age = 5'>, { id: number }[]>
+>;
+
 export type WhereStrictLock = [
   ValidWhereStillResolves,
   UnknownColumnOnComparisonLhs,
@@ -182,4 +203,7 @@ export type WhereStrictLock = [
   WhereErrorInsideCte,
   ColumnErrorInSelectListTakesPrecedenceOverWhereError,
   NonStrictModeIsUnaffectedByWhereTypos,
+  UnknownColumnOnComparisonRhs,
+  ValidTrailingColumnOperandResolves,
+  ValidTrailingLiteralOperandResolves,
 ];
