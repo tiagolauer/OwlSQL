@@ -9,6 +9,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
+    "types": ["node"],
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
