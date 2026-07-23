@@ -3,7 +3,7 @@ import sqlContext = require('./sql-context.cjs');
 import schemaModule = require('./schema.cjs');
 
 const { findSources, findSourceByAlias, stripStringLiterals } = sqlContext;
-const { getColumnNames } = schemaModule;
+const { tableExists, columnExists } = schemaModule;
 
 const SELECT_KEYWORD = /^\s*select\b/i;
 const DISTINCT_KEYWORD = /^\s*distinct\b/i;
@@ -92,6 +92,7 @@ function columnTokenFromEntry(entry: ColumnEntry): { token: string; offset: numb
 }
 
 function getQueryDiagnostics(
+  typescript: typeof ts,
   checker: ts.TypeChecker,
   dbType: ts.Type,
   literal: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral,
@@ -115,7 +116,7 @@ function getQueryDiagnostics(
   const diagnostics: DiagnosticSpan[] = [];
 
   for (const source of sources) {
-    if (!checker.getPropertyOfType(dbType, source.table)) {
+    if (!tableExists(typescript, checker, dbType, source.table)) {
       diagnostics.push({
         start: literalStart + source.tableStart,
         length: source.tableEnd - source.tableStart,
@@ -151,23 +152,22 @@ function getQueryDiagnostics(
         diagnostics.push({ start: tokenStart, length: qualifier.length, message: `unknown alias: ${qualifier}` });
         continue;
       }
-      if (!checker.getPropertyOfType(dbType, matchedSource.table)) {
+      if (!tableExists(typescript, checker, dbType, matchedSource.table)) {
         continue;
       }
-      const names = getColumnNames(checker, dbType, literal, matchedSource.table);
-      if (!names.includes(columnName)) {
+      if (!columnExists(typescript, checker, dbType, literal, matchedSource.table, columnName)) {
         diagnostics.push({ start: columnStart, length: columnName.length, message: `unknown column: ${columnName}` });
       }
       continue;
     }
 
-    const knownTables = sources.filter((source) => checker.getPropertyOfType(dbType, source.table));
+    const knownTables = sources.filter((source) => tableExists(typescript, checker, dbType, source.table));
     if (knownTables.length === 0) {
       continue;
     }
 
     const containingTables = knownTables.filter((source) =>
-      getColumnNames(checker, dbType, literal, source.table).includes(columnName),
+      columnExists(typescript, checker, dbType, literal, source.table, columnName),
     );
 
     if (containingTables.length === 0) {
