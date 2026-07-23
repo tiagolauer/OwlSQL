@@ -25,6 +25,67 @@ describe('detectDialect', () => {
     );
     expect(() => detectDialect('mongodb://user:pass@host/db')).toThrow('Unrecognized connection URL');
   });
+
+  it('rejects a mistyped single-slash URL without leaking the password or defaulting to sqlite (#134)', () => {
+    let message = '';
+    try {
+      detectDialect('postgres:/user:S3cretPass@host/db');
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('Unrecognized connection URL');
+    expect(message).toContain('postgres:/***@host/db');
+    expect(message).not.toContain('S3cretPass');
+    expect(message).not.toContain('user:');
+  });
+
+  it('rejects an ADO/DSN string missing a server keyword without leaking the password (#134)', () => {
+    let message = '';
+    try {
+      detectDialect('Uid=sa;Pwd=S3cretPass;Initial Catalog=mydb;');
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('Unrecognized connection URL');
+    expect(message).not.toContain('S3cretPass');
+    expect(message).toContain('Uid=sa;Pwd=***;Initial Catalog=mydb;');
+  });
+
+  it('treats Windows drive-letter paths containing "@" as sqlite, not a mistyped URL', () => {
+    expect(detectDialect('C:/app@prod.db')).toBe('sqlite');
+    expect(detectDialect('D:\\data@backup.db')).toBe('sqlite');
+    expect(detectDialect('c:/Users/me@work/app.db')).toBe('sqlite');
+  });
+
+  it('redacts a quoted DSN password containing a semicolon without leaking it', () => {
+    let message = '';
+    try {
+      detectDialect('Uid=sa;Pwd="S3;cretPass";Initial Catalog=mydb;');
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('Unrecognized connection URL');
+    expect(message).toContain('Uid=sa;Pwd=***;Initial Catalog=mydb;');
+    expect(message).not.toContain('S3;cretPass');
+    expect(message).not.toContain('cretPass');
+  });
+
+  it('redacts a brace-wrapped DSN password containing a semicolon without leaking it', () => {
+    let message = '';
+    try {
+      detectDialect('Uid=sa;Pwd={S3;cretPass};Initial Catalog=mydb;');
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('Unrecognized connection URL');
+    expect(message).toContain('Uid=sa;Pwd=***;Initial Catalog=mydb;');
+    expect(message).not.toContain('S3;cretPass');
+    expect(message).not.toContain('cretPass');
+  });
 });
 
 describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite file)', () => {

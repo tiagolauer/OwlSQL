@@ -19,10 +19,39 @@ const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 const ADO_MSSQL_PATTERN = /(^|;)\s*(server|data source|address|addr|network address)\s*=/i;
 
-const CREDENTIALS_PATTERN = /\/\/[^@/]+@/;
+// A connection URL whose "//" was mistyped as a single "/" (e.g.
+// "postgres:/user:pass@host/db") still carries embedded credentials but matches
+// neither SCHEME_PATTERN (needs "://") nor ADO_MSSQL_PATTERN. The leading
+// negative lookahead excludes Windows drive-letter paths ("C:/app@prod.db"),
+// which are valid SQLite file paths, not mistyped URLs.
+const MISTYPED_URL_CREDENTIALS_PATTERN = /^(?![a-z]:[/\\])[a-z][a-z0-9+.-]*:\/{1,2}[^/@\s]*@/i;
+
+// An ADO / DSN key=value connection string that omits a "server="-style keyword
+// (e.g. "Uid=sa;Pwd=secret;Initial Catalog=db"). Not a SQLite file path either.
+const ADO_CREDENTIALS_PATTERN =
+  /(^|;)\s*(uid|user id|pwd|password|database|initial catalog|trusted_connection|integrated security|driver|dsn)\s*=/i;
+
+// URL userinfo ("//user:pass@" or a mistyped single-slash ":/user:pass@"). The
+// single-slash form requires a multi-character scheme before the ":/" so that
+// Windows drive-letter paths ("C:/app@prod.db") are not treated as URL userinfo.
+const URL_CREDENTIALS_PATTERN = /(\/\/|(?<=[a-z][a-z0-9+.-]):\/)[^@/]+@/i;
+
+// The password value of an ADO / DSN "Pwd="/"Password=" pair. The value may be
+// wrapped in double quotes, braces, or single quotes (so an embedded ";" does
+// not terminate it); an unquoted value runs to the next ";" delimiter.
+const DSN_PASSWORD_PATTERN =
+  /((?:^|;)\s*(?:pwd|password)\s*=)("[^"]*"|\{[^}]*\}|'[^']*'|[^;]*)/gi;
 
 export function redactCredentials(url: string): string {
-  return url.replace(CREDENTIALS_PATTERN, '//***@');
+  return url
+    .replace(URL_CREDENTIALS_PATTERN, (_match, separator: string) => `${separator}***@`)
+    .replace(DSN_PASSWORD_PATTERN, '$1***');
+}
+
+function unrecognizedUrlError(url: string): Error {
+  return new Error(
+    `Unrecognized connection URL "${redactCredentials(url)}". Expected postgres://, postgresql://, mysql://, mssql://, sqlserver://, or a path to a SQLite database file.`,
+  );
 }
 
 export function detectDialect(url: string): Dialect {
@@ -47,9 +76,14 @@ export function detectDialect(url: string): Dialect {
   }
 
   if (SCHEME_PATTERN.test(url)) {
-    throw new Error(
-      `Unrecognized connection URL "${redactCredentials(url)}". Expected postgres://, postgresql://, mysql://, mssql://, sqlserver://, or a path to a SQLite database file.`,
-    );
+    throw unrecognizedUrlError(url);
+  }
+
+  // A mistyped connection URL (single-slash scheme, or an ADO/DSN string missing
+  // a "server=" keyword) must not fall through to sqlite: introspectSqlite would
+  // then echo the raw string — password included — verbatim to stderr (#134).
+  if (MISTYPED_URL_CREDENTIALS_PATTERN.test(url) || ADO_CREDENTIALS_PATTERN.test(url)) {
+    throw unrecognizedUrlError(url);
   }
 
   return 'sqlite';
