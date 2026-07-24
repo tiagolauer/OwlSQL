@@ -36,7 +36,7 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    expect(getColumnNames(checker, dbType, node, 'users').sort()).toEqual(['id', 'name']);
+    expect(getColumnNames(ts, checker, dbType, node, 'users').sort()).toEqual(['id', 'name']);
   });
 
   it('returns no columns for a FROM table that does not exist in the schema, instead of falling back to all tables', () => {
@@ -45,8 +45,8 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    expect(getColumnNames(checker, dbType, node, 'userz')).toEqual([]);
-    expect(getColumnType(checker, dbType, node, 'userz', 'title')).toBeNull();
+    expect(getColumnNames(ts, checker, dbType, node, 'userz')).toEqual([]);
+    expect(getColumnType(ts, checker, dbType, node, 'userz', 'title')).toBeNull();
   });
 
   it('unions columns across all tables when no FROM table is given', () => {
@@ -55,7 +55,7 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    expect(getColumnNames(checker, dbType, node, null).sort()).toEqual(['id', 'name', 'title']);
+    expect(getColumnNames(ts, checker, dbType, node, null).sort()).toEqual(['id', 'name', 'title']);
   });
 
   it('resolves a column type unambiguously when every table agrees on it, even with no FROM scoping', () => {
@@ -64,7 +64,7 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    const columnType = getColumnType(checker, dbType, node, null, 'id');
+    const columnType = getColumnType(ts, checker, dbType, node, null, 'id');
     expect(columnType && checker.typeToString(columnType)).toBe('number');
   });
 
@@ -74,7 +74,7 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    expect(getColumnType(checker, dbType, node, null, 'id')).toBeNull();
+    expect(getColumnType(ts, checker, dbType, node, null, 'id')).toBeNull();
   });
 
   it('unions columns across an explicit array of tables, for JOIN scoping', () => {
@@ -87,12 +87,12 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    expect(getColumnNames(checker, dbType, node, ['users', 'posts']).sort()).toEqual([
+    expect(getColumnNames(ts, checker, dbType, node, ['users', 'posts']).sort()).toEqual([
       'id',
       'name',
       'title',
     ]);
-    expect(getColumnNames(checker, dbType, node, ['users', 'posts'])).not.toContain('body');
+    expect(getColumnNames(ts, checker, dbType, node, ['users', 'posts'])).not.toContain('body');
   });
 
   it('resolves a column type unambiguously across a joined table array', () => {
@@ -101,7 +101,7 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    const columnType = getColumnType(checker, dbType, node, ['users', 'posts'], 'name');
+    const columnType = getColumnType(ts, checker, dbType, node, ['users', 'posts'], 'name');
     expect(columnType && checker.typeToString(columnType)).toBe('string');
   });
 
@@ -111,6 +111,42 @@ describe('getColumnNames / getColumnType scoping', () => {
       declare const dbValue: DB;
     `);
 
-    expect(getColumnType(checker, dbType, node, ['users', 'accounts'], 'id')).toBeNull();
+    expect(getColumnType(ts, checker, dbType, node, ['users', 'accounts'], 'id')).toBeNull();
+  });
+
+  it('resolves an optional table key by stripping undefined (issue #164 repro)', () => {
+    const { checker, dbType, node } = buildDbType(`
+      interface DB { users?: { id: number; name: string } }
+      declare const dbValue: DB;
+    `);
+
+    expect(getColumnNames(ts, checker, dbType, node, 'users').sort()).toEqual(['id', 'name']);
+    const columnType = getColumnType(ts, checker, dbType, node, 'users', 'id');
+    expect(columnType && checker.typeToString(columnType)).toBe('number');
+  });
+
+  it('resolves any table name against a Record<string, ...> schema (issue #164 repro)', () => {
+    const { checker, dbType, node } = buildDbType(`
+      type DB = Record<string, Record<string, unknown>>;
+      declare const dbValue: DB;
+    `);
+
+    expect(getColumnNames(ts, checker, dbType, node, 'users')).toEqual([]);
+    const columnType = getColumnType(ts, checker, dbType, node, 'users', 'id');
+    expect(columnType && checker.typeToString(columnType)).toBe('unknown');
+  });
+
+  it('resolves a named table alongside a Record<string, ...> catch-all', () => {
+    const { checker, dbType, node } = buildDbType(`
+      interface DB {
+        users: { id: number; name: string };
+        [table: string]: Record<string, unknown>;
+      }
+      declare const dbValue: DB;
+    `);
+
+    expect(getColumnNames(ts, checker, dbType, node, 'users').sort()).toEqual(['id', 'name']);
+    const columnType = getColumnType(ts, checker, dbType, node, 'ghost_table', 'anything');
+    expect(columnType && checker.typeToString(columnType)).toBe('unknown');
   });
 });

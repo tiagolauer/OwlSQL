@@ -67,7 +67,7 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
     const table = findFromTable(match.literal.text);
     expect(table).toBeNull();
 
-    const columns = getColumnNames(checker, match.dbType, match.literal, table);
+    const columns = getColumnNames(ts, checker, match.dbType, match.literal, table);
     const filtered = columns.filter((name) => name.startsWith(context.prefix));
 
     expect(filtered).toEqual(['name']);
@@ -87,7 +87,7 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
     const table = findFromTable(match.literal.text);
     expect(table).toBe('posts');
 
-    const columns = getColumnNames(checker, match.dbType, match.literal, table);
+    const columns = getColumnNames(ts, checker, match.dbType, match.literal, table);
 
     expect(columns.sort()).toEqual(['id', 'title']);
     expect(columns).not.toContain('name');
@@ -114,7 +114,7 @@ describe('ts-plugin: detect + schema against a real ts.Program', () => {
     const table = findFromTable(match.literal.text);
     expect(table).toBe('users');
 
-    const columns = getColumnNames(checker, match.dbType, match.literal, table);
+    const columns = getColumnNames(ts, checker, match.dbType, match.literal, table);
     const filtered = columns.filter((name) => name.startsWith(context.prefix));
 
     expect(filtered).toEqual(['name']);
