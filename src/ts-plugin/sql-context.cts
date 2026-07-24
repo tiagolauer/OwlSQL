@@ -7,6 +7,8 @@ const CTE_NAME = /^\s*([A-Za-z_][A-Za-z0-9_]*)/;
 const AS_KEYWORD_START = /^\s*as\b/i;
 const LEADING_COMMA = /^\s*,/;
 const QUALIFIED_TRAILING_TOKEN = /(?:([A-Za-z_][A-Za-z0-9_]*)\.)?([A-Za-z0-9_]*)$/;
+const FROM_JOIN_TABLE_START = /(?:\bfrom|\bjoin)\s+([A-Za-z0-9_]*)$/i;
+const FROM_LIST_COMMA_START = /,\s*([A-Za-z0-9_]*)$/;
 const FROM_TABLE = /\bfrom\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)/i;
 const FROM_OR_JOIN_SOURCE = /\b(from|join)\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)(?:\s+(as\s+)?([A-Za-z_][A-Za-z0-9_]*))?/gid;
 const WORD_CHAR = /[A-Za-z0-9_]/;
@@ -263,6 +265,36 @@ function getWhereClauseContext(textBeforeCursor: string): SelectListContext | nu
   return prefixFrom(textBeforeCursor);
 }
 
+// Table-name completion triggers right after FROM/JOIN (any INNER/LEFT/
+// RIGHT/FULL/CROSS modifier before JOIN doesn't matter, only the JOIN
+// keyword itself does), or after a comma in an old-style comma-joined FROM
+// list. The comma case only fires once a FROM has been seen and no later
+// clause keyword (WHERE/HAVING/ON/GROUP BY/ORDER BY) has started yet -
+// otherwise a plain SELECT-list comma, or a comma inside a WHERE/ON
+// expression, would be misread as a table position too.
+function getFromClauseContext(textBeforeCursor: string): SelectListContext | null {
+  const { stripped, insideLiteral } = stripStringLiterals(textBeforeCursor);
+  if (insideLiteral) {
+    return null;
+  }
+
+  const { remainder } = stripWithClause(stripped);
+
+  const directMatch = FROM_JOIN_TABLE_START.exec(remainder);
+  if (directMatch) {
+    return { prefix: directMatch[1] ?? '', qualifier: null };
+  }
+
+  if (HAS_FROM.test(remainder) && !HAS_COLUMN_CLAUSE.test(remainder)) {
+    const commaMatch = FROM_LIST_COMMA_START.exec(remainder);
+    if (commaMatch) {
+      return { prefix: commaMatch[1] ?? '', qualifier: null };
+    }
+  }
+
+  return null;
+}
+
 function findFromTable(fullLiteralText: string): string | null {
   const { stripped } = stripStringLiterals(fullLiteralText);
   const match = FROM_TABLE.exec(stripped);
@@ -351,6 +383,7 @@ function getWordAtOffset(text: string, offset: number): WordAtOffset | null {
 export = {
   getSelectListContext,
   getWhereClauseContext,
+  getFromClauseContext,
   findFromTable,
   findSources,
   findSourceByAlias,

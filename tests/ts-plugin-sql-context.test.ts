@@ -4,6 +4,7 @@ import sqlContext from '../src/ts-plugin/sql-context.cts';
 const {
   getSelectListContext,
   getWhereClauseContext,
+  getFromClauseContext,
   findFromTable,
   findSources,
   findSourceByAlias,
@@ -105,6 +106,65 @@ describe('getWhereClauseContext', () => {
         'with recent_users as (select id from users) select id from recent_users where na',
       ),
     ).toEqual({ prefix: 'na', qualifier: null });
+  });
+});
+
+describe('getFromClauseContext', () => {
+  it('offers table completions right after FROM', () => {
+    expect(getFromClauseContext('select id from us')).toEqual({ prefix: 'us', qualifier: null });
+  });
+
+  it('offers an empty-prefix table completion right after FROM with nothing typed yet', () => {
+    expect(getFromClauseContext('select id from ')).toEqual({ prefix: '', qualifier: null });
+  });
+
+  it('offers table completions right after JOIN', () => {
+    expect(getFromClauseContext('select id from users u join po')).toEqual({
+      prefix: 'po',
+      qualifier: null,
+    });
+  });
+
+  it('ignores an INNER/LEFT/RIGHT/FULL/CROSS modifier before JOIN', () => {
+    expect(getFromClauseContext('select id from users u left join po')).toEqual({
+      prefix: 'po',
+      qualifier: null,
+    });
+    expect(getFromClauseContext('select id from users u cross join po')).toEqual({
+      prefix: 'po',
+      qualifier: null,
+    });
+  });
+
+  it('offers a table completion after a comma in an old-style comma-joined FROM list', () => {
+    expect(getFromClauseContext('select id from users u, po')).toEqual({
+      prefix: 'po',
+      qualifier: null,
+    });
+  });
+
+  it('returns null before any FROM has been typed, including for a SELECT-list comma', () => {
+    expect(getFromClauseContext('select id, na')).toBeNull();
+  });
+
+  it('does not offer a table completion for a comma inside a WHERE clause', () => {
+    expect(getFromClauseContext('select id from users where id in (1, 2')).toBeNull();
+  });
+
+  it('does not offer a table completion for a comma after ON/WHERE/GROUP BY/ORDER BY has started', () => {
+    expect(
+      getFromClauseContext('select id from users u join posts p on p.user_id = u.id, po'),
+    ).toBeNull();
+  });
+
+  it('does not misfire inside a string literal', () => {
+    expect(getFromClauseContext("select id from users where name = 'from ")).toBeNull();
+  });
+
+  it('offers completions past the WITH-clause of a CTE query', () => {
+    expect(
+      getFromClauseContext('with recent_users as (select id from users) select id from re'),
+    ).toEqual({ prefix: 're', qualifier: null });
   });
 });
 

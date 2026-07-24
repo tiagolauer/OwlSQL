@@ -744,22 +744,25 @@ that talk to `tsserver` (Cursor, some Neovim/Sublime LSP setups) generally
 pick up `tsconfig.json` plugins automatically.
 
 **What it does:** suggests column names right after `SELECT`/a comma in the
-column list or after `WHERE`/`AND`/`OR`, and shows a column's resolved type
-on hover, for `db.query(...)` calls made through a client built with
-`createTypedDb<DB>`. It is `JOIN`/alias-aware: every table introduced by a
-`FROM` or `JOIN` in the same string is in scope, and typing an alias
-qualifier (`u.` in `... from users u`) narrows completions and hover to that
-one source. With no qualifier, completions/hover union columns across all
-sources present so far — the deduplicated union of every table in `DB` before
-any `FROM` is typed at all, exactly what covers the example above. `WHERE`-
-position completions require a `FROM` to already be present (there's no
-table to scope to otherwise). It also reports unknown columns, unknown
-tables, unknown aliases, and ambiguous unqualified columns (present in more
-than one joined table) as live editor diagnostics in the `SELECT` list,
-`FROM`/`JOIN` clause, and simple `WHERE` comparisons (`where naem = 'x'`
-squiggles `naem` the moment you type it) — the same checks strict mode
-(`{ strict: true }`) applies at compile time, surfaced as a squiggle while
-you type instead of only once the query is finished.
+column list or after `WHERE`/`AND`/`OR`, suggests table names right after
+`FROM`/`JOIN` (or a comma in an old-style comma-joined `FROM` list), and
+shows a column's resolved type on hover, for `db.query(...)` calls made
+through a client built with `createTypedDb<DB>`. It is `JOIN`/alias-aware:
+every table introduced by a `FROM` or `JOIN` in the same string is in scope,
+and typing an alias qualifier (`u.` in `... from users u`) narrows
+completions and hover to that one source. With no qualifier, completions/hover
+union columns across all sources present so far — the deduplicated union of
+every table in `DB` before any `FROM` is typed at all, exactly what covers
+the example above. `WHERE`-position completions require a `FROM` to already
+be present (there's no table to scope to otherwise); table-name completions
+after `FROM`/`JOIN` suggest every table in `DB`, filtered by whatever prefix
+you've typed. It also reports unknown columns, unknown tables, unknown
+aliases, and ambiguous unqualified columns (present in more than one joined
+table) as live editor diagnostics in the `SELECT` list, `FROM`/`JOIN` clause,
+and simple `WHERE` comparisons (`where naem = 'x'` squiggles `naem` the
+moment you type it) — the same checks strict mode (`{ strict: true }`)
+applies at compile time, surfaced as a squiggle while you type instead of
+only once the query is finished.
 
 **What it does not do** (documented scope, not bugs):
 
@@ -770,8 +773,6 @@ you type instead of only once the query is finished.
   or `)` at all — a subquery, a function call, a parenthesized group — the
   whole clause is skipped rather than risked: no diagnostics for it, never a
   wrong one. `HAVING`/`ORDER BY`/`GROUP BY` aren't checked at all.
-- No table-name completions after `FROM`/`JOIN` — only column names, after
-  `SELECT`/`WHERE`, are suggested.
 - The first `FROM <table>` is found with a regex, not a real SQL parser: a
   `FROM (subquery)` can make it lock onto a table name from inside the
   subquery instead of recognizing there's no real outer table yet.
@@ -782,7 +783,8 @@ you type instead of only once the query is finished.
   (`` db.query(`select ... ${x}`) ``) silently turns completions/hover off
   for that call — there's no squiggle or warning telling you why.
 - Completions after `ORDER BY`/`GROUP BY`/`HAVING`/etc. aren't offered yet —
-  only the `SELECT` column list and `WHERE` clause.
+  only the `SELECT` column list, `WHERE` clause, and `FROM`/`JOIN` table
+  names.
 - **Requires TypeScript < 7.** TypeScript 7's native (Go-based) compiler
   removed the classic JS Compiler API (`ts.Node`, `ts.forEachChild`,
   `ts.createProgram`, ...) that this plugin — and, as of this writing, every
