@@ -23,8 +23,8 @@ interface DB {
 declare const db: TypedDb<DB>;
 `;
 
-function diagnosticsFor(query: string): { message: string; text: string }[] {
-  const source = `${FIXTURE}\ndb.query(\`${query}\`);\n`;
+function diagnosticsFor(query: string, fixture: string = FIXTURE): { message: string; text: string }[] {
+  const source = `${fixture}\ndb.query(\`${query}\`);\n`;
   const { program, sourceFile, dir } = buildProgram(source, 'owlsql-ts-plugin-diagnostics-');
   try {
     const checker = program.getTypeChecker();
@@ -32,7 +32,7 @@ function diagnosticsFor(query: string): { message: string; text: string }[] {
     expect(matches).toHaveLength(1);
     const [match] = matches;
     if (!match) return [];
-    return getQueryDiagnostics(checker, match.dbType, match.literal, sourceFile).map((span) => ({
+    return getQueryDiagnostics(ts, checker, match.dbType, match.literal, sourceFile).map((span) => ({
       message: span.message,
       text: sourceFile.text.slice(span.start, span.start + span.length),
     }));
@@ -114,6 +114,45 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
     expect(
       diagnosticsFor('select id,\r\n  name,\r\n  nope\r\nfrom users\r\nwhere id = 1'),
     ).toEqual([{ message: 'unknown column: nope', text: 'nope' }]);
+  });
+
+  it('does not flag valid columns on an optional table key (issue #164 repro)', () => {
+    const fixture = `
+      import type { TypedDb } from '@owlsql/core';
+
+      interface DB {
+        users?: { id: number; name: string };
+      }
+
+      declare const db: TypedDb<DB>;
+    `;
+    expect(diagnosticsFor('select id, name from users', fixture)).toEqual([]);
+  });
+
+  it('still reports an unknown column on an optional table key', () => {
+    const fixture = `
+      import type { TypedDb } from '@owlsql/core';
+
+      interface DB {
+        users?: { id: number; name: string };
+      }
+
+      declare const db: TypedDb<DB>;
+    `;
+    expect(diagnosticsFor('select id, nope from users', fixture)).toEqual([
+      { message: 'unknown column: nope', text: 'nope' },
+    ]);
+  });
+
+  it('does not flag any table as unknown against a Record<string, ...> schema (issue #164 repro)', () => {
+    const fixture = `
+      import type { TypedDb } from '@owlsql/core';
+
+      type DB = Record<string, Record<string, unknown>>;
+
+      declare const db: TypedDb<DB>;
+    `;
+    expect(diagnosticsFor('select id, name from users', fixture)).toEqual([]);
   });
 
   it('does not flag a CTE name as an unknown table (issue #165 repro)', () => {

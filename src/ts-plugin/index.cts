@@ -100,7 +100,7 @@ function init(modules: { typescript: typeof ts }) {
           const fullLiteralText = match.literal.text;
           const sources = findSources(fullLiteralText);
           const table = resolveTableScope(sources, context.qualifier);
-          const columns = getColumnNames(checker, match.dbType, match.literal, table);
+          const columns = getColumnNames(typescript, checker, match.dbType, match.literal, table);
           const response = completionsFromNames(
             columns,
             context.prefix,
@@ -164,7 +164,7 @@ function init(modules: { typescript: typeof ts }) {
         }
 
         const table = resolveTableScope(findSources(match.literal.text), null);
-        const columnType = getColumnType(checker, match.dbType, match.literal, table, entryName);
+        const columnType = getColumnType(typescript, checker, match.dbType, match.literal, table, entryName);
         if (!columnType) {
           return native();
         }
@@ -209,7 +209,7 @@ function init(modules: { typescript: typeof ts }) {
 
         const qualifier = getQualifierBefore(rawLiteralText, word.start);
         const table = resolveTableScope(findSources(rawLiteralText), qualifier);
-        const columnType = getColumnType(checker, match.dbType, match.literal, table, word.word);
+        const columnType = getColumnType(typescript, checker, match.dbType, match.literal, table, word.word);
         if (!columnType) {
           return native();
         }
@@ -244,7 +244,7 @@ function init(modules: { typescript: typeof ts }) {
         const extra: ts.Diagnostic[] = [];
 
         for (const match of matches) {
-          for (const span of getQueryDiagnostics(checker, match.dbType, match.literal, sourceFile)) {
+          for (const span of getQueryDiagnostics(typescript, checker, match.dbType, match.literal, sourceFile)) {
             extra.push({
               file: sourceFile,
               start: span.start,
