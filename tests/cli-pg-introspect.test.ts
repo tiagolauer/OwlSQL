@@ -40,7 +40,7 @@ describe('introspectPostgres', () => {
         name: 'users',
         columns: [
           { name: 'id', tsType: 'number', nullable: false },
-          { name: 'state', tsType: "'happy' | 'sad'", nullable: true },
+          { name: 'state', tsType: '"happy" | "sad"', nullable: true },
           { name: 'tags', tsType: 'string[]', nullable: true },
         ],
       },

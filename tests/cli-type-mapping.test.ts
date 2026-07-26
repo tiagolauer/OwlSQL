@@ -71,7 +71,12 @@ describe('mapPostgresType', () => {
 
   it('maps enums to a label union when the enum map is provided', () => {
     const enums = new Map([['mood', ['happy', 'sad']]]);
-    expect(mapPostgresType('mood', enums)).toBe("'happy' | 'sad'");
+    expect(mapPostgresType('mood', enums)).toBe('"happy" | "sad"');
+  });
+
+  it('escapes a label containing a backslash, a quote, or a newline (issue #201 repro)', () => {
+    const enums = new Map([['mood', ['a\\', 'b"c', "d'e", 'f\ng']]]);
+    expect(mapPostgresType('mood', enums)).toBe('"a\\\\" | "b\\"c" | "d\'e" | "f\\ng"');
   });
 
   it('maps an enum array to the raw string pg returns - enum OIDs are dynamic and never registered as arrays', () => {

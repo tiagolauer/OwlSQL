@@ -79,8 +79,13 @@ const POSTGRES_ARRAY_TYPE_OVERRIDES: Record<string, string> = {
   numeric: 'number',
 };
 
+// JSON.stringify emits a TypeScript-valid double-quoted literal and escapes
+// backslashes, quotes and control characters - hand-rolled quoting only
+// escaped `'`, so a label ending in a backslash escaped the closing quote and
+// the generated schema.ts stopped parsing. renderKey in src/cli/codegen.ts
+// already quotes identifiers this way.
 function renderEnumUnion(labels: string[]): string {
-  return labels.map((label) => `'${label.replace(/'/g, "\\'")}'`).join(' | ');
+  return labels.map((label) => JSON.stringify(label)).join(' | ');
 }
 
 function scalarType(base: string): string {
