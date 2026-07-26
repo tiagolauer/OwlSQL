@@ -2,6 +2,7 @@ import type { ConnectionPool, Transaction, Request } from 'mssql';
 import type { DialectExecutor, QueryMeta, SchemaLike, TypedDb, TypedDbOptions } from '../index.js';
 import { createTypedDb } from '../index.js';
 import { collectNamedParameters } from './named-params.js';
+import { rollbackPreservingError } from './transaction-errors.js';
 
 const MSSQL_PARAM_PREFIXES: ReadonlySet<string> = new Set(['@']);
 
@@ -58,13 +59,17 @@ export function createMssqlTransaction<DB extends SchemaLike>(pool: ConnectionPo
       { ...options, placeholders: 'at' } as Options & { placeholders: 'at' },
     );
 
+    let begun = false;
     try {
       await transaction.begin();
+      begun = true;
       const result = await fn(tx);
       await transaction.commit();
       return result;
     } catch (error) {
-      await transaction.rollback();
+      if (begun) {
+        await rollbackPreservingError(error, () => transaction.rollback());
+      }
       throw error;
     }
   };

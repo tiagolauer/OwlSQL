@@ -115,6 +115,25 @@ describe('createPgTransaction', () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
+  it('preserves the callback error when rollback also throws', async () => {
+    const { pool, clientQuery, release } = fakeTransactionalPool();
+    const original = new Error('original failure');
+    const rollback = new Error('rollback failed');
+    clientQuery.mockImplementation(async (sql: string) => {
+      if (sql === 'rollback') {
+        throw rollback;
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(createPgTransaction<DB>(pool)(async () => {
+      throw original;
+    })).rejects.toBe(original);
+
+    expect(original.cause).toBe(rollback);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
   it('releases even when commit itself throws', async () => {
     const { pool, clientQuery, release } = fakeTransactionalPool();
     clientQuery.mockImplementation(async (sql: string) => {

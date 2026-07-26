@@ -1,6 +1,7 @@
 import type { Pool, Client, PoolClient } from 'pg';
 import type { DialectExecutor, SchemaLike, TypedDb, TypedDbOptions } from '../index.js';
 import { createTypedDb } from '../index.js';
+import { rollbackPreservingError } from './transaction-errors.js';
 
 export type PgQueryable = Pool | Client | PoolClient;
 
@@ -56,7 +57,7 @@ export function createPgTransaction<DB extends SchemaLike>(pool: Pool) {
       await client.query('commit');
       return result;
     } catch (error) {
-      await client.query('rollback');
+      await rollbackPreservingError(error, () => client.query('rollback'));
       throw error;
     } finally {
       client.release();

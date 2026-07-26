@@ -113,4 +113,20 @@ describe('createMysql2Transaction', () => {
     expect(commit).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it('preserves the callback error when rollback also throws', async () => {
+    const { pool, rollback, commit, release } = fakeTransactionalPool();
+    const original = new Error('original failure');
+    const rollbackError = new Error('rollback failed');
+    rollback.mockRejectedValue(rollbackError);
+
+    await expect(createMysql2Transaction<DB>(pool)(async () => {
+      throw original;
+    })).rejects.toBe(original);
+
+    expect(original.cause).toBe(rollbackError);
+    expect(rollback).toHaveBeenCalledOnce();
+    expect(commit).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
+  });
 });

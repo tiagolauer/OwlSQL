@@ -2,6 +2,7 @@ import type { Pool, Connection } from 'mysql2/promise';
 import type { ExecuteValues } from 'mysql2';
 import type { DialectExecutor, QueryMeta, SchemaLike, TypedDb, TypedDbOptions } from '../index.js';
 import { createTypedDb } from '../index.js';
+import { rollbackPreservingError } from './transaction-errors.js';
 
 export type Mysql2Queryable = Pool | Connection;
 
@@ -61,7 +62,7 @@ export function createMysql2Transaction<DB extends SchemaLike>(pool: Pool) {
       await connection.commit();
       return result;
     } catch (error) {
-      await connection.rollback();
+      await rollbackPreservingError(error, () => connection.rollback());
       throw error;
     } finally {
       connection.release();

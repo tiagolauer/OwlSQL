@@ -160,4 +160,30 @@ describe('createMssqlTransaction', () => {
     expect(rollback).toHaveBeenCalledOnce();
     expect(commit).not.toHaveBeenCalled();
   });
+
+  it('preserves the callback error when rollback also throws', async () => {
+    const { pool, rollback, commit } = fakeTransactionalPool();
+    const original = new Error('original failure');
+    const rollbackError = new Error('rollback failed');
+    rollback.mockRejectedValue(rollbackError);
+
+    await expect(createMssqlTransaction<DB>(pool)(async () => {
+      throw original;
+    })).rejects.toBe(original);
+
+    expect(original.cause).toBe(rollbackError);
+    expect(rollback).toHaveBeenCalledOnce();
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('does not roll back when begin fails before the transaction starts', async () => {
+    const { pool, begin, rollback, commit } = fakeTransactionalPool();
+    const beginError = new Error('connect failed');
+    begin.mockRejectedValue(beginError);
+
+    await expect(createMssqlTransaction<DB>(pool)(async () => 'done')).rejects.toBe(beginError);
+
+    expect(rollback).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+  });
 });
