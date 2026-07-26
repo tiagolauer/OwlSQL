@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createTypedDb, isOk } from '../src/index.js';
 import { createNodeSqliteExecutor } from '../src/adapters/node-sqlite.js';
 import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
@@ -29,6 +29,7 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
         { id: 1, name: 'ada' },
         { id: 2, name: 'grace' },
       ]);
+      expect(result.meta).toBeUndefined();
     }
   });
 
@@ -121,20 +122,117 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
     ]);
   });
 
-  it('supports an INSERT round-trip through the typed client', async () => {
+  it('reports write metadata without leaking stale values through the typed client', async () => {
     const sqlite = seededDatabase();
     const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
 
-    const insert = await db.query('insert into users (id, name) values ($1, $2)', 3, 'lin');
+    const insert = await db.query('insert into users (id, name) values ($1, $2)', 9, 'lin');
     expect(isOk(insert)).toBe(true);
     if (isOk(insert)) {
-      expect(insert.meta).toEqual({ rowCount: 1, lastInsertRowid: 3 });
+      expect(insert.meta).toEqual({ rowCount: 1, lastInsertRowid: 9 });
     }
 
-    const rows = await db.query('select name from users where id = ?', 3);
+    const update = await db.query('update users set name = ? where id = ?', 'ada-lovelace', 1);
+    expect(isOk(update)).toBe(true);
+    if (isOk(update)) {
+      expect(update.meta).toEqual({ rowCount: 1 });
+    }
+
+    const deleted = await db.query('delete from users where id = ?', 2);
+    expect(isOk(deleted)).toBe(true);
+    if (isOk(deleted)) {
+      expect(deleted.meta).toEqual({ rowCount: 1 });
+    }
+
+    const deleteMiss = await db.query('delete from users where id = ?', 12345);
+    expect(isOk(deleteMiss)).toBe(true);
+    if (isOk(deleteMiss)) {
+      expect(deleteMiss.meta).toEqual({ rowCount: 0 });
+    }
+
+    const ddl = await db.query('create table t2 (a integer)');
+    expect(isOk(ddl)).toBe(true);
+    if (isOk(ddl)) {
+      expect(ddl.meta).toEqual({});
+    }
+
+    const rows = await db.query('select name from users where id = ?', 9);
     expect(isOk(rows)).toBe(true);
     if (isOk(rows)) {
       expect(rows.value).toEqual([{ name: 'lin' }]);
     }
+  });
+});
+
+describe('createNodeSqliteExecutor column detection fallback', () => {
+  it('classifies statements from SQL when StatementSync.columns is unavailable', async () => {
+    const insertStatement = {
+      run: vi.fn().mockReturnValue({ changes: 1, lastInsertRowid: 7 }),
+      all: vi.fn().mockReturnValue([]),
+    };
+    const selectStatement = {
+      run: vi.fn(),
+      all: vi.fn().mockReturnValue([{ id: 7 }]),
+    };
+    const ddlStatement = {
+      run: vi.fn().mockReturnValue({ changes: 4, lastInsertRowid: 99 }),
+      all: vi.fn().mockReturnValue([]),
+    };
+    const returningStatement = {
+      run: vi.fn(),
+      all: vi.fn().mockReturnValue([{ id: 8 }]),
+    };
+    const statements: Record<string, unknown> = {
+      'insert into users (name) values (?)': insertStatement,
+      'select id from users': selectStatement,
+      'create table t2 (a integer)': ddlStatement,
+      'insert into users (name) values (?) returning id': returningStatement,
+    };
+    const sqlite = {
+      prepare: vi.fn((sql: string) => statements[sql]),
+    } as unknown as import('node:sqlite').DatabaseSync;
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(executor('insert into users (name) values (?)', ['ada'])).resolves.toEqual({
+      rows: [],
+      meta: { rowCount: 1, lastInsertRowid: 7 },
+    });
+    expect(insertStatement.run).toHaveBeenCalledWith('ada');
+    expect(insertStatement.all).not.toHaveBeenCalled();
+
+    await expect(executor('select id from users', [])).resolves.toEqual([{ id: 7 }]);
+    expect(selectStatement.all).toHaveBeenCalledWith();
+    expect(selectStatement.run).not.toHaveBeenCalled();
+
+    await expect(executor('create table t2 (a integer)', [])).resolves.toEqual({
+      rows: [],
+      meta: {},
+    });
+    expect(ddlStatement.run).toHaveBeenCalledWith();
+    expect(ddlStatement.all).not.toHaveBeenCalled();
+
+    await expect(
+      executor('insert into users (name) values (?) returning id', ['grace']),
+    ).resolves.toEqual([{ id: 8 }]);
+    expect(returningStatement.all).toHaveBeenCalledWith('grace');
+    expect(returningStatement.run).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row path when StatementSync.columns throws', async () => {
+    const statement = {
+      columns: vi.fn(() => {
+        throw new Error('columns unavailable');
+      }),
+      run: vi.fn(),
+      all: vi.fn().mockReturnValue([{ id: 1 }]),
+    };
+    const sqlite = {
+      prepare: vi.fn(() => statement),
+    } as unknown as import('node:sqlite').DatabaseSync;
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(executor('select id from users', [])).resolves.toEqual([{ id: 1 }]);
+    expect(statement.all).toHaveBeenCalledWith();
+    expect(statement.run).not.toHaveBeenCalled();
   });
 });
