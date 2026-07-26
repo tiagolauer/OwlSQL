@@ -2,6 +2,7 @@ import type { ConnectionPool, Transaction, Request } from 'mssql';
 import type { DialectExecutor, QueryMeta, SchemaLike, TypedDb, TypedDbOptions } from '../index.js';
 import { createTypedDb } from '../index.js';
 import { collectNamedParameters } from './named-params.js';
+import { rollbackAndRethrow } from './transaction.js';
 
 const MSSQL_PARAM_PREFIXES: ReadonlySet<string> = new Set(['@']);
 
@@ -58,14 +59,18 @@ export function createMssqlTransaction<DB extends SchemaLike>(pool: ConnectionPo
       { ...options, placeholders: 'at' } as Options & { placeholders: 'at' },
     );
 
+    // begin() stays outside the try: node-mssql throws "Transaction has not
+    // begun" when rollback() runs on a transaction that never started, so a
+    // pool that can't reach the server would report a transaction-state
+    // problem instead of the connection failure that actually happened.
+    await transaction.begin();
+
     try {
-      await transaction.begin();
       const result = await fn(tx);
       await transaction.commit();
       return result;
     } catch (error) {
-      await transaction.rollback();
-      throw error;
+      return await rollbackAndRethrow(error, () => transaction.rollback());
     }
   };
 }

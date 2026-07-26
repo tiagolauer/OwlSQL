@@ -113,4 +113,18 @@ describe('createMysql2Transaction', () => {
     expect(commit).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it('keeps the original error when the rollback itself fails (issue #204 repro)', async () => {
+    const { pool, rollback, release } = fakeTransactionalPool();
+    rollback.mockRejectedValue(new Error('connection lost'));
+
+    const thrown = await createMysql2Transaction<DB>(pool)(async () => {
+      throw new Error('boom');
+    }).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(AggregateError);
+    const errors = (thrown as AggregateError).errors as Error[];
+    expect(errors.map((error) => error.message)).toEqual(['boom', 'connection lost']);
+    expect(release).toHaveBeenCalledOnce();
+  });
 });

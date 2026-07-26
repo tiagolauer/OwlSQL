@@ -160,4 +160,31 @@ describe('createMssqlTransaction', () => {
     expect(rollback).toHaveBeenCalledOnce();
     expect(commit).not.toHaveBeenCalled();
   });
+
+  it('keeps the original error when the rollback itself fails (issue #204 repro)', async () => {
+    const { pool, rollback } = fakeTransactionalPool();
+    rollback.mockRejectedValue(new Error('Transaction has not begun'));
+
+    const thrown = await createMssqlTransaction<DB>(pool)(async () => {
+      throw new Error('boom');
+    }).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(AggregateError);
+    const errors = (thrown as AggregateError).errors as Error[];
+    expect(errors.map((error) => error.message)).toEqual([
+      'boom',
+      'Transaction has not begun',
+    ]);
+  });
+
+  it('does not roll back a transaction that never began', async () => {
+    const { pool, begin, rollback } = fakeTransactionalPool();
+    begin.mockRejectedValue(new Error('connection refused'));
+
+    await expect(
+      createMssqlTransaction<DB>(pool)(async () => 'unreachable'),
+    ).rejects.toThrow('connection refused');
+
+    expect(rollback).not.toHaveBeenCalled();
+  });
 });
