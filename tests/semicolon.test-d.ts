@@ -1,4 +1,4 @@
-import type { Query, StrictRow, QueryTypeError } from '../src/index.js';
+import type { Query, Params, StrictRow, QueryTypeError } from '../src/index.js';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2)
@@ -49,8 +49,22 @@ type NonTrailingSemicolonIsRejectedInStrictMode = Expect<
   >
 >;
 
-type NonStrictModeStillMergesNonTrailingSemicolon = Expect<
-  Equal<Query<DB, 'select id from users; select name from users'>, { id: number }[]>
+type NonTrailingSemicolonIsRejectedInNonStrictMode = Expect<
+  Equal<
+    Query<DB, 'select id from users; select name from users'>,
+    QueryTypeError<'multiple statements are not supported: found a semicolon before the end of the query'>[]
+  >
+>;
+
+type NonTrailingSemicolonIsRejectedForParams = Expect<
+  Equal<
+    Params<DB, 'select id from users where id = ?; delete from users where id = ?'>,
+    [QueryTypeError<'multiple statements are not supported: found a semicolon before the end of the query'>]
+  >
+>;
+
+type TrailingSemicolonStillTypesParams = Expect<
+  Equal<Params<DB, 'select id from users where id = ?;'>, [number]>
 >;
 
 export type Assertions = [
@@ -61,5 +75,7 @@ export type Assertions = [
   SemicolonInsideDollarQuotedLiteralIsFine,
   SemicolonInsideCommentIsFine,
   NonTrailingSemicolonIsRejectedInStrictMode,
-  NonStrictModeStillMergesNonTrailingSemicolon,
+  NonTrailingSemicolonIsRejectedInNonStrictMode,
+  NonTrailingSemicolonIsRejectedForParams,
+  TrailingSemicolonStillTypesParams,
 ];
