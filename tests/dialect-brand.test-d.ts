@@ -21,6 +21,16 @@ export async function placeholderStyleCallSites() {
 
   await mysqlDb.query('select id from users where id = ?', 1);
 
+  await mysqlDb.query(
+    'select id from users where name = ? and id in (select 1 where $$x$$ = $$x$$)',
+    'ada',
+  );
+
+  await mysqlDb.query(
+    'select id from users where name = ? and id in (select 1 where $tag$x$tag$ = $tag$x$tag$)',
+    'ada',
+  );
+
   // @ts-expect-error a question-style client rejects $n placeholders
   await mysqlDb.query('select id from users where id = $1', 1);
 

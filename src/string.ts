@@ -50,6 +50,35 @@ ${infer Rest}`
 
 type AfterBlockComment<S extends string> = S extends `${string}*/${infer Rest}` ? Rest : '';
 
+type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+
+type ContainsWhitespace<S extends string> = S extends `${string}${Whitespace}${string}` ? true : false;
+
+type IsDollarQuoteTag<S extends string> = S extends ''
+  ? false
+  : S extends `${Digit}${string}`
+    ? false
+    : ContainsWhitespace<S> extends true
+      ? false
+      : true;
+
+type MaskDollarQuotedBodies<
+  S extends string,
+  Accumulated extends string = '',
+> = S extends `${infer Before}$${infer AfterDollar}`
+  ? AfterDollar extends `$${infer AfterOpen}`
+    ? AfterOpen extends `${string}$$${infer Rest}`
+      ? MaskDollarQuotedBodies<Rest, `${Accumulated}${Before}''`>
+      : `${Accumulated}${S}`
+    : AfterDollar extends `${infer Tag}$${infer AfterOpen}`
+      ? IsDollarQuoteTag<Tag> extends true
+        ? AfterOpen extends `${string}$${Tag}$${infer Rest}`
+          ? MaskDollarQuotedBodies<Rest, `${Accumulated}${Before}''`>
+          : `${Accumulated}${S}`
+        : MaskDollarQuotedBodies<AfterDollar, `${Accumulated}${Before}$`>
+      : `${Accumulated}${S}`
+  : `${Accumulated}${S}`;
+
 export type StripCommentsAndMaskLiterals<
   S extends string,
   Accumulated extends string = '',
@@ -87,7 +116,7 @@ export type StripCommentsAndMaskLiterals<
       : `${Accumulated}${S}`;
 
 export type Normalize<S extends string> = Trim<
-  CollapseSpaces<WhitespaceToSpace<RemoveSemicolons<StripCommentsAndMaskLiterals<S>>>>
+  CollapseSpaces<WhitespaceToSpace<RemoveSemicolons<StripCommentsAndMaskLiterals<MaskDollarQuotedBodies<S>>>>>
 >;
 
 // RemoveSemicolons strips every semicolon, not just a single trailing one, so
@@ -96,7 +125,7 @@ export type Normalize<S extends string> = Trim<
 // literal-masked text so a semicolon inside a comment or a string literal
 // (already reduced to '') is never mistaken for a statement separator.
 export type HasNonTrailingSemicolon<S extends string> =
-  Trim<StripCommentsAndMaskLiterals<S>> extends `${string};${infer After}`
+  Trim<StripCommentsAndMaskLiterals<MaskDollarQuotedBodies<S>>> extends `${string};${infer After}`
     ? Trim<After> extends ''
       ? false
       : true
