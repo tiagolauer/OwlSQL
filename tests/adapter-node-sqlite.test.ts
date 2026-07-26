@@ -127,6 +127,9 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
 
     const insert = await db.query('insert into users (id, name) values ($1, $2)', 3, 'lin');
     expect(isOk(insert)).toBe(true);
+    if (isOk(insert)) {
+      expect(insert.meta).toEqual({ rowCount: 1, lastInsertRowid: 3 });
+    }
 
     const rows = await db.query('select name from users where id = ?', 3);
     expect(isOk(rows)).toBe(true);

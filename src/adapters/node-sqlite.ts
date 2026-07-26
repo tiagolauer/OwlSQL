@@ -19,6 +19,14 @@ function toSqliteValue(value: unknown): SqliteParam {
   return value as SqliteParam;
 }
 
+function hasResultColumns(statement: import('node:sqlite').StatementSync): boolean {
+  try {
+    return statement.columns().length > 0;
+  } catch {
+    return true;
+  }
+}
+
 export function createNodeSqliteExecutor(
   db: DatabaseSync,
 ): DialectExecutor<'question' | 'at' | 'dollar'> {
@@ -26,6 +34,19 @@ export function createNodeSqliteExecutor(
     const statement = db.prepare(sql);
     const values = params.map(toSqliteValue);
     const { named, positional } = resolveMixedParameters(sql, SQLITE_PARAM_PREFIXES, values);
+
+    if (!hasResultColumns(statement)) {
+      const result = Object.keys(named).length > 0
+        ? statement.run(named as Record<string, SqliteParam>, ...(positional as SqliteParam[]))
+        : statement.run(...(positional as SqliteParam[]));
+      return {
+        rows: [],
+        meta: {
+          rowCount: result.changes,
+          lastInsertRowid: result.lastInsertRowid,
+        },
+      };
+    }
 
     if (Object.keys(named).length > 0) {
       return statement.all(named as Record<string, SqliteParam>, ...(positional as SqliteParam[]));
