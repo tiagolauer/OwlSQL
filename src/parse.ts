@@ -17,7 +17,13 @@ import type {
   FunctionOutputName,
   FunctionReturnType,
 } from './functions.js';
-import type { Source, ParseFromClause, RestAfterFromClause } from './from.js';
+import type {
+  Source,
+  ParseFromClause,
+  RestAfterFromClause,
+  TakeFromClause,
+  ExtractJoinOnText,
+} from './from.js';
 import type { IsCaseExpression, SplitCaseExpression, CaseExpressionType } from './case.js';
 import type { ParseWithClause, BuildCteMap } from './cte.js';
 import type { ExtractSelectWhereText, ExtractUpdateDeleteWhereText, WhereClauseError } from './where.js';
@@ -210,6 +216,7 @@ export interface ParsedStatement {
   columns: string;
   sources: Source[];
   whereText: string;
+  fromText: string;
 }
 
 type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer Body
@@ -223,8 +230,12 @@ type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer B
             columns: Columns;
             sources: ParseFromClause<AfterFrom>;
             whereText: ExtractSelectWhereText<RestAfterFromClause<AfterFrom>>;
+            // Kept as raw text rather than pre-extracted ON conditions: the
+            // JOIN ON check only runs in strict mode, and this way the scan
+            // is never instantiated for a non-strict query.
+            fromText: TakeFromClause<AfterFrom>;
           }
-        : { columns: Columns; sources: []; whereText: '' }
+        : { columns: Columns; sources: []; whereText: ''; fromText: '' }
       : never
     : never
   : never;
@@ -237,6 +248,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
           columns: ReturningOrOutputColumns<S, 'values'>;
           sources: SingleSource<WordAfterKeyword<S, 'into'>>;
           whereText: '';
+          fromText: '';
         }
       : IsKeyword<Keyword, 'update'> extends true
         ? {
@@ -246,6 +258,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
               ...ExtraSourcesAfterKeyword<S, 'from'>,
             ];
             whereText: ExtractUpdateDeleteWhereText<S>;
+            fromText: '';
           }
         : IsKeyword<Keyword, 'delete'> extends true
           ? {
@@ -255,6 +268,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
                 ...ExtraSourcesAfterKeyword<S, 'using'>,
               ];
               whereText: ExtractUpdateDeleteWhereText<S>;
+              fromText: '';
             }
           : IsKeyword<Keyword, 'merge'> extends true
             ? {
@@ -266,6 +280,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
                 columns: StripPseudoTableQualifiers<OutputClauseColumnsToEnd<S>>;
                 sources: SingleSource<WordAfterKeyword<S, 'into'>>;
                 whereText: '';
+                fromText: '';
               }
             : never
   : never;
@@ -823,20 +838,40 @@ type BuildDerivedSourceMap<
     : BuildDerivedSourceMap<DB, Tail, Strict, Accumulated>
   : Accumulated;
 
+type ApplyClauseError<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  ClauseText extends string,
+  Row,
+> = Trim<ClauseText> extends ''
+  ? Row
+  : [WhereClauseError<DB, Sources, ClauseText>] extends [never]
+    ? Row
+    : WhereClauseError<DB, Sources, ClauseText>;
+
+// JOIN ON conditions are validated the same way the WHERE clause is: the
+// operands are ordinary column references against the same sources, and a
+// wrong side (`o.id` where `o.user_id` was meant) compiles, runs, and returns
+// a wrong result set - exactly what strict mode exists to catch (issue #205).
+// GROUP BY, HAVING and ORDER BY stay out: they have their own resolution
+// rules (SELECT-list aliases, ordinals, aggregates), documented as a
+// limitation in the README.
 type ApplyWhereCheck<
   DB extends SchemaLike,
   Sources extends Source[],
   WhereText extends string,
+  FromText extends string,
   Strict extends boolean,
   Row,
 > = Strict extends true
   ? Row extends QueryTypeError<string>
     ? Row
-    : Trim<WhereText> extends ''
-      ? Row
-      : [WhereClauseError<DB, Sources, WhereText>] extends [never]
-        ? Row
-        : WhereClauseError<DB, Sources, WhereText>
+    : ApplyClauseError<
+        DB,
+        Sources,
+        ExtractJoinOnText<FromText>,
+        ApplyClauseError<DB, Sources, WhereText, Row>
+      >
   : Row;
 
 // Checked in both modes, unlike the schema-driven checks that strict mode
@@ -868,6 +903,7 @@ type InferRowWithChecked<
       columns: infer Columns extends string;
       sources: infer Sources extends Source[];
       whereText: infer WhereText extends string;
+      fromText: infer FromText extends string;
     }
     ? (CteDB & BuildDerivedSourceMap<CteDB, Sources, Strict>) extends infer EffectiveDB extends SchemaLike
       ? Trim<Columns> extends ''
@@ -876,6 +912,7 @@ type InferRowWithChecked<
             EffectiveDB,
             Sources,
             WhereText,
+            FromText,
             Strict,
             IsSelectAll<Columns> extends true
               ? StarRow<EffectiveDB, Sources, Strict>

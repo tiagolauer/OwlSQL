@@ -417,6 +417,20 @@ const typo = await db.query('select naem from users');
 The error type propagates wherever you use the rows, surfacing the message in
 hovers and breaking any code that treats them as real data.
 
+Strict mode checks the `SELECT` list, the `WHERE` clause, and `JOIN ... ON`
+conditions:
+
+```ts
+const wrongSide = await db.query(
+  'select u.id from users u join orders o on u.id = o.id',
+);
+//     wrongSide.value ^? QueryTypeError<'unknown column: id'>[] (when orders has no such column)
+```
+
+`GROUP BY`, `HAVING`, and `ORDER BY` are **not** checked — they have their own
+resolution rules (a `SELECT`-list alias, an ordinal, an aggregate), so a name
+there is not necessarily a column of a source table.
+
 ### 9. Joins
 
 `INNER`, `LEFT`, `RIGHT`, `FULL` (with optional `OUTER`), and `CROSS` joins are
@@ -879,7 +893,7 @@ this.**
 | Quoted / schema-qualified ids | `select "id" from public."users"` |
 | Trailing semicolon | `select id from users;` |
 | Typed parameters | `where id = $1` → `query(sql, id: number)` |
-| Strict mode | `{ strict: true }` → unknown column becomes a `QueryTypeError` |
+| Strict mode | `{ strict: true }` → unknown column becomes a `QueryTypeError` (`SELECT` list, `WHERE`, and `JOIN ... ON`) |
 | `WHERE` operators | `=`, `<>`, comparisons, `LIKE`/`ILIKE`, `IN (...)`, `BETWEEN ... AND ...`, `IS [NOT] NULL`, `IS [NOT] DISTINCT FROM`, `AND`/`OR` |
 | `GROUP BY` / `HAVING` / `ORDER BY` / `LIMIT` / `OFFSET` | parsed and skipped; output shape follows the `SELECT` list, `HAVING`/`LIMIT`/`OFFSET` placeholders are typed |
 | `UNION` / `UNION ALL` | result shape is inferred from the first branch |
@@ -961,7 +975,11 @@ This is a focused tool for the common read path, not a full SQL grammar:
   `OUTPUT $action` is recognized and typed as `'INSERT' | 'UPDATE' |
   'DELETE'`.
 - **Unknown columns, tables, or aliases resolve to `unknown`** by default — pass
-  `{ strict: true }` to turn them into a `QueryTypeError` instead.
+  `{ strict: true }` to turn them into a `QueryTypeError` instead. Strict mode
+  covers the `SELECT` list, the `WHERE` clause, and `JOIN ... ON` conditions;
+  `GROUP BY`, `HAVING`, and `ORDER BY` are left alone, since a name there can
+  be a `SELECT`-list alias, an ordinal, or an aggregate rather than a column
+  of a source table.
 - **One statement per query.** A semicolon is only allowed at the end. A
   second statement after one (`select id from users; drop table users`) is a
   `QueryTypeError` in both modes, for the row type and for the parameter

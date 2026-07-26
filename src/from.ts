@@ -51,7 +51,62 @@ type SplitFromClauseBoundary<
       : { clause: Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>; rest: '' }
     : { clause: Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>; rest: '' };
 
-type TakeFromClause<S extends string> = SplitFromClauseBoundary<S>['clause'];
+export type TakeFromClause<S extends string> = SplitFromClauseBoundary<S>['clause'];
+
+type IsJoinPhraseWord<Word extends string> = Lowercase<Word> extends
+  | 'join'
+  | 'inner'
+  | 'left'
+  | 'right'
+  | 'full'
+  | 'outer'
+  | 'cross'
+  | 'lateral'
+  ? true
+  : false;
+
+// Collects every top-level `ON` condition in a FROM clause into one text, with
+// the groups joined by `and` so the WHERE scanner can validate them in a
+// single pass - the operands are ordinary bare or qualified column references,
+// exactly what ValidateWhereOperand already handles. Depth-tracked, so an `ON`
+// belonging to a derived table's own inner query is left to that query's own
+// parse.
+type ScanJoinOnText<
+  S extends string,
+  Depth extends unknown[] = [],
+  Collecting extends boolean = false,
+  Accumulated extends string = '',
+> = S extends `${infer Head} ${infer Tail}`
+  ? Depth extends []
+    ? IsKeyword<Head, 'on'> extends true
+      ? ScanJoinOnText<
+          Tail,
+          ApplyParenDelta<Depth, Head>,
+          true,
+          Accumulated extends '' ? '' : `${Accumulated} and`
+        >
+      : IsJoinPhraseWord<Head> extends true
+        ? ScanJoinOnText<Tail, ApplyParenDelta<Depth, Head>, false, Accumulated>
+        : Collecting extends true
+          ? ScanJoinOnText<
+              Tail,
+              ApplyParenDelta<Depth, Head>,
+              true,
+              Accumulated extends '' ? Head : `${Accumulated} ${Head}`
+            >
+          : ScanJoinOnText<Tail, ApplyParenDelta<Depth, Head>, false, Accumulated>
+    : ScanJoinOnText<Tail, ApplyParenDelta<Depth, Head>, Collecting, Accumulated>
+  : Depth extends []
+    ? Collecting extends true
+      ? IsJoinPhraseWord<S> extends true
+        ? Accumulated
+        : Accumulated extends ''
+          ? S
+          : `${Accumulated} ${S}`
+      : Accumulated
+    : Accumulated;
+
+export type ExtractJoinOnText<FromClause extends string> = ScanJoinOnText<Trim<FromClause>>;
 
 export type RestAfterFromClause<AfterFrom extends string> = SplitFromClauseBoundary<AfterFrom>['rest'];
 
