@@ -130,4 +130,23 @@ describe('createPgTransaction', () => {
 
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it('keeps the original error when the rollback itself fails (issue #204 repro)', async () => {
+    const { pool, clientQuery, release } = fakeTransactionalPool();
+    clientQuery.mockImplementation(async (sql: string) => {
+      if (sql === 'rollback') {
+        throw new Error('connection terminated');
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const thrown = await createPgTransaction<DB>(pool)(async () => {
+      throw new Error('boom');
+    }).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(AggregateError);
+    const errors = (thrown as AggregateError).errors as Error[];
+    expect(errors.map((error) => error.message)).toEqual(['boom', 'connection terminated']);
+    expect(release).toHaveBeenCalledOnce();
+  });
 });

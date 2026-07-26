@@ -544,6 +544,11 @@ Kysely users should use Kysely's own `db.transaction()`. `node:sqlite` is a
 single connection, so plain `begin`/`commit` statements are safe there and no
 helper is provided.
 
+If the rollback *itself* fails, the helper throws an `AggregateError` whose
+`errors[0]` is the original failure and `errors[1]` is the rollback failure —
+the error that caused the transaction to be abandoned is never replaced by a
+cleanup error.
+
 Under the hood, each helper does exactly what you'd otherwise write by hand:
 
 ```ts
