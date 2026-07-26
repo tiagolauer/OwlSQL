@@ -27,6 +27,10 @@ type SemicolonInsideLiteralIsFine = Expect<
   Equal<StrictRow<DB, "select id from users where name = 'a;b'">, { id: number }>
 >;
 
+type SemicolonInsideDollarQuotedLiteralIsFine = Expect<
+  Equal<StrictRow<DB, 'select id from users where name = $$a;b$$'>, { id: number }>
+>;
+
 type SemicolonInsideCommentIsFine = Expect<
   Equal<
     StrictRow<
@@ -54,6 +58,7 @@ export type Assertions = [
   TrailingSemicolonWithSpaceIsFine,
   NoSemicolonIsFine,
   SemicolonInsideLiteralIsFine,
+  SemicolonInsideDollarQuotedLiteralIsFine,
   SemicolonInsideCommentIsFine,
   NonTrailingSemicolonIsRejectedInStrictMode,
   NonStrictModeStillMergesNonTrailingSemicolon,

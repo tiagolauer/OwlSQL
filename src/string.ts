@@ -50,73 +50,116 @@ ${infer Rest}`
 
 type AfterBlockComment<S extends string> = S extends `${string}*/${infer Rest}` ? Rest : '';
 
-type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+export type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
 
-type ContainsWhitespace<S extends string> = S extends `${string}${Whitespace}${string}` ? true : false;
+type LowerAlpha =
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'
+  | 'g'
+  | 'h'
+  | 'i'
+  | 'j'
+  | 'k'
+  | 'l'
+  | 'm'
+  | 'n'
+  | 'o'
+  | 'p'
+  | 'q'
+  | 'r'
+  | 's'
+  | 't'
+  | 'u'
+  | 'v'
+  | 'w'
+  | 'x'
+  | 'y'
+  | 'z';
 
-type IsDollarQuoteTag<S extends string> = S extends ''
-  ? false
-  : S extends `${Digit}${string}`
-    ? false
-    : ContainsWhitespace<S> extends true
-      ? false
-      : true;
+type UpperAlpha = Uppercase<LowerAlpha>;
 
-type MaskDollarQuotedBodies<
-  S extends string,
-  Accumulated extends string = '',
-> = S extends `${infer Before}$${infer AfterDollar}`
-  ? AfterDollar extends `$${infer AfterOpen}`
-    ? AfterOpen extends `${string}$$${infer Rest}`
-      ? MaskDollarQuotedBodies<Rest, `${Accumulated}${Before}''`>
-      : `${Accumulated}${S}`
-    : AfterDollar extends `${infer Tag}$${infer AfterOpen}`
-      ? IsDollarQuoteTag<Tag> extends true
-        ? AfterOpen extends `${string}$${Tag}$${infer Rest}`
-          ? MaskDollarQuotedBodies<Rest, `${Accumulated}${Before}''`>
-          : `${Accumulated}${S}`
-        : MaskDollarQuotedBodies<AfterDollar, `${Accumulated}${Before}$`>
-      : `${Accumulated}${S}`
-  : `${Accumulated}${S}`;
+type IdentifierStart = LowerAlpha | UpperAlpha | '_';
+
+type IdentifierChar = IdentifierStart | Digit;
+
+type IsIdentifierTail<S extends string> = S extends ''
+  ? true
+  : S extends `${infer Head}${infer Rest}`
+    ? Head extends IdentifierChar
+      ? IsIdentifierTail<Rest>
+      : false
+    : false;
+
+type IsDollarQuoteTag<S extends string> = S extends `${infer Head}${infer Rest}`
+  ? Head extends IdentifierStart
+    ? IsIdentifierTail<Rest>
+    : false
+  : false;
+
+type DollarQuoteOpen<S extends string> = S extends `$${infer AfterOpen}`
+  ? { tag: ''; afterOpen: AfterOpen }
+  : S extends `${infer Tag}$${infer AfterOpen}`
+    ? IsDollarQuoteTag<Tag> extends true
+      ? { tag: Tag; afterOpen: AfterOpen }
+      : never
+    : never;
+
+type SkipDollarQuotedBody<S extends string, Tag extends string> = Tag extends ''
+  ? S extends `${string}$$${infer Rest}`
+    ? { rest: Rest }
+    : never
+  : S extends `${string}$${Tag}$${infer Rest}`
+    ? { rest: Rest }
+    : never;
+
+type HasMaskableToken<S extends string> = S extends
+  | `${string}'${string}`
+  | `${string}--${string}`
+  | `${string}/*${string}`
+  | `${string}$${string}`
+  ? true
+  : false;
 
 export type StripCommentsAndMaskLiterals<
   S extends string,
   Accumulated extends string = '',
-> = S extends `${infer BeforeQuote}'${infer AfterQuote}`
-  ? BeforeQuote extends `${infer BeforeDash}--${infer AfterDash}`
-    ? BeforeDash extends `${infer BeforeBlock}/*${infer AfterBlock}`
-      ? StripCommentsAndMaskLiterals<
-          AfterBlockComment<`${AfterBlock}--${AfterDash}'${AfterQuote}`>,
-          `${Accumulated}${BeforeBlock} `
-        >
-      : StripCommentsAndMaskLiterals<
-          AfterLineComment<`${AfterDash}'${AfterQuote}`>,
-          `${Accumulated}${BeforeDash} `
-        >
-    : BeforeQuote extends `${infer BeforeBlock}/*${infer AfterBlock}`
-      ? StripCommentsAndMaskLiterals<
-          AfterBlockComment<`${AfterBlock}'${AfterQuote}`>,
-          `${Accumulated}${BeforeBlock} `
-        >
-      : SkipLiteralBody<AfterQuote> extends { rest: infer Rest extends string }
-        ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}${BeforeQuote}''`>
+> = S extends ''
+  ? Accumulated
+  : HasMaskableToken<S> extends false
+    ? `${Accumulated}${S}`
+    : S extends `'${infer AfterQuote}`
+      ? SkipLiteralBody<AfterQuote> extends { rest: infer Rest extends string }
+        ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}''`>
         : `${Accumulated}${S}`
-  : S extends `${infer BeforeDash}--${infer AfterDash}`
-    ? BeforeDash extends `${infer BeforeBlock}/*${infer AfterBlock}`
-      ? StripCommentsAndMaskLiterals<
-          AfterBlockComment<`${AfterBlock}--${AfterDash}`>,
-          `${Accumulated}${BeforeBlock} `
-        >
-      : StripCommentsAndMaskLiterals<AfterLineComment<AfterDash>, `${Accumulated}${BeforeDash} `>
-    : S extends `${infer BeforeBlock}/*${infer AfterBlock}`
-      ? StripCommentsAndMaskLiterals<
-          AfterBlockComment<AfterBlock>,
-          `${Accumulated}${BeforeBlock} `
-        >
-      : `${Accumulated}${S}`;
+      : S extends `--${infer AfterDash}`
+        ? StripCommentsAndMaskLiterals<AfterLineComment<AfterDash>, `${Accumulated} `>
+        : S extends `/*${infer AfterBlock}`
+          ? StripCommentsAndMaskLiterals<AfterBlockComment<AfterBlock>, `${Accumulated} `>
+          : S extends `$${infer AfterDollar}`
+            ? [DollarQuoteOpen<AfterDollar>] extends [never]
+              ? S extends `${infer Head}${infer Rest}`
+                ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}${Head}`>
+                : Accumulated
+              : DollarQuoteOpen<AfterDollar> extends {
+                    tag: infer Tag extends string;
+                    afterOpen: infer AfterOpen extends string;
+                  }
+                ? [SkipDollarQuotedBody<AfterOpen, Tag>] extends [never]
+                  ? `${Accumulated}${S}`
+                  : SkipDollarQuotedBody<AfterOpen, Tag> extends { rest: infer Rest extends string }
+                    ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}''`>
+                    : Accumulated
+                : Accumulated
+            : S extends `${infer Head}${infer Rest}`
+              ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}${Head}`>
+              : Accumulated;
 
 export type Normalize<S extends string> = Trim<
-  CollapseSpaces<WhitespaceToSpace<RemoveSemicolons<StripCommentsAndMaskLiterals<MaskDollarQuotedBodies<S>>>>>
+  CollapseSpaces<WhitespaceToSpace<RemoveSemicolons<StripCommentsAndMaskLiterals<S>>>>
 >;
 
 // RemoveSemicolons strips every semicolon, not just a single trailing one, so
@@ -125,7 +168,7 @@ export type Normalize<S extends string> = Trim<
 // literal-masked text so a semicolon inside a comment or a string literal
 // (already reduced to '') is never mistaken for a statement separator.
 export type HasNonTrailingSemicolon<S extends string> =
-  Trim<StripCommentsAndMaskLiterals<MaskDollarQuotedBodies<S>>> extends `${string};${infer After}`
+  Trim<StripCommentsAndMaskLiterals<S>> extends `${string};${infer After}`
     ? Trim<After> extends ''
       ? false
       : true

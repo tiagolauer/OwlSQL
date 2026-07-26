@@ -1,4 +1,12 @@
-import type { Normalize, FirstWord, DropFirstWord, Trim, IsKeyword, ExtractParenGroup } from './string.js';
+import type {
+  Normalize,
+  FirstWord,
+  DropFirstWord,
+  Trim,
+  IsKeyword,
+  ExtractParenGroup,
+  Digit,
+} from './string.js';
 import type {
   Source,
   SchemaLike,
@@ -56,8 +64,6 @@ export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends 
       : CleanScanToken<Token> extends `@${string}`
         ? true
         : false;
-
-type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
 
 interface DigitCounters {
   '0': [];

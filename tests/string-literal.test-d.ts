@@ -62,6 +62,20 @@ type DollarInsideLiteralIsNotPlaceholder = Expect<
   Equal<Params<DB, "select id from users where note = 'costs $5 today'">, []>
 >;
 
+type UntaggedDollarQuoteDelimitersInsideLiteralsDoNotSwallowFromClause = Expect<
+  Equal<
+    Query<DB, "select '$$' as a, name from users where note = '$$'">,
+    { a: string; name: string }[]
+  >
+>;
+
+type TaggedDollarQuoteDelimitersInsideLiteralsDoNotSwallowFromClause = Expect<
+  Equal<
+    Query<DB, "select '$t$' as a, name from users where note = '$t$'">,
+    { a: string; name: string }[]
+  >
+>;
+
 type QuestionMarkInsideLiteralIsNotPlaceholder = Expect<
   Equal<Params<DB, "select id from users where note = 'why?'">, []>
 >;
@@ -105,6 +119,8 @@ export type Assertions = [
   BackslashEscapedQuoteStillFindsWhereClauseStrict,
   EscapedBackslashThenRealCloseIsNotMistakenForEscape,
   DollarInsideLiteralIsNotPlaceholder,
+  UntaggedDollarQuoteDelimitersInsideLiteralsDoNotSwallowFromClause,
+  TaggedDollarQuoteDelimitersInsideLiteralsDoNotSwallowFromClause,
   QuestionMarkInsideLiteralIsNotPlaceholder,
   AtInsideCteLiteralKeepsParamTyping,
   SemicolonInsideLiteralDoesNotSplit,
