@@ -13,6 +13,10 @@ const FROM_TABLE = /\bfrom\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]
 const FROM_OR_JOIN_SOURCE = /\b(from|join)\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)(?:\s+(as\s+)?([A-Za-z_][A-Za-z0-9_]*))?/gid;
 const WORD_CHAR = /[A-Za-z0-9_]/;
 const WORD_START_CHAR = /[A-Za-z_]/;
+// Postgres dollar-quoted string opener: `$$` or `$tag$`, where the tag is an
+// identifier (so a `$1` placeholder never matches). The closer is the exact
+// same delimiter, which is what makes the body free of quoting rules.
+const DOLLAR_QUOTE_OPEN = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/;
 
 const RESERVED_AFTER_SOURCE = new Set([
   'on',
@@ -95,6 +99,26 @@ function stripStringLiterals(text: string): StrippedText {
       precedingBackslashes = 0;
       i += 1;
       continue;
+    }
+
+    if (char === '$') {
+      // Dollar-quoted body: mask the delimiters and everything between them,
+      // so FROM/JOIN/column scanning never reads string content as SQL. The
+      // runtime scanners in src/adapters/named-params.ts already skip these
+      // (issue #140); an unterminated open runs to the end of the text, the
+      // same way the block-comment branch below behaves.
+      const open = DOLLAR_QUOTE_OPEN.exec(text.slice(i));
+      if (open) {
+        const delimiter = open[0];
+        const closeIndex = text.indexOf(delimiter, i + delimiter.length);
+        const end = closeIndex === -1 ? text.length : closeIndex + delimiter.length;
+        while (i < end) {
+          stripped += text[i] === '\n' ? '\n' : ' ';
+          i += 1;
+        }
+        precedingBackslashes = 0;
+        continue;
+      }
     }
 
     if (char === '-' && text[i + 1] === '-') {
