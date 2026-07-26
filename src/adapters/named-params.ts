@@ -1,6 +1,20 @@
 const NAMED_PARAM_BODY = /^[A-Za-z0-9_]+/;
 const DOLLAR_QUOTE_TAG = /^\$([A-Za-z0-9_]*)\$/;
 
+// A quote preceded by an odd run of backslashes is backslash-escaped (MySQL's
+// and SQLite's default `\'`) and doesn't open or close a literal - the run has
+// to be odd, not merely non-empty, since `\\'` is an escaped backslash followed
+// by a real delimiter. Mirrors EndsWithOddBackslashes in src/string.ts and the
+// same check in the ts-plugin's stripStringLiterals; without it every parameter
+// after the escaped quote is read as literal body and silently dropped.
+function isLiteralDelimiter(sql: string, index: number): boolean {
+  let backslashes = 0;
+  while (backslashes < index && sql[index - 1 - backslashes] === '\\') {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 0;
+}
+
 export function collectNamedParameters(sql: string, prefixes: ReadonlySet<string>): string[] {
   const names: string[] = [];
   let insideLiteral = false;
@@ -8,7 +22,7 @@ export function collectNamedParameters(sql: string, prefixes: ReadonlySet<string
   for (let index = 0; index < sql.length; index += 1) {
     const char = sql[index] as string;
 
-    if (char === "'") {
+    if (char === "'" && isLiteralDelimiter(sql, index)) {
       insideLiteral = !insideLiteral;
       continue;
     }
@@ -70,7 +84,7 @@ export function resolveMixedParameters(
   for (let index = 0; index < sql.length; index += 1) {
     const char = sql[index] as string;
 
-    if (char === "'") {
+    if (char === "'" && isLiteralDelimiter(sql, index)) {
       insideLiteral = !insideLiteral;
       continue;
     }
