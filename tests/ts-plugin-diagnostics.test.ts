@@ -236,4 +236,22 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
       diagnosticsFor('select id from users where naem = 1 order by id desc'),
     ).toEqual([{ message: 'unknown column: naem', text: 'naem' }]);
   });
+
+  it('stops the WHERE clause at an ORDER BY on the next line', () => {
+    expect(diagnosticsFor('select id from users\nwhere id = 1\norder by name desc')).toEqual([]);
+  });
+
+  it('stops the WHERE clause at a GROUP BY on the next line', () => {
+    expect(diagnosticsFor('select id from users\nwhere id = 1\ngroup by name')).toEqual([]);
+  });
+
+  it('stops the WHERE clause at a tab-separated LIMIT', () => {
+    expect(diagnosticsFor('select id from users where id = 1\tlimit 10')).toEqual([]);
+  });
+
+  it('still reports a WHERE-clause typo in a multi-line query', () => {
+    expect(diagnosticsFor('select id from users\nwhere naem = 1\norder by name desc')).toEqual([
+      { message: 'unknown column: naem', text: 'naem' },
+    ]);
+  });
 });
