@@ -37,6 +37,11 @@ const WHERE_TRIGGER_OPERATORS: ReadonlySet<string> = new Set([
   'is',
 ]);
 const WHERE_AND_OR: ReadonlySet<string> = new Set(['and', 'or']);
+// A tagged template spanning several lines separates clauses with a newline
+// (or a tab), not a space, so the boundary walk below has to break words on
+// any whitespace - otherwise `1\norder` reads as one word, no boundary
+// matches, and the WHERE clause runs to the end of the statement.
+const WHITESPACE_CHAR = /\s/;
 const WHERE_TRANSPARENT_WORD = /^not$/i;
 const WHERE_IDENTIFIER_TOKEN = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/;
 const WHERE_PLACEHOLDER_TOKEN = /^(?:\$\d+|\?|@[A-Za-z_][A-Za-z0-9_]*)$/;
@@ -119,7 +124,7 @@ function findWhereClauseText(text: string): { text: string; start: number } | nu
       if (char === '(') boundaryDepth += 1;
       else if (char === ')') boundaryDepth -= 1;
 
-      if (char === undefined || char === ' ') {
+      if (char === undefined || WHITESPACE_CHAR.test(char)) {
         const word = text.slice(wordStart, i).toLowerCase();
         if (boundaryDepth === 0 && WHERE_CLAUSE_BOUNDARY_WORDS.has(word)) {
           end = wordStart;
