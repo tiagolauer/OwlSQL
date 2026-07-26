@@ -962,6 +962,12 @@ This is a focused tool for the common read path, not a full SQL grammar:
   'DELETE'`.
 - **Unknown columns, tables, or aliases resolve to `unknown`** by default — pass
   `{ strict: true }` to turn them into a `QueryTypeError` instead.
+- **One statement per query.** A semicolon is only allowed at the end. A
+  second statement after one (`select id from users; drop table users`) is a
+  `QueryTypeError` in both modes, for the row type and for the parameter
+  tuple — this isn't a schema question, so strict mode has nothing to be
+  stricter about, and inferring a row from two merged statements would be
+  confidently wrong rather than merely permissive.
 
 These are deliberate scope choices; the [FAQ](#faq) covers how to work around
 them.

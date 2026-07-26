@@ -839,14 +839,21 @@ type ApplyWhereCheck<
         : WhereClauseError<DB, Sources, WhereText>
   : Row;
 
+// Checked in both modes, unlike the schema-driven checks that strict mode
+// gates: how many statements a string holds is not a schema question, and
+// Normalize strips every semicolon, so a stacked statement is folded into the
+// first one and the inferred row describes something the driver will not do
+// (issue #206). Non-strict inference is permissive - `unknown` where it can't
+// tell - but never knowingly wrong.
+export type MultipleStatementsError =
+  QueryTypeError<'multiple statements are not supported: found a semicolon before the end of the query'>;
+
 export type InferRowWith<
   DB extends SchemaLike,
   Q extends string,
   Strict extends boolean,
-> = Strict extends true
-  ? HasNonTrailingSemicolon<Q> extends true
-    ? QueryTypeError<'multiple statements are not supported: found a semicolon before the end of the query'>
-    : InferRowWithChecked<DB, Q, Strict>
+> = HasNonTrailingSemicolon<Q> extends true
+  ? MultipleStatementsError
   : InferRowWithChecked<DB, Q, Strict>;
 
 type InferRowWithChecked<

@@ -6,6 +6,7 @@ import type {
   IsKeyword,
   ExtractParenGroup,
   Digit,
+  HasNonTrailingSemicolon,
 } from './string.js';
 import type {
   Source,
@@ -16,6 +17,7 @@ import type {
   ResolveKey,
   AfterKeyword,
   SplitColumnList,
+  MultipleStatementsError,
 } from './parse.js';
 import type { ParseWithClause } from './cte.js';
 
@@ -412,7 +414,16 @@ type OuterAndCteParams<
       : unknown[]
   : unknown[];
 
+// Same guard InferRowWith applies (issue #206): the parameter tuple is
+// derived from the merged text too, so a stacked statement would otherwise
+// hand the caller a normal-looking signature covering placeholders from two
+// different statements. The error tuple makes the call site fail instead.
 export type InferParams<DB extends SchemaLike, Q extends string> =
+  HasNonTrailingSemicolon<Q> extends true
+    ? [MultipleStatementsError]
+    : InferParamsChecked<DB, Q>;
+
+type InferParamsChecked<DB extends SchemaLike, Q extends string> =
   IsKeyword<FirstWord<Normalize<Q>>, 'insert'> extends true
     ? InsertParamTypes<DB, Normalize<Q>>
     : ResolveCteContext<DB, Q, false> extends {
