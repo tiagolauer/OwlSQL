@@ -270,6 +270,41 @@ describe('findSources', () => {
     ]);
   });
 
+  it('ignores a FROM inside a $$ dollar-quoted body (issue #209 repro)', () => {
+    const sources = findSources('select id, name from users where note = $$ pulled from orders $$');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+    ]);
+  });
+
+  it('ignores a JOIN inside a $tag$ dollar-quoted body', () => {
+    const sources = findSources('select id from users where note = $note$ join orders o $note$');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+    ]);
+  });
+
+  it('still resolves sources written after a dollar-quoted body', () => {
+    const sources = findSources('select id from users u join posts p on p.note = $$ from ghosts $$');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'u' },
+      { table: 'posts', alias: 'p' },
+    ]);
+  });
+
+  it('does not treat a $1 placeholder as a dollar-quote opener', () => {
+    const sources = findSources('select id from users where id = $1 and name = $2');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+    ]);
+  });
+
+  it('keeps table spans aligned across a dollar-quoted body', () => {
+    const text = 'select id from users where note = $$ x $$ and id = 1';
+    const [source] = findSources(text);
+    expect(source && text.slice(source.tableStart, source.tableEnd)).toBe('users');
+  });
+
   it('reports the table token span for each source', () => {
     const text = 'select id from users';
     const sources = findSources(text);
