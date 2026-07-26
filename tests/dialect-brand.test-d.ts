@@ -21,6 +21,29 @@ export async function placeholderStyleCallSites() {
 
   await mysqlDb.query('select id from users where id = ?', 1);
 
+  await mysqlDb.query(
+    'select id from users where name = ? and id in (select 1 where $$x$$ = $$x$$)',
+    'ada',
+  );
+
+  await mysqlDb.query(
+    'select id from users where name = ? and id in (select 1 where $tag$x$tag$ = $tag$x$tag$)',
+    'ada',
+  );
+
+  await mysqlDb.query(
+    'select id from users where name = ? and note = $$this body mentions $1$$',
+    'ada',
+  );
+
+  await mysqlDb.query(
+    'select id from users where name = ? and note = $tag$this body mentions $1$tag$',
+    'ada',
+  );
+
+  // @ts-expect-error a question-style client still rejects $n placeholders outside dollar-quoted bodies
+  await mysqlDb.query('select id from users where id = $1 and note = $$x$$', 1);
+
   // @ts-expect-error a question-style client rejects $n placeholders
   await mysqlDb.query('select id from users where id = $1', 1);
 
