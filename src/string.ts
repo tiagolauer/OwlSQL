@@ -171,9 +171,50 @@ export type StripCommentsAndMaskLiterals<
               ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}${Head}`>
               : Accumulated;
 
+// Everything downstream splits the query on spaces, so a quoted identifier
+// holding one - `"first name"`, `[Order Details]` - was torn in half: the
+// column key came out as `name"`, the table as `[Order`, and strict mode
+// reported both as unknown (issue #247). Quoting exists precisely for those
+// names, and `owlsql generate` emits them itself.
+//
+// The space is swapped for a character SQL text cannot contain, so the
+// identifier survives every splitter as one token, and Unquote - the single
+// place a quoted name is finally read - puts it back.
+type QuotedSpace = '\u0000';
+
+type ReplaceSpaces<S extends string> = S extends `${infer Before} ${infer After}`
+  ? ReplaceSpaces<`${Before}${QuotedSpace}${After}`>
+  : S;
+
+type EscapeQuotedSpacesWith<
+  S extends string,
+  Open extends string,
+  Close extends string,
+> = S extends `${infer Before}${Open}${infer AfterOpen}`
+  ? AfterOpen extends `${infer Body}${Close}${infer Rest}`
+    ? `${Before}${Open}${ReplaceSpaces<Body>}${Close}${EscapeQuotedSpacesWith<Rest, Open, Close>}`
+    : S
+  : S;
+
+// Gated on the one cheap check, since most queries quote nothing: without it
+// every query pays three template splits for a rewrite that cannot apply.
+type EscapeQuotedSpaces<S extends string> = HasQuoteChar<S> extends false
+  ? S
+  : EscapeQuotedSpacesWith<
+      EscapeQuotedSpacesWith<EscapeQuotedSpacesWith<S, '[', ']'>, '`', '`'>,
+      '"',
+      '"'
+    >;
+
 export type Normalize<S extends string> = Trim<
-  CollapseSpaces<WhitespaceToSpace<RemoveTrailingSemicolons<StripCommentsAndMaskLiterals<S>>>>
+  CollapseSpaces<
+    EscapeQuotedSpaces<WhitespaceToSpace<RemoveTrailingSemicolons<StripCommentsAndMaskLiterals<S>>>>
+  >
 >;
+
+type UnescapeSpaces<S extends string> = S extends `${infer Before}${QuotedSpace}${infer After}`
+  ? UnescapeSpaces<`${Before} ${After}`>
+  : S;
 
 type HasQuoteChar<S extends string> = S extends
   | `${string}"${string}`
@@ -216,11 +257,11 @@ export type HasNonTrailingSemicolon<S extends string> =
     : false;
 
 export type Unquote<S extends string> = S extends `"${infer Inner}"`
-  ? Inner
+  ? UnescapeSpaces<Inner>
   : S extends `[${infer Inner}]`
-    ? Inner
+    ? UnescapeSpaces<Inner>
     : S extends `\`${infer Inner}\``
-      ? Inner
+      ? UnescapeSpaces<Inner>
       : S;
 
 export type FirstWord<S extends string> = S extends `${infer Head} ${string}`
