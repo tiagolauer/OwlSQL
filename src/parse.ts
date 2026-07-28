@@ -207,8 +207,16 @@ type SplitAtTopLevelKeyword<
       : never
     : never;
 
-type ExtraSourcesAfterKeyword<S extends string, Keyword extends string> =
-  SplitAtTopLevelKeyword<S, Keyword> extends { after: infer AfterClause extends string }
+// The [never] guard is load-bearing: SplitAtTopLevelKeyword resolves to never
+// when the statement has no such clause, and `never extends { after: infer X
+// extends string }` passes with X inferred as `string`, which would hand
+// ParseFromClause a wildcard table name matching every table in the schema
+// (issue #229).
+type ExtraSourcesAfterKeyword<S extends string, Keyword extends string> = [
+  SplitAtTopLevelKeyword<S, Keyword>,
+] extends [never]
+  ? []
+  : SplitAtTopLevelKeyword<S, Keyword> extends { after: infer AfterClause extends string }
     ? ParseFromClause<AfterClause>
     : [];
 

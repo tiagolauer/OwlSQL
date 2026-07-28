@@ -99,6 +99,39 @@ type UpdateWithoutFromIsUnaffected = Expect<
   Equal<Query<DB, 'update users set name = $1 where id = $2'>, Record<string, never>[]>
 >;
 
+// Regression for #229: with no FROM/USING clause the statement has exactly one
+// source. A fabricated second one (table typed `string`, which resolves against
+// every table in the schema) made every RETURNING column look ambiguous.
+type DeleteWithoutUsingResolvesReturning = Expect<
+  Equal<StrictQuery<DB, 'delete from users where id = 1 returning id'>, { id: number }[]>
+>;
+
+type UpdateWithoutFromResolvesReturning = Expect<
+  Equal<
+    StrictQuery<DB, 'update users set name = $1 where id = $2 returning name'>,
+    { name: string }[]
+  >
+>;
+
+type UpdateWithoutFromStillReportsAnUnknownReturningColumn = Expect<
+  Equal<
+    StrictQuery<DB, 'update users set name = $1 returning nope'>,
+    QueryTypeError<'unknown column: nope'>[]
+  >
+>;
+
+// The phantom source also leaked types in non-strict mode: `balance` belongs to
+// accounts, which this statement never mentions.
+type DeleteWithoutUsingDoesNotBorrowColumnsFromOtherTables = Expect<
+  Equal<Query<DB, 'delete from users where id = 1 returning balance'>, { balance: unknown }[]>
+>;
+
+// RETURNING is a clause boundary, so the WHERE text stops before it instead of
+// swallowing the returned column list.
+type ReturningIsNotScannedAsPartOfTheWhereClause = Expect<
+  Equal<StrictQuery<DB, 'delete from users where id = 1 returning id, name'>, { id: number; name: string }[]>
+>;
+
 export type Assertions = [
   SchemaQualifiedInsertResolvesReturning,
   QuotedInsertTargetResolvesReturning,
@@ -111,4 +144,9 @@ export type Assertions = [
   DeleteUsingRegistersTheExtraTableAsASource,
   UpdateFromStillRejectsATrulyUnknownAlias,
   UpdateWithoutFromIsUnaffected,
+  DeleteWithoutUsingResolvesReturning,
+  UpdateWithoutFromResolvesReturning,
+  UpdateWithoutFromStillReportsAnUnknownReturningColumn,
+  DeleteWithoutUsingDoesNotBorrowColumnsFromOtherTables,
+  ReturningIsNotScannedAsPartOfTheWhereClause,
 ];
