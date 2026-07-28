@@ -4,6 +4,7 @@ import type {
   FirstWord,
   DropFirstWord,
   StripQualifier,
+  BeforeParen,
   Qualifier,
   IsKeyword,
   Unquote,
@@ -179,7 +180,7 @@ type ReturningOrOutputColumns<S extends string, StopKeyword extends string> = Re
   ? StripPseudoTableQualifiers<OutputClauseColumns<S, StopKeyword>>
   : ReturningColumns<S>;
 
-type CleanTargetIdentifier<Raw extends string> = Unquote<StripQualifier<Raw>>;
+type CleanTargetIdentifier<Raw extends string> = Unquote<StripQualifier<BeforeParen<Raw>>>;
 
 type SingleSource<Table extends string> = [
   { table: CleanTargetIdentifier<Table>; alias: CleanTargetIdentifier<Table>; nullable: false },
