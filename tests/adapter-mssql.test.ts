@@ -5,13 +5,23 @@ import { createMssqlExecutor, createMssqlTransaction } from '../src/adapters/mss
 interface FakeRequest {
   input: ReturnType<typeof vi.fn>;
   query: ReturnType<typeof vi.fn>;
+  parameters: Record<string, unknown>;
 }
 
+// Mirrors node-mssql: input() records the parameter and refuses a name it has
+// already seen, and nothing clears the bag on its own.
 function fakeRequest(result: unknown): FakeRequest {
-  return {
-    input: vi.fn(),
+  const request: FakeRequest = {
+    parameters: {},
+    input: vi.fn((name: string, value: unknown) => {
+      if (name in request.parameters) {
+        throw new Error(`The parameter name ${name} has already been declared.`);
+      }
+      request.parameters[name] = value;
+    }),
     query: vi.fn().mockResolvedValue(result),
   };
+  return request;
 }
 
 function fakePool(result: unknown): { pool: ConnectionPool; request: FakeRequest } {
@@ -110,6 +120,29 @@ describe('createMssqlExecutor', () => {
 
     expect((request as unknown as FakeRequest).input.mock.calls).toEqual([['id', 1]]);
     expect(result).toEqual({ rows: [{ id: 1 }], meta: {} });
+  });
+
+  it('reuses a caller-supplied Request across queries with the same parameter name', async () => {
+    const request = fakeRequest({ recordset: [] }) as unknown as Request;
+    const executor = createMssqlExecutor(request);
+
+    await executor('select id from users where id = @id', [1]);
+    await executor('select id from users where id = @id', [2]);
+
+    expect((request as unknown as FakeRequest).input.mock.calls).toEqual([
+      ['id', 1],
+      ['id', 2],
+    ]);
+  });
+
+  it('does not carry a previous query parameters into the next one', async () => {
+    const request = fakeRequest({ recordset: [] }) as unknown as Request;
+    const executor = createMssqlExecutor(request);
+
+    await executor('select id from users where id = @id', [1]);
+    await executor('select id from users where name = @name', ['ada']);
+
+    expect(request.parameters).toEqual({ name: 'ada' });
   });
 
   it('binds a repeated @name once, without misaligning the parameter after it', async () => {
