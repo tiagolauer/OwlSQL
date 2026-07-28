@@ -38,6 +38,7 @@ npm test                  # types + runtime
 npm run test:types        # tsc --noEmit over src + tests
 npm run test:runtime      # vitest
 npm run test:integration  # vitest against real databases, see Testing below
+npm run test:perf         # type-instantiation budget, see Testing below
 npm run build             # emit dist/ with .d.ts
 ```
 
@@ -81,6 +82,18 @@ OWLSQL_PG_URL='postgres://owlsql:owlsql@127.0.0.1:5433/owlsql' OWLSQL_MYSQL_URL=
 The compose file maps non-default host ports (5433/3307/1434) so it doesn't collide with a PostgreSQL or MySQL you already run locally. SQLite needs no container — `node:sqlite` is tested against real database files in the regular runtime suite.
 
 Each suite creates and drops its own `it_*` tables, so the three databases can be shared with anything else you have running in them.
+
+### The type-instantiation budget
+
+The parser is recursive template literal types, so the cost that actually reaches users is compile time, and nothing about a passing type test tells you whether a change made `tsc` work three times harder for the same answer.
+
+```bash
+npm run test:perf
+```
+
+That generates a fixture (100 tables, 32 queries covering joins, `GROUP BY`, `CASE`, CTEs, `UNION`, strict mode, and typed params), type-checks it with `tsc --extendedDiagnostics`, and fails if the instantiation count goes over the budget in `scripts/type-budget.mjs`. Instantiation count is used rather than wall-clock time because it's deterministic: the same input and the same TypeScript version give the same number on any machine, so it can be a hard threshold instead of a flaky one. That's also why this runs on the lockfile's TypeScript version only, while the type tests run against the whole supported matrix.
+
+If your change legitimately costs more, raise the budget in the same commit rather than leaving it to drift. A reviewer can then see how much more expensive the feature made every query in every user's project.
 
 ## Publishing
 

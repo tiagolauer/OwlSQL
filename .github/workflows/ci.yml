@@ -42,6 +42,18 @@ jobs:
       - run: npm ci
       - run: npm run test:runtime
 
+  type-budget:
+    name: Type-instantiation budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:perf
+
   integration:
     name: Integration tests (real databases)
     runs-on: ubuntu-latest
