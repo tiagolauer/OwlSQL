@@ -2,6 +2,14 @@
 
 Notable changes to this project, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This log starts at 0.1.8; earlier history lives in git and the GitHub releases page.
 
+## [Unreleased]
+
+### Added
+
+- Integration tests running the adapters and `owlsql generate` against real PostgreSQL, MySQL, and SQL Server instances, alongside the existing faked-driver tests.
+- A type-instantiation budget (`npm run test:perf`) that fails CI when a change makes the type-level parser measurably more expensive.
+- [VERSIONING.md](VERSIONING.md), stating what counts as a breaking change for a library whose public API is the types it infers.
+
 ## [0.1.8] - 2026-07-24
 
 ### Added

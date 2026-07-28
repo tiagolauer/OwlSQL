@@ -54,6 +54,8 @@
     "typecheck": "tsc --noEmit",
     "test:types": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.ts-plugin.json && tsc --noEmit -p tsconfig.ts-plugin-tests.json",
     "test:runtime": "vitest run",
+    "test:integration": "vitest run tests/integration",
+    "test:perf": "node scripts/type-budget.mjs",
     "test": "npm run test:types && npm run test:runtime",
     "prepublishOnly": "npm run test && npm run build"
   },
@@ -113,7 +115,7 @@
     "mysql2": "^3.23.0",
     "pg": "^8.22.0",
     "postgres": "^3.4.9",
-    "typescript": "^7.0.2",
+    "typescript": "^5.6.0",
     "vitest": "^4.1.10"
   }
 }
