@@ -36,12 +36,11 @@
     "./kysely": {
       "types": "./dist/adapters/kysely.d.ts",
       "import": "./dist/adapters/kysely.js"
-    },
-    "./ts-plugin": {
-      "types": "./dist/ts-plugin/index.d.cts",
-      "require": "./dist/ts-plugin/index.cjs"
     }
   },
+  "workspaces": [
+    "ts-plugin"
+  ],
   "files": [
     "dist",
     "README.md"
@@ -50,9 +49,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.ts-plugin.json",
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test:types": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.ts-plugin.json && tsc --noEmit -p tsconfig.ts-plugin-tests.json",
+    "test:types": "npm run test:types:core && tsc --noEmit -p tsconfig.compiler-api-tests.json",
+    "test:types:core": "tsc --noEmit -p tsconfig.json",
     "test:runtime": "vitest run",
     "test:integration": "vitest run tests/integration",
     "test:perf": "node scripts/type-budget.mjs",

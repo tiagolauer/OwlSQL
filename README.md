@@ -737,7 +737,7 @@ Want to see it running for yourself before there's a recorded demo here?
 [`examples/ts-plugin-demo`](examples/ts-plugin-demo) is a ready-to-open
 VSCode project set up for exactly that.
 
-`@owlsql/core/ts-plugin` is a **TypeScript Language Service Plugin** —
+`@owlsql/ts-plugin` is a **TypeScript Language Service Plugin** —
 it runs inside `tsserver`, the same process that already powers VSCode's
 IntelliSense, and adds column-name completions while you're still typing the
 query string. This is a genuinely different mechanism from the rest of the
@@ -745,12 +745,18 @@ library: everything else works by *type-checking* a finished query string;
 this works by hooking into the editor's completion request for a string
 that isn't even valid SQL yet.
 
-**Setup** — add it to your `tsconfig.json`:
+**Setup** — it ships as its own package, so install it first:
+
+```bash
+npm install --save-dev @owlsql/ts-plugin
+```
+
+Then add it to your `tsconfig.json`:
 
 ```json
 {
   "compilerOptions": {
-    "plugins": [{ "name": "@owlsql/core/ts-plugin" }]
+    "plugins": [{ "name": "@owlsql/ts-plugin" }]
   }
 }
 ```
@@ -804,12 +810,17 @@ only once the query is finished.
 - Completions after `ORDER BY`/`GROUP BY`/`HAVING`/etc. aren't offered yet —
   only the `SELECT` column list, `WHERE` clause, and `FROM`/`JOIN` table
   names.
-- **Requires TypeScript < 7.** TypeScript 7's native (Go-based) compiler
-  removed the classic JS Compiler API (`ts.Node`, `ts.forEachChild`,
-  `ts.createProgram`, ...) that this plugin — and, as of this writing, every
-  TypeScript language service plugin in the ecosystem — is built on. There is
-  no compatibility shim yet. The plugin works on TypeScript 5.x/6.x; on 7.x
-  it currently fails to load rather than silently doing nothing.
+- **Requires TypeScript < 7**, which its own `peerDependencies` range
+  enforces. TypeScript 7's native (Go-based) compiler ships no public
+  compiler API at all — the classic `ts.Node`/`ts.forEachChild`/
+  `ts.createProgram` surface this plugin is built on is gone, and the
+  `tsserver` protocol that loads plugins has been replaced by LSP. That
+  affects every TypeScript language service plugin, not just this one;
+  TypeScript 7.1 is expected to introduce a new (and different) programmatic
+  API. The library itself is unaffected and is tested against TypeScript 7 in
+  CI — this is exactly why the plugin lives in a separate package with a
+  separate version, so `@owlsql/core` isn't held to the plugin's narrower
+  range.
 
 ## API reference
 

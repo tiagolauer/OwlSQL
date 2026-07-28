@@ -18,10 +18,11 @@ the editor tooling, not a promise of dates.
   Kysely) and a documented Drizzle recipe.
 - `npx @owlsql/core generate` — schema introspection CLI for all four
   databases.
-- `@owlsql/core/ts-plugin` — in-editor column-name autocomplete and hover
+- `@owlsql/ts-plugin` — in-editor column-name autocomplete and hover
   info, `JOIN`/alias-aware, plus live diagnostics for unknown columns,
   unknown tables, unknown aliases, and ambiguous unqualified columns in the
-  `SELECT` list and `FROM`/`JOIN` clause.
+  `SELECT` list and `FROM`/`JOIN` clause. Ships as its own package on its own
+  version, since it reaches a narrower TypeScript range than the library.
 - Scalar subqueries in the `SELECT` list — single-column subqueries are
   typed; a multi-column subquery resolves to `unknown` in normal mode and a
   `QueryTypeError` in strict mode (selecting more than one column from a
@@ -43,13 +44,17 @@ first-timer-sized, but open if you want to dig in:
 - **Scalar subqueries in `WHERE`** still resolve to `unknown` — `WHERE`
   isn't part of the typed structure at all right now, only scanned for
   parameter placeholders.
-- **`ts-plugin` on TypeScript 7+** — TS 7's native (Go) compiler dropped the
-  classic JS Compiler API entirely (no `ts.Node`/`ts.forEachChild`/
-  `ts.createProgram` in the package anymore, replaced by a still-`unstable/`-
-  prefixed AST API). This isn't unique to this project — it breaks every
-  tsserver plugin built the classic way. Blocked on either TypeScript
-  shipping a compatibility layer or the new API stabilizing enough to port
-  to; not worth chasing while it's explicitly marked unstable upstream.
+- **`@owlsql/ts-plugin` on TypeScript 7+** — TypeScript 7.0 shipped in July
+  2026 and is now the `latest` tag on npm. It carries no public compiler API
+  at all: the classic `ts.Node`/`ts.forEachChild`/`ts.createProgram` surface
+  is gone, and the `tsserver` protocol that loads plugins has been replaced
+  by LSP. This isn't unique to this project — it takes out every editor
+  plugin built the classic way. TypeScript 7.1 is expected to introduce a
+  new, different programmatic API; reaching it will be a rewrite rather than
+  a port, so the plugin waits for that API to exist before anyone starts.
+  The library itself is unaffected — it needs no compiler API and is tested
+  against TypeScript 7 in CI, which is why the plugin was split into its own
+  package rather than holding `@owlsql/core` to a narrower range.
 
 ## Good first issues
 

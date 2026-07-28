@@ -5,9 +5,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const PACKAGE_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
-const PLUGIN_DIR = join(REPO_ROOT, 'src', 'ts-plugin');
+const REPO_ROOT = join(PACKAGE_ROOT, '..');
+
+const PLUGIN_DIR = join(PACKAGE_ROOT, 'src');
 
 const PLUGIN_MODULES = [
   'index.cts',
@@ -45,7 +47,7 @@ export function loadPlugin(): { plugin: PluginFactory; dir: string } {
   return { plugin: requireCompiled(join(dir, 'index.cjs')) as PluginFactory, dir };
 }
 
-export type DiagnosticsModule = typeof import('../src/ts-plugin/diagnostics.cts');
+export type DiagnosticsModule = typeof import('../src/diagnostics.cts');
 
 export function loadDiagnostics(): { diagnostics: DiagnosticsModule; dir: string } {
   const dir = transpilePluginModules();

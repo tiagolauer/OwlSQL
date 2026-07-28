@@ -1,8 +1,8 @@
 import { describe, it, expect, afterAll, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import detectModule from '../src/ts-plugin/detect.cts';
-import { buildProgram, loadDiagnostics } from './ts-plugin-test-helpers.js';
+import detectModule from '../src/detect.cts';
+import { buildProgram, loadDiagnostics } from './test-helpers.js';
 
 const { findAllQueryLiterals } = detectModule;
 const { diagnostics: diagnosticsModule, dir: diagnosticsDir } = loadDiagnostics();

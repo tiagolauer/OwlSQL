@@ -65,7 +65,7 @@ The supported ranges are the ones declared in `peerDependencies` and `engines`. 
 - Dropping a version from either supported range is a major.
 - A new TypeScript release breaking inference that used to work is a **bug**, fixed in a patch. New TypeScript versions ship their own breaking changes; absorbing them is this library's problem, not a reason to bump anything here.
 
-The `@owlsql/core/ts-plugin` editor integration is versioned with the package but carries no compatibility guarantee of its own: it depends on the classic TypeScript compiler API, whose availability is decided upstream. Completion lists, hover text, and diagnostic wording may change in any release.
+The editor plugin is a separate package, [`@owlsql/ts-plugin`](ts-plugin/README.md), with its own version and its own narrower TypeScript range. This policy does not cover it, and it is deliberately staying on `0.x`: it is built on the classic TypeScript compiler API, whose availability is decided upstream, so it is in no position to promise stability. Keeping the two apart is what lets this package support TypeScript 7 while the plugin cannot.
 
 ## Not covered
 

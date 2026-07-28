@@ -26,23 +26,31 @@ Keep a PR to one fix or one feature. A PR that touches three unrelated things is
 
 If the change alters what a query infers to, say so in the description and name the bump it implies under [VERSIONING.md](VERSIONING.md). A row shape that gains, loses, or retypes a key is a breaking change even when no runtime signature moved.
 
-Every behavior change needs a test that would fail without the fix. If you're touching `src/parse.ts`, `src/where.ts`, or another type-level file, that usually means a `.test-d.ts` case with `@ts-expect-error` or an `Equal<>` assertion; runtime behavior (adapters, the CLI, the ts-plugin) gets a `.test.ts` case instead. A PR without a regression test is a PR someone else will eventually re-break by accident.
+Every behavior change needs a test that would fail without the fix. If you're touching `src/parse.ts`, `src/where.ts`, or another type-level file, that usually means a `.test-d.ts` case with `@ts-expect-error` or an `Equal<>` assertion; runtime behavior (adapters, the CLI, the editor plugin) gets a `.test.ts` case instead. A PR without a regression test is a PR someone else will eventually re-break by accident.
 
 ## Developing
 
 ### Environment
 
-You'll need Node 20 or later. The `node:sqlite` adapter and the CLI's SQLite introspection need Node 22.5+, since `node:sqlite` is newer than the rest of the runtime surface this library targets. TypeScript 5.4 through 7 is accepted as a peer dependency; the ts-plugin currently only loads on the classic (pre-7) compiler API.
+You'll need Node 20 or later. The `node:sqlite` adapter and the CLI's SQLite introspection need Node 22.5+, since `node:sqlite` is newer than the rest of the runtime surface this library targets.
+
+This repository holds two packages, as an npm workspace: `@owlsql/core` at the root, and the editor plugin in [`ts-plugin/`](ts-plugin/README.md). They are apart because they don't reach the same TypeScript versions — the library type-checks clean on TypeScript 7, while the plugin needs the classic compiler API, which TypeScript 7 does not ship at all. One package can only declare one peer range, and either choice would have been a lie about half the code.
 
 ```bash
 npm install
-npm test                  # types + runtime
+npm test                  # core: types + runtime
 npm run test:types        # tsc --noEmit over src + tests
 npm run test:runtime      # vitest
 npm run test:integration  # vitest against real databases, see Testing below
 npm run test:perf         # type-instantiation budget, see Testing below
 npm run build             # emit dist/ with .d.ts
+
+npm test --workspace @owlsql/ts-plugin   # the editor plugin, independently
 ```
+
+Nothing in the root `npm test` runs plugin code, and that's deliberate: a release of the library should not be gated on a plugin whose supported TypeScript range is narrower and whose future is upstream's to decide.
+
+One wrinkle worth knowing before you touch the tsconfigs: the TypeScript 7 CI job runs `test:types:core` rather than `test:types`, because `tests/cli-codegen-edge.test.ts` uses the compiler API (it parses generated schema output to prove it's syntactically valid) and so cannot run there. That one file lives in `tsconfig.compiler-api-tests.json` so it can be left out of the TypeScript 7 run without being quietly dropped from every other one.
 
 ### Fixing a bug
 
@@ -64,7 +72,7 @@ Open an issue before writing the implementation if the feature touches the publi
 Three layers, and they test different things:
 
 - **Type tests** (`tests/*.test-d.ts`) are pure type assertions. If they compile, the inference is correct; there's no runtime assertion to run. They cover column/alias projection, `@ts-expect-error` cases for queries that should fail to type, permissive-inference locks, and deep-recursion stress.
-- **Runtime tests** (`tests/*.test.ts`) run under vitest and cover the executor/`Result` contract, adapter parameter handling, the CLI, and the ts-plugin's runtime scanners. Drivers are faked here, so these prove the adapter's own logic, not what a real server sends back.
+- **Runtime tests** (`tests/*.test.ts`) run under vitest and cover the executor/`Result` contract, adapter parameter handling, and the CLI. Drivers are faked here, so these prove the adapter's own logic, not what a real server sends back. The plugin's own tests live beside it in `ts-plugin/tests/`.
 - **Integration tests** (`tests/integration/*.test.ts`) run the adapters and the `generate` CLI against real PostgreSQL, MySQL, and SQL Server instances. They cover what a fake driver can't: how each driver actually decodes a column (`bigint`, `numeric`, `tinyint(1)`, `bit`), the metadata a real result carries, and whether a rolled-back transaction really left no rows behind.
 
 CI runs the type tests against a matrix of TypeScript versions, since a template-literal-type change that works on one TypeScript release can silently stop working (or start working differently) on another.
@@ -99,11 +107,19 @@ If your change legitimately costs more, raise the budget in the same commit rath
 
 ## Publishing
 
-The package ships compiled JavaScript and declarations from `dist/`, wired into `prepublishOnly`:
+Both packages ship compiled JavaScript and declarations from their own `dist/`, wired into `prepublishOnly`:
 
 ```bash
 npm version <patch|minor|major>
 npm publish            # runs test:types, then build, then publishes dist/
 ```
+
+The editor plugin publishes separately, on its own version, from its own directory:
+
+```bash
+npm publish --workspace @owlsql/ts-plugin
+```
+
+They are not released together and their version numbers are unrelated. Which bump the library takes is decided by [VERSIONING.md](VERSIONING.md); the plugin stays on `0.x` and is not covered by that policy.
 
 Before the first registry publish, the package is still usable via a local path (`npm i file:../owlsql`), a tarball (`npm pack`), a workspace protocol, or a git URL.
