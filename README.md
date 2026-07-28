@@ -433,7 +433,8 @@ The error type propagates wherever you use the rows, surfacing the message in
 hovers and breaking any code that treats them as real data.
 
 Strict mode checks the `SELECT` list, the `WHERE` clause, and `JOIN ... ON`
-conditions:
+conditions — including the `WHERE` of an `UPDATE`/`DELETE` that returns no
+columns, where a typo is most expensive:
 
 ```ts
 const wrongSide = await db.query(
@@ -514,7 +515,9 @@ await db.query('select id from users where id = ?', 1);
 ```
 
 Styles: `'dollar'` (pg, postgres.js), `'question'` (mysql2), `'at'` (mssql).
-`node:sqlite` accepts all three, so leave the option off there.
+`node:sqlite` accepts all three plus `:name`, so leave the option off there.
+A `:name` placeholder is typed like any other but carries no style of its own,
+so it is never checked against a declared dialect.
 
 **Write metadata.** Adapters report driver metadata alongside the rows: on a
 successful `Result`, `result.meta?.rowCount` carries the affected-row count
