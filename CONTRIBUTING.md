@@ -34,10 +34,11 @@ You'll need Node 20 or later. The `node:sqlite` adapter and the CLI's SQLite int
 
 ```bash
 npm install
-npm test              # types + runtime
-npm run test:types    # tsc --noEmit over src + tests
-npm run test:runtime  # vitest
-npm run build         # emit dist/ with .d.ts
+npm test                  # types + runtime
+npm run test:types        # tsc --noEmit over src + tests
+npm run test:runtime      # vitest
+npm run test:integration  # vitest against real databases, see Testing below
+npm run build             # emit dist/ with .d.ts
 ```
 
 ### Fixing a bug
@@ -57,12 +58,29 @@ Open an issue before writing the implementation if the feature touches the publi
 
 ## Testing
 
-Two layers, and they test different things:
+Three layers, and they test different things:
 
 - **Type tests** (`tests/*.test-d.ts`) are pure type assertions. If they compile, the inference is correct; there's no runtime assertion to run. They cover column/alias projection, `@ts-expect-error` cases for queries that should fail to type, permissive-inference locks, and deep-recursion stress.
-- **Runtime tests** (`tests/*.test.ts`) run under vitest and cover the executor/`Result` contract, adapter parameter handling, the CLI, and the ts-plugin's runtime scanners.
+- **Runtime tests** (`tests/*.test.ts`) run under vitest and cover the executor/`Result` contract, adapter parameter handling, the CLI, and the ts-plugin's runtime scanners. Drivers are faked here, so these prove the adapter's own logic, not what a real server sends back.
+- **Integration tests** (`tests/integration/*.test.ts`) run the adapters and the `generate` CLI against real PostgreSQL, MySQL, and SQL Server instances. They cover what a fake driver can't: how each driver actually decodes a column (`bigint`, `numeric`, `tinyint(1)`, `bit`), the metadata a real result carries, and whether a rolled-back transaction really left no rows behind.
 
 CI runs the type tests against a matrix of TypeScript versions, since a template-literal-type change that works on one TypeScript release can silently stop working (or start working differently) on another.
+
+### Running the integration tests
+
+Each database is gated on its own environment variable. Unset it and that suite skips; set it to something unreachable and the suite fails rather than skipping silently, so a broken CI service can't pass as a green run.
+
+```bash
+docker compose -f docker-compose.integration.yml up -d
+```
+
+```bash
+OWLSQL_PG_URL='postgres://owlsql:owlsql@127.0.0.1:5433/owlsql' OWLSQL_MYSQL_URL='mysql://root:owlsql@127.0.0.1:3307/owlsql' OWLSQL_MSSQL_URL='mssql://sa:Owlsql_Passw0rd@127.0.0.1:1434/master?encrypt=false&trustServerCertificate=true' npm run test:integration
+```
+
+The compose file maps non-default host ports (5433/3307/1434) so it doesn't collide with a PostgreSQL or MySQL you already run locally. SQLite needs no container — `node:sqlite` is tested against real database files in the regular runtime suite.
+
+Each suite creates and drops its own `it_*` tables, so the three databases can be shared with anything else you have running in them.
 
 ## Publishing
 
