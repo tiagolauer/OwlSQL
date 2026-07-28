@@ -21,8 +21,12 @@ type CollapseSpaces<S extends string> = S extends `${infer Before}  ${infer Afte
   ? CollapseSpaces<`${Before} ${After}`>
   : S;
 
-type RemoveSemicolons<S extends string> = S extends `${infer Before};${infer After}`
-  ? RemoveSemicolons<`${Before} ${After}`>
+// Only the trailing semicolon is dropped. Scrubbing every semicolon in the
+// string also destroyed the ones inside a quoted identifier (`"id;x"`), and a
+// non-trailing one outside a quote is already rejected by
+// HasNonTrailingSemicolon before anything reads this text (issue #232).
+type RemoveTrailingSemicolons<S extends string> = TrimRight<S> extends `${infer Rest};`
+  ? RemoveTrailingSemicolons<Rest>
   : S;
 
 // A quote preceded by an odd run of backslashes is backslash-escaped (MySQL's
@@ -159,16 +163,44 @@ export type StripCommentsAndMaskLiterals<
               : Accumulated;
 
 export type Normalize<S extends string> = Trim<
-  CollapseSpaces<WhitespaceToSpace<RemoveSemicolons<StripCommentsAndMaskLiterals<S>>>>
+  CollapseSpaces<WhitespaceToSpace<RemoveTrailingSemicolons<StripCommentsAndMaskLiterals<S>>>>
 >;
+
+type HasQuoteChar<S extends string> = S extends
+  | `${string}"${string}`
+  | `${string}\`${string}`
+  | `${string}[${string}`
+  ? true
+  : false;
+
+type AfterIdentifierClose<S extends string, Close extends string> =
+  S extends `${string}${Close}${infer Rest}` ? Rest : '';
+
+// Quoted identifiers are the one piece of a query StripCommentsAndMaskLiterals
+// deliberately leaves intact - the parser needs the name. That makes their
+// bodies the last place raw punctuation survives, so anything scanning the
+// masked text for structure has to blank them first (issue #232).
+type MaskQuotedIdentifiers<S extends string, Accumulated extends string = ''> =
+  HasQuoteChar<S> extends false
+    ? `${Accumulated}${S}`
+    : S extends `"${infer AfterOpen}`
+      ? MaskQuotedIdentifiers<AfterIdentifierClose<AfterOpen, '"'>, `${Accumulated}""`>
+      : S extends `\`${infer AfterOpen}`
+        ? MaskQuotedIdentifiers<AfterIdentifierClose<AfterOpen, '\`'>, `${Accumulated}\`\``>
+        : S extends `[${infer AfterOpen}`
+          ? MaskQuotedIdentifiers<AfterIdentifierClose<AfterOpen, ']'>, `${Accumulated}[]`>
+          : S extends `${infer Head}${infer Rest}`
+            ? MaskQuotedIdentifiers<Rest, `${Accumulated}${Head}`>
+            : Accumulated;
 
 // RemoveSemicolons strips every semicolon, not just a single trailing one, so
 // a second statement after a non-trailing semicolon would otherwise be
 // silently merged into the first. Checked against the comment-stripped,
-// literal-masked text so a semicolon inside a comment or a string literal
-// (already reduced to '') is never mistaken for a statement separator.
+// literal-masked text (so a semicolon inside a comment or a string literal is
+// never mistaken for a separator) with quoted identifiers blanked on top of
+// it, since a column may legally be named `"a;b"`.
 export type HasNonTrailingSemicolon<S extends string> =
-  Trim<StripCommentsAndMaskLiterals<S>> extends `${string};${infer After}`
+  Trim<MaskQuotedIdentifiers<StripCommentsAndMaskLiterals<S>>> extends `${string};${infer After}`
     ? Trim<After> extends ''
       ? false
       : true
