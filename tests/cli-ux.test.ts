@@ -28,7 +28,20 @@ describe('sqlite URL forms', () => {
     expect(normalizeSqlitePath('sqlite://./app.db')).toBe('./app.db');
     expect(normalizeSqlitePath('sqlite:./app.db')).toBe('./app.db');
     expect(normalizeSqlitePath('file://./app.db')).toBe('./app.db');
+    // Regression for #236: detectDialect accepts this spelling, so the prefix
+    // has to be stripped here too - it used to reach existsSync verbatim.
+    expect(normalizeSqlitePath('file:./app.db')).toBe('./app.db');
     expect(normalizeSqlitePath('./app.db')).toBe('./app.db');
+  });
+
+  it.skipIf(!sqliteAvailable)('introspects through a file: URL', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      await runGenerate({ url: `file:${file}`, out });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it.skipIf(!sqliteAvailable)('introspects through a sqlite:// URL', async () => {

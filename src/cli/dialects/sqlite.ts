@@ -47,7 +47,11 @@ function isRowidAlias(column: SqliteTableInfoRow, primaryKeyCount: number): bool
   );
 }
 
-const SQLITE_URL_PREFIXES = ['sqlite://', 'sqlite:', 'file://'];
+// Longest first: `file://x` must not be stripped as `file:` and keep a leading
+// `//`. Every spelling detectDialect routes to sqlite has to be listed here, or
+// the prefix survives into existsSync and the file is reported missing under a
+// name nobody wrote (issue #236).
+const SQLITE_URL_PREFIXES = ['sqlite://', 'sqlite:', 'file://', 'file:'];
 
 export function normalizeSqlitePath(url: string): string {
   for (const prefix of SQLITE_URL_PREFIXES) {
