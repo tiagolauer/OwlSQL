@@ -71,13 +71,18 @@ export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends 
     // caller an extra parameter slot (issue #231).
     Lowercase<CleanScanToken<Token>> extends '$action'
     ? false
-    : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@'
+    : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@' | ':'
       ? false
       : CleanScanToken<Token> extends `$${string}`
         ? true
         : CleanScanToken<Token> extends `@${string}`
           ? true
-          : false;
+          : // `:name` is the third prefix the node:sqlite adapter binds, and it
+            // was the only one the type layer didn't know about (issue #238).
+            // A `::` cast never reaches here - CleanScanToken strips it.
+            CleanScanToken<Token> extends `:${string}`
+            ? true
+            : false;
 
 interface DigitCounters {
   '0': [];

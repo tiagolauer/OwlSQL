@@ -82,6 +82,23 @@ type DistinctNamedDollarPlaceholdersGetTheirOwnSlots = Expect<
   >
 >;
 
+// Regression for #238: `:name` is bound by the node:sqlite adapter, so the
+// type layer has to see it too - it used to produce an empty tuple.
+type ColonNamedParamsGetSlots = Expect<
+  Equal<
+    Params<DB, 'select id from users where id = :id and name = :nm'>,
+    [number, string]
+  >
+>;
+
+type RepeatedColonNamedPlaceholderOccupiesOneSlot = Expect<
+  Equal<Params<DB, 'select id from users where id = :id or parent_id = :id'>, [number]>
+>;
+
+type CastIsNotAColonPlaceholder = Expect<
+  Equal<Params<DB, 'select id from users where name = id::text'>, []>
+>;
+
 // Same root cause: a Postgres cast attached to a numbered placeholder made the
 // index unreadable, so `$2::int` no longer bound to the second slot.
 type CastOnNumberedPlaceholderStillBindsByIndex = Expect<
@@ -124,6 +141,9 @@ export type Assertions = [
   MixedQuestionMarksAndRepeatedNamedPlaceholderBindCorrectly,
   SystemVariableIsNotPlaceholder,
   DistinctNamedDollarPlaceholdersGetTheirOwnSlots,
+  ColonNamedParamsGetSlots,
+  RepeatedColonNamedPlaceholderOccupiesOneSlot,
+  CastIsNotAColonPlaceholder,
   CastOnNumberedPlaceholderStillBindsByIndex,
   CastOnFirstNumberedPlaceholderStillBindsByIndex,
   InsertOutOfOrderPlaceholdersBindByIndex,

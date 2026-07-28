@@ -62,6 +62,20 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
     }
   });
 
+  // Regression for #238: the adapter has always bound `:name`, but the type
+  // layer typed the query as taking no parameters at all.
+  it('routes :name placeholders through the named-parameters object', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const result = await db.query('select id, name from users where id = :id', 1);
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([{ id: 1, name: 'ada' }]);
+    }
+  });
+
   it('ignores named-parameter lookalikes inside string literals', async () => {
     const sqlite = seededDatabase();
     const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
