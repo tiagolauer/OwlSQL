@@ -93,6 +93,18 @@ describe('createMssqlExecutor', () => {
     expect(request.input).not.toHaveBeenCalled();
   });
 
+  // Regression for #248: T-SQL has no backslash escape, so 'C:\' is a complete
+  // literal. Reading that quote as escaped ran the literal to the end of the
+  // statement, @id was never declared, and the driver rejected the query.
+  it('binds a parameter that follows a path literal ending in a backslash', async () => {
+    const { pool, request } = fakePool({ recordset: [] });
+    const executor = createMssqlExecutor(pool);
+
+    await executor("select * from files where path = 'C:\\' and id = @id", [7]);
+
+    expect(request.input.mock.calls).toEqual([['id', 7]]);
+  });
+
   it('returns empty rows and rowCount metadata when a write produces no recordset', async () => {
     const { pool } = fakePool({ recordset: undefined, rowsAffected: [3] });
     const executor = createMssqlExecutor(pool);

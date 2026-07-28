@@ -10,25 +10,22 @@ const IDENTIFIER_QUOTE_CLOSERS: ReadonlyMap<string, string> = new Map([
   ['[', ']'],
 ]);
 
-// A quote preceded by an odd run of backslashes is backslash-escaped (MySQL's
-// and SQLite's default `\'`) and doesn't open or close a literal - the run has
-// to be odd, not merely non-empty, since `\\'` is an escaped backslash followed
-// by a real delimiter. Mirrors EndsWithOddBackslashes in src/string.ts and the
-// same check in the ts-plugin's stripStringLiterals; without it every parameter
-// after the escaped quote is read as literal body and silently dropped.
-function isLiteralDelimiter(sql: string, index: number): boolean {
-  let backslashes = 0;
-  while (backslashes < index && sql[index - 1 - backslashes] === '\\') {
-    backslashes += 1;
-  }
-  return backslashes % 2 === 0;
-}
-
+// Doubling (`''`) is the only escape this scanner honours, because the only
+// two adapters that use it - mssql and node:sqlite - run on engines where a
+// backslash is an ordinary character: `'C:\'` is a *complete* literal in both
+// T-SQL and SQLite. Treating that closing quote as escaped (MySQL's `\'`, the
+// rule this scanner used to apply to every dialect) ran the literal on to the
+// end of the statement and swallowed every parameter after it - silently
+// wrong rows on SQLite, an unbound @name on SQL Server (issue #248).
+//
+// The type-level masking in src/string.ts keeps the backslash rule: it has no
+// dialect to key off, and dropping it there would break the MySQL queries it
+// covers today.
 function skipSingleQuotedLiteral(sql: string, openIndex: number): number {
   let index = openIndex + 1;
 
   while (index < sql.length) {
-    if (sql[index] === "'" && isLiteralDelimiter(sql, index)) {
+    if (sql[index] === "'") {
       if (sql[index + 1] === "'") {
         index += 2;
         continue;
