@@ -1017,6 +1017,11 @@ Building, testing, and publishing are documented in
 [ROADMAP.md](ROADMAP.md) — it lists what's shipped, what's in progress, and
 issues labeled [`good first issue`](https://github.com/tiagolauer/OwlSQL/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
+[VERSIONING.md](VERSIONING.md) covers what counts as a breaking change here.
+Since the product is inferred types, a release can break your build without
+touching a single runtime signature, so the classification is written down
+rather than left to judgement.
+
 ## License
 
 MIT

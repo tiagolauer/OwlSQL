@@ -24,6 +24,8 @@ For feature requests, explain the use case before the API. "I need X because Y" 
 
 Keep a PR to one fix or one feature. A PR that touches three unrelated things is harder to review and harder to revert if something breaks. Reference the issue it closes in the description.
 
+If the change alters what a query infers to, say so in the description and name the bump it implies under [VERSIONING.md](VERSIONING.md). A row shape that gains, loses, or retypes a key is a breaking change even when no runtime signature moved.
+
 Every behavior change needs a test that would fail without the fix. If you're touching `src/parse.ts`, `src/where.ts`, or another type-level file, that usually means a `.test-d.ts` case with `@ts-expect-error` or an `Equal<>` assertion; runtime behavior (adapters, the CLI, the ts-plugin) gets a `.test.ts` case instead. A PR without a regression test is a PR someone else will eventually re-break by accident.
 
 ## Developing
