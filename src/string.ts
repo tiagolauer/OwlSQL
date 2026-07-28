@@ -88,7 +88,16 @@ type UpperAlpha = Uppercase<LowerAlpha>;
 
 type IdentifierStart = LowerAlpha | UpperAlpha | '_';
 
-type IdentifierChar = IdentifierStart | Digit;
+export type IdentifierChar = IdentifierStart | Digit;
+
+// A placeholder prefix is only a placeholder when a name or an index follows
+// it. Postgres spells containment and key-existence with `@>`, `<@`, `?`,
+// `?|` and `?&`, and those used to be read as parameters (issue #249).
+export type StartsWithIdentifierChar<S extends string> = S extends `${infer Head}${string}`
+  ? Head extends IdentifierChar
+    ? true
+    : false
+  : false;
 
 type IsIdentifierTail<S extends string> = S extends ''
   ? true
@@ -180,7 +189,7 @@ type AfterIdentifierClose<S extends string, Close extends string> =
 // deliberately leaves intact - the parser needs the name. That makes their
 // bodies the last place raw punctuation survives, so anything scanning the
 // masked text for structure has to blank them first (issue #232).
-type MaskQuotedIdentifiers<S extends string, Accumulated extends string = ''> =
+export type MaskQuotedIdentifiers<S extends string, Accumulated extends string = ''> =
   HasQuoteChar<S> extends false
     ? `${Accumulated}${S}`
     : S extends `"${infer AfterOpen}`

@@ -7,6 +7,8 @@ import type {
   ExtractParenGroup,
   Digit,
   HasNonTrailingSemicolon,
+  MaskQuotedIdentifiers,
+  StartsWithIdentifierChar,
 } from './string.js';
 import type {
   Source,
@@ -22,7 +24,11 @@ import type {
 import type { ParseWithClause } from './cte.js';
 import type { FunctionName } from './functions.js';
 
-type Operator = '=' | '<>' | '!=' | '<' | '>' | '<=' | '>=';
+// `@>` and `<@` compare an array or a jsonb value against another of the same
+// type, so the bound value carries the column's own type - the same thing `=`
+// does. They are listed here so the parameter beside them is typed rather
+// than left `unknown` now that they are no longer misread as placeholders.
+type Operator = '=' | '<>' | '!=' | '<' | '>' | '<=' | '>=' | '@>' | '<@';
 
 type WordOperator = 'like' | 'ilike' | 'in' | 'between' | 'distinct';
 
@@ -89,6 +95,12 @@ export type CleanColumnToken<S extends string> = StripLeadingParens<S> extends i
     : StripTrailingListPunctuation<Stripped>
   : never;
 
+// The body test is what keeps an operator out: `@>` and `?|` start with a
+// placeholder prefix but carry no name, so they used to be counted as
+// parameters and to report the query as using a placeholder style the
+// executor doesn't accept (issue #249). A bare `?` stays a placeholder -
+// that is exactly what it is in MySQL and SQLite, and no amount of text
+// alone can tell it apart from Postgres's jsonb existence operator.
 export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends '?'
   ? true
   : // MERGE's `$action` is a pseudo-column, not a placeholder - ResolveColumnType
@@ -96,17 +108,17 @@ export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends 
     // caller an extra parameter slot (issue #231).
     Lowercase<CleanScanToken<Token>> extends '$action'
     ? false
-    : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@' | ':'
+    : CleanScanToken<Token> extends `$$${string}` | `@@${string}`
       ? false
-      : CleanScanToken<Token> extends `$${string}`
-        ? true
-        : CleanScanToken<Token> extends `@${string}`
-          ? true
+      : CleanScanToken<Token> extends `$${infer Body}`
+        ? StartsWithIdentifierChar<Body>
+        : CleanScanToken<Token> extends `@${infer Body}`
+          ? StartsWithIdentifierChar<Body>
           : // `:name` is the third prefix the node:sqlite adapter binds, and it
             // was the only one the type layer didn't know about (issue #238).
             // A `::` cast never reaches here - CleanScanToken strips it.
-            CleanScanToken<Token> extends `:${string}`
-            ? true
+            CleanScanToken<Token> extends `:${infer Body}`
+            ? StartsWithIdentifierChar<Body>
             : false;
 
 interface DigitCounters {
@@ -467,15 +479,40 @@ type StripDollarAction<S extends string> = S extends `${infer Before}$action${in
   ? StripDollarAction<`${Before}${After}`>
   : S;
 
+// A prefix only counts when a name or an index follows it, the same rule
+// IsPlaceholder applies per token - otherwise `where tags @> $1` reported the
+// `at` style and was rejected against a dollar executor (issue #249).
+type HasPrefixedPlaceholder<
+  S extends string,
+  Prefix extends string,
+> = S extends `${string}${Prefix}${infer After}`
+  ? StartsWithIdentifierChar<After> extends true
+    ? true
+    : HasPrefixedPlaceholder<After, Prefix>
+  : false;
+
+// `?|` and `?&` are Postgres jsonb operators, not placeholders. A bare `?` is
+// a placeholder, since that is what it is in MySQL and SQLite.
+type HasQuestionPlaceholder<S extends string> = S extends `${string}?${infer After}`
+  ? After extends `|${string}` | `&${string}`
+    ? HasQuestionPlaceholder<After>
+    : true
+  : false;
+
+// Quoted identifiers survive Normalize by design (the parser needs the name),
+// so their bodies are masked here before the scan - a column legally named
+// "user@id" is not a parameter style.
+//
 // Lowercased so the `$action` strip is case-insensitive, matching how
 // IsMergeActionPseudoColumn resolves it. Case is irrelevant to the three
 // characters this scans for, so nothing else is affected.
-export type UsedPlaceholderStyles<Q extends string> = Lowercase<Normalize<Q>> extends infer Text extends
-  string
+export type UsedPlaceholderStyles<Q extends string> = Lowercase<
+  MaskQuotedIdentifiers<Normalize<Q>>
+> extends infer Text extends string
   ?
-      | (Text extends `${string}?${string}` ? 'question' : never)
-      | (StripDollarAction<Text> extends `${string}$${string}` ? 'dollar' : never)
-      | (StripDoubledAt<Text> extends `${string}@${string}` ? 'at' : never)
+      | (HasQuestionPlaceholder<Text> extends true ? 'question' : never)
+      | (HasPrefixedPlaceholder<StripDollarAction<Text>, '$'> extends true ? 'dollar' : never)
+      | (HasPrefixedPlaceholder<StripDoubledAt<Text>, '@'> extends true ? 'at' : never)
   : never;
 
 type OuterAndCteParams<
