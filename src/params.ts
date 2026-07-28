@@ -270,8 +270,17 @@ type ZipIntersectIndexed<A extends unknown[], B extends unknown[]> = A extends [
     : A
   : B;
 
+// The column list starts right after the target name, which is not always a
+// word boundary: `insert into users(id, name)` glues it to the table, so
+// dropping the first word ate the first column too (issue #245).
+type RestAfterTarget<S extends string> = FirstWord<Trim<S>> extends `${string}(${string}`
+  ? Trim<S> extends `${string}(${infer AfterOpen}`
+    ? `(${AfterOpen}`
+    : Trim<DropFirstWord<Trim<S>>>
+  : Trim<DropFirstWord<Trim<S>>>;
+
 type InsertColumnList<S extends string> = AfterKeyword<S, 'into'> extends infer AfterInto extends string
-  ? Trim<DropFirstWord<AfterInto>> extends `(${infer AfterOpen}`
+  ? RestAfterTarget<AfterInto> extends `(${infer AfterOpen}`
     ? ExtractParenGroup<AfterOpen> extends { inner: infer Cols extends string; rest: infer Rest extends string }
       ? { columns: SplitColumnList<Cols>; rest: Trim<Rest> }
       : never

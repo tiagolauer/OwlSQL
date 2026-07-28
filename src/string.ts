@@ -218,6 +218,11 @@ export type FirstWord<S extends string> = S extends `${infer Head} ${string}`
   ? Head
   : S;
 
+// `insert into users(id, name)` is as legal as `insert into users (id, name)`,
+// and the target is a space-delimited word either way - so the name has to be
+// cut at the paren too, or the table is read as `users(id,` (issue #245).
+export type BeforeParen<S extends string> = S extends `${infer Before}(${string}` ? Before : S;
+
 export type StripQualifier<S extends string> = S extends `${string}.${infer Rest}`
   ? StripQualifier<Rest>
   : S;
