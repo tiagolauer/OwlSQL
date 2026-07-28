@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import { buildLanguageService, loadPlugin } from './ts-plugin-test-helpers.js';
+import { buildLanguageService, loadPlugin } from './test-helpers.js';
 
 const { plugin, dir: transpileDir } = loadPlugin();
 

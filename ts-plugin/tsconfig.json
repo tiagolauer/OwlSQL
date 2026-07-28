@@ -12,8 +12,8 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist/ts-plugin",
-    "rootDir": "src/ts-plugin"
+    "outDir": "dist",
+    "rootDir": "src"
   },
-  "include": ["src/ts-plugin"]
+  "include": ["src"]
 }

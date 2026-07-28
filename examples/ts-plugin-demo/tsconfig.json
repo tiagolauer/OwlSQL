@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
-    "plugins": [{ "name": "@owlsql/core/ts-plugin" }]
+    "plugins": [{ "name": "@owlsql/ts-plugin" }]
   },
   "include": ["*.ts"]
 }
