@@ -122,13 +122,6 @@ export type AfterKeyword<S extends string, Keyword extends string> =
       : AfterKeyword<Tail, Keyword>
     : never;
 
-type WordAfterKeyword<S extends string, Keyword extends string> =
-  AfterKeyword<S, Keyword> extends infer Rest
-    ? Rest extends string
-      ? FirstWord<Rest>
-      : ''
-    : '';
-
 type ReturningColumns<S extends string> = AfterKeyword<S, 'returning'> extends infer Rest
   ? Rest extends string
     ? Rest
@@ -182,9 +175,70 @@ type ReturningOrOutputColumns<S extends string, StopKeyword extends string> = Re
 
 type CleanTargetIdentifier<Raw extends string> = Unquote<StripQualifier<BeforeParen<Raw>>>;
 
-type SingleSource<Table extends string> = [
-  { table: CleanTargetIdentifier<Table>; alias: CleanTargetIdentifier<Table>; nullable: false },
-];
+// The word after a write target is an alias unless it opens the next clause.
+// `UPDATE t alias`, `DELETE FROM t AS alias` and `MERGE INTO t AS alias` are
+// all legal - the README's own MERGE example uses `as target` - and the alias
+// used to be dropped, so every reference through it failed to resolve
+// (issue #246).
+type WriteTargetBoundary =
+  | 'set'
+  | 'where'
+  | 'values'
+  | 'value'
+  | 'returning'
+  | 'output'
+  | 'using'
+  | 'from'
+  | 'select'
+  | 'on'
+  | 'default'
+  | 'with'
+  | 'union'
+  | 'order'
+  | 'group'
+  | 'having'
+  | 'limit'
+  | 'offset'
+  | 'when';
+
+type IsWriteTargetBoundary<Word extends string> = Lowercase<Word> extends WriteTargetBoundary
+  ? true
+  : false;
+
+// CleanTargetIdentifier resolves a token that opens a column list (`(id,`) to
+// the empty string, which is exactly the "no alias here" answer this needs.
+type AliasAfterTarget<Rest extends string> = Trim<Rest> extends ''
+  ? ''
+  : FirstWord<Trim<Rest>> extends infer Next extends string
+    ? IsKeyword<Next, 'as'> extends true
+      ? CleanTargetIdentifier<FirstWord<Trim<DropFirstWord<Trim<Rest>>>>>
+      : IsWriteTargetBoundary<Next> extends true
+        ? ''
+        : CleanTargetIdentifier<Next>
+    : '';
+
+type SingleSource<After extends string> = CleanTargetIdentifier<
+  FirstWord<Trim<After>>
+> extends infer Table extends string
+  ? FirstWord<Trim<After>> extends `${string}(${string}`
+    ? // A column list glued to the target (`users(id, name)`) leaves no room
+      // for an alias: Postgres spells that form `insert into t AS u (id)`.
+      [{ table: Table; alias: Table; nullable: false }]
+    : AliasAfterTarget<DropFirstWord<Trim<After>>> extends infer Alias extends string
+      ? [{ table: Table; alias: Alias extends '' ? Table : Alias; nullable: false }]
+      : [{ table: Table; alias: Table; nullable: false }]
+  : never;
+
+// AfterKeyword resolves to never when the keyword is absent; SingleSource
+// needs a string either way.
+type RestAfterKeyword<S extends string, Keyword extends string> = AfterKeyword<
+  S,
+  Keyword
+> extends infer Rest
+  ? Rest extends string
+    ? Rest
+    : ''
+  : '';
 
 // Postgres/SQLite's `UPDATE t SET ... FROM other WHERE ...` and Postgres's
 // `DELETE FROM t USING other WHERE ...` both introduce an extra table that
@@ -255,7 +309,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
     : IsKeyword<Keyword, 'insert'> extends true
       ? {
           columns: ReturningOrOutputColumns<S, 'values'>;
-          sources: SingleSource<WordAfterKeyword<S, 'into'>>;
+          sources: SingleSource<RestAfterKeyword<S, 'into'>>;
           whereText: '';
           fromText: '';
         }
@@ -263,7 +317,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
         ? {
             columns: ReturningOrOutputColumns<S, 'where'>;
             sources: [
-              ...SingleSource<WordAfterKeyword<S, 'update'>>,
+              ...SingleSource<RestAfterKeyword<S, 'update'>>,
               ...ExtraSourcesAfterKeyword<S, 'from'>,
             ];
             whereText: ExtractUpdateDeleteWhereText<S>;
@@ -273,7 +327,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
           ? {
               columns: ReturningOrOutputColumns<S, 'where'>;
               sources: [
-                ...SingleSource<WordAfterKeyword<S, 'from'>>,
+                ...SingleSource<RestAfterKeyword<S, 'from'>>,
                 ...ExtraSourcesAfterKeyword<S, 'using'>,
               ];
               whereText: ExtractUpdateDeleteWhereText<S>;
@@ -287,7 +341,7 @@ type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Key
                 // for INSERT/UPDATE/DELETE. Requires an explicit INTO; MERGE
                 // without it (legal but rare in practice) isn't recognized.
                 columns: StripPseudoTableQualifiers<OutputClauseColumnsToEnd<S>>;
-                sources: SingleSource<WordAfterKeyword<S, 'into'>>;
+                sources: SingleSource<RestAfterKeyword<S, 'into'>>;
                 whereText: '';
                 fromText: '';
               }
