@@ -247,9 +247,15 @@ prints a clear error telling you which one to install if it's missing.
 `string` but `bigint` as a JS `number` (unless you enable
 `supportBigNumbers`/`bigNumberStrings`); `mssql` (tedious) returns `bigint` as
 `string` but parses `decimal`/`numeric`/`money` into JS `number` (with
-precision loss beyond 2^53). The generated types mirror exactly that. If your
-driver is configured differently, just edit the generated field by hand; it's
-a plain type after that point.
+precision loss beyond 2^53). SQLite has no column types, only affinities, so
+the *declared* type drives the mapping: `INTEGER`/`REAL` and the numeric
+names (`NUMERIC`, `DECIMAL(10,2)`, `MONEY`) become `number`, text-affinity
+types and `JSON` become `string`, `BLOB` and an untyped column become
+`Uint8Array`, and a declared type that says nothing about its contents
+(`GEOMETRY`, a custom name) becomes `unknown` rather than a guess. The
+generated types mirror exactly that. If your driver is configured
+differently, just edit the generated field by hand; it's a plain type after
+that point.
 
 ### 2. Create a typed client
 

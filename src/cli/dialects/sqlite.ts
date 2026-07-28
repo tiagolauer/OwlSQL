@@ -12,6 +12,14 @@ export function mapSqliteType(declaredType: string): string {
     return 'string';
   }
 
+  // A JSON column has NUMERIC affinity, and a JSON document is not a
+  // well-formed number, so SQLite stores it as TEXT and node:sqlite hands
+  // back a string. It used to reach the fallback below and be typed `number`
+  // (issue #252).
+  if (type === 'JSON' || type === 'JSONB') {
+    return 'string';
+  }
+
   if (type.includes('INT')) {
     return 'number';
   }
@@ -31,7 +39,16 @@ export function mapSqliteType(declaredType: string): string {
     return 'number';
   }
 
-  return 'number';
+  // The NUMERIC-affinity names people actually declare. Everything past this
+  // point is a type SQLite gives NUMERIC affinity without any hint about what
+  // is stored in it, so it degrades to `unknown` the way an unrecognized type
+  // already does in the other three introspectors - claiming `number` for it
+  // was a guess that a JSON or an enum-ish column silently broke (issue #252).
+  if (type.includes('NUM') || type.includes('DEC') || type.includes('MONEY')) {
+    return 'number';
+  }
+
+  return 'unknown';
 }
 
 interface SqliteTableInfoRow {
