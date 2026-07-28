@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseFlags } from '../src/cli/index';
+import { parseFlags, parseTableList } from '../src/cli/index';
 
 describe('parseFlags', () => {
   it('parses the spaced form', () => {
@@ -68,5 +68,26 @@ describe('parseFlags', () => {
     expect(() => parseFlags(['--check=false'])).toThrow('--check does not take a value.');
     expect(() => parseFlags(['--help=no'])).toThrow('--help does not take a value.');
     expect(() => parseFlags(['--version=1'])).toThrow('--version does not take a value.');
+  });
+});
+
+describe('parseTableList', () => {
+  it('splits and trims a list', () => {
+    expect(parseTableList('users, posts ,orders', 'table')).toEqual(['users', 'posts', 'orders']);
+  });
+
+  it('returns undefined when the flag was not given', () => {
+    expect(parseTableList(undefined, 'table')).toBeUndefined();
+  });
+
+  // Regression for #253: an empty list collapsed to undefined, which means
+  // "no filter" downstream - so --table= generated the whole schema and
+  // printed the usual success line.
+  it('rejects a list with no usable name instead of silently dropping the filter', () => {
+    expect(() => parseTableList('', 'table')).toThrow('--table needs at least one table name.');
+    expect(() => parseTableList(' , ,', 'table')).toThrow('--table needs at least one table name.');
+    expect(() => parseTableList('', 'exclude')).toThrow(
+      '--exclude needs at least one table name.',
+    );
   });
 });

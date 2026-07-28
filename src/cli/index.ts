@@ -89,7 +89,11 @@ function parseDialect(raw: string | undefined): Dialect | undefined {
   return raw as Dialect;
 }
 
-function parseTableList(raw: string | undefined): string[] | undefined {
+// An empty list used to collapse to `undefined`, which downstream means "no
+// filter at all" - so `--table=` (an unset variable in a CI script) quietly
+// generated the whole schema and reported success. Same class of silence as
+// #240, where a name matching no table was ignored (issue #253).
+export function parseTableList(raw: string | undefined, flag: string): string[] | undefined {
   if (raw === undefined) {
     return undefined;
   }
@@ -99,7 +103,11 @@ function parseTableList(raw: string | undefined): string[] | undefined {
     .map((name) => name.trim())
     .filter((name) => name.length > 0);
 
-  return names.length > 0 ? names : undefined;
+  if (names.length === 0) {
+    throw new Error(`--${flag} needs at least one table name.`);
+  }
+
+  return names;
 }
 
 function readVersion(): string {
@@ -168,8 +176,8 @@ async function main(): Promise<void> {
     out,
     dialect: parseDialect(flags.get('dialect')),
     schema: flags.get('schema'),
-    tables: parseTableList(flags.get('table')),
-    exclude: parseTableList(flags.get('exclude')),
+    tables: parseTableList(flags.get('table'), 'table'),
+    exclude: parseTableList(flags.get('exclude'), 'exclude'),
     check: flags.has('check'),
   });
 
