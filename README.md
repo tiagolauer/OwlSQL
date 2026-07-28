@@ -921,6 +921,7 @@ this.**
 | Trailing clauses (ignored) | `... where active = true order by id limit 10` |
 | Aggregates / functions | `select count(*) as total, lower(name) from users` |
 | `RETURNING` | `insert into users (name) values ($1) returning id` |
+| Aliased write target | `update users u set name = $1 where u.id = $2 returning u.name` |
 | Nullable columns | `bio: string \| null` → `{ bio: string \| null }` |
 | Joins | `select u.name, p.title from users u join posts p on u.id = p.user_id` |
 | `LEFT`/`RIGHT`/`FULL` nullability | outer-joined side(s) become `T \| null` |
