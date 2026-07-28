@@ -41,3 +41,57 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:runtime
+
+  integration:
+    name: Integration tests (real databases)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: owlsql
+          POSTGRES_PASSWORD: owlsql
+          POSTGRES_DB: owlsql
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U owlsql -d owlsql"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: owlsql
+          MYSQL_DATABASE: owlsql
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -powlsql"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 40
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: Owlsql_Passw0rd
+        ports:
+          - 1434:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Owlsql_Passw0rd -C -Q 'select 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 40
+    env:
+      OWLSQL_PG_URL: postgres://owlsql:owlsql@127.0.0.1:5433/owlsql
+      OWLSQL_MYSQL_URL: mysql://root:owlsql@127.0.0.1:3307/owlsql
+      OWLSQL_MSSQL_URL: mssql://sa:Owlsql_Passw0rd@127.0.0.1:1434/master?encrypt=false&trustServerCertificate=true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration
