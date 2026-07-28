@@ -95,6 +95,46 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // Regression for #240: a typo used to be honored silently, so the table it
+  // was meant to name simply went missing from the generated schema.
+  it('rejects a --table name that matches no table, even when others match', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      await expect(
+        runGenerate({ url: file, out, tables: ['users', 'ordrs'] }),
+      ).rejects.toThrow('--table matched no such table: ordrs');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('warns but still generates when --exclude names a table that is not there', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      const result = await runGenerate({ url: file, out, exclude: ['posts', 'ordrs'] });
+      expect(result).toEqual({
+        kind: 'written',
+        warnings: ['--exclude matched no such table: ordrs'],
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports no warnings when every filter name matches', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      expect(await runGenerate({ url: file, out, exclude: ['posts'] })).toEqual({
+        kind: 'written',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe.skipIf(!sqliteAvailable)('write errors', () => {

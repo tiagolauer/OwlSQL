@@ -167,6 +167,10 @@ async function main(): Promise<void> {
     check: flags.has('check'),
   });
 
+  for (const warning of result.warnings ?? []) {
+    process.stderr.write(`Warning: ${warning}\n`);
+  }
+
   if (result.kind === 'written') {
     process.stdout.write(`Wrote ${out}\n`);
     return;
