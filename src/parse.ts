@@ -914,15 +914,19 @@ type InferRowWithChecked<
       fromText: infer FromText extends string;
     }
     ? (CteDB & BuildDerivedSourceMap<CteDB, Sources, Strict>) extends infer EffectiveDB extends SchemaLike
-      ? Trim<Columns> extends ''
-        ? EmptyRow
-        : ApplyWhereCheck<
-            EffectiveDB,
-            Sources,
-            WhereText,
-            FromText,
-            Strict,
-            IsSelectAll<Columns> extends true
+      ? // The clause check wraps the empty row too: a write with no RETURNING
+        // projects nothing, but its WHERE clause is still a set of column
+        // references strict mode has to validate - and UPDATE/DELETE is where
+        // a wrong one costs the most (issue #233).
+        ApplyWhereCheck<
+          EffectiveDB,
+          Sources,
+          WhereText,
+          FromText,
+          Strict,
+          Trim<Columns> extends ''
+            ? EmptyRow
+            : IsSelectAll<Columns> extends true
               ? StarRow<EffectiveDB, Sources, Strict>
               : BuildSelection<
                   EffectiveDB,
@@ -932,7 +936,7 @@ type InferRowWithChecked<
                     : [],
                   Strict
                 >
-          >
+        >
       : never
     : never
   : never;
