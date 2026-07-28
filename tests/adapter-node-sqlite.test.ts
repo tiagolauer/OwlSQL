@@ -88,6 +88,22 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
     }
   });
 
+  // Regression for #248: SQLite has no backslash escape, so 'C:\' is a
+  // complete literal and the ? after it is a real placeholder. The scanner
+  // used to read that quote as escaped, run the literal to the end of the
+  // statement, and return a silently empty result set.
+  it('binds a placeholder that follows a literal ending in a backslash', async () => {
+    const DatabaseSync = loadSqlite();
+    const sqlite = new DatabaseSync(':memory:');
+    sqlite.exec('create table files (id integer primary key, path text)');
+    sqlite.prepare('insert into files (id, path) values (?, ?)').run(1, 'C:\\');
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    const rows = await executor("select id from files where path = 'C:\\' and id = ?", [1]);
+
+    expect(rows).toEqual([{ id: 1 }]);
+  });
+
   it('coerces boolean and Date params to driver-supported values', async () => {
     const DatabaseSync = loadSqlite();
     const sqlite = new DatabaseSync(':memory:');
