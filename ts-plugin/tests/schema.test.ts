@@ -49,6 +49,19 @@ describe('getColumnNames / getColumnType scoping', () => {
     expect(getColumnType(ts, checker, dbType, node, 'userz', 'title')).toBeNull();
   });
 
+  // Regression for #250: the type layer resolves identifiers
+  // case-insensitively, so the plugin has to as well - otherwise it scopes to
+  // nothing and offers no columns for a query tsc types fine.
+  it('scopes to a table named in a different case', () => {
+    const { checker, dbType, node } = buildDbType(`
+      interface DB { users: { id: number; name: string }; posts: { id: number; title: string } }
+      declare const dbValue: DB;
+    `);
+
+    expect(getColumnNames(ts, checker, dbType, node, 'USERS').sort()).toEqual(['id', 'name']);
+    expect(getColumnType(ts, checker, dbType, node, 'Users', 'NAME')).not.toBeNull();
+  });
+
   it('unions columns across all tables when no FROM table is given', () => {
     const { checker, dbType, node } = buildDbType(`
       interface DB { users: { id: number; name: string }; posts: { id: number; title: string } }
