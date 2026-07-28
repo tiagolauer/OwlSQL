@@ -1,4 +1,5 @@
-import type { Query, Params, StrictQuery, QueryTypeError } from '../src/index.js';
+import type { Query, Params, StrictQuery, QueryTypeError, Executor } from '../src/index.js';
+import { createTypedDb } from '../src/index.js';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2)
@@ -10,6 +11,8 @@ type Expect<T extends true> = T;
 interface DB {
   users: { id: number; name: string; email: string };
 }
+
+declare const executor: Executor;
 
 type NamedParamSingle = Expect<
   Equal<Params<DB, 'select id from users where id = @id'>, [number]>
@@ -108,6 +111,30 @@ type MergeActionPseudoColumn = Expect<
   >
 >;
 
+// Regression for #231: `$action` is a pseudo-column, so it must not consume a
+// parameter slot - only the two real @name placeholders do.
+type MergeActionIsNotAParameter = Expect<
+  Equal<
+    Params<
+      DB,
+      'merge into users as target using (values (@id, @name)) as source (id, name) on target.id = source.id when matched then update set target.name = source.name output $action, inserted.id'
+    >,
+    [unknown, unknown]
+  >
+>;
+
+// ...and it must not make the query look dollar-styled, which turned every
+// MERGE into a placeholder-style mismatch against the (always 'at') mssql
+// executor.
+export async function mergeActionPassesThePlaceholderStyleCheck() {
+  const db = createTypedDb<DB, { placeholders: 'at' }>(executor, { placeholders: 'at' });
+  return db.query(
+    'merge into users as target using (values (@id, @name)) as source (id, name) on target.id = source.id when matched then update set target.name = source.name output $action, inserted.id',
+    1,
+    'x',
+  );
+}
+
 type MergeWithoutTargetAlias = Expect<
   Equal<
     Query<
@@ -175,6 +202,7 @@ export type MssqlLock = [
   NoOutputClauseIsEmptyRow,
   MergeOutputClause,
   MergeActionPseudoColumn,
+  MergeActionIsNotAParameter,
   MergeWithoutTargetAlias,
   MergeNoOutputClauseIsEmptyRow,
   MergeStrictRejectsUnknownOutputColumn,

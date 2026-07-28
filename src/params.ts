@@ -66,13 +66,18 @@ export type CleanColumnToken<S extends string> = StripLeadingParens<S> extends i
 
 export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends '?'
   ? true
-  : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@'
+  : // MERGE's `$action` is a pseudo-column, not a placeholder - ResolveColumnType
+    // already types it as the branch that fired, so counting it here handed the
+    // caller an extra parameter slot (issue #231).
+    Lowercase<CleanScanToken<Token>> extends '$action'
     ? false
-    : CleanScanToken<Token> extends `$${string}`
-      ? true
-      : CleanScanToken<Token> extends `@${string}`
+    : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@'
+      ? false
+      : CleanScanToken<Token> extends `$${string}`
         ? true
-        : false;
+        : CleanScanToken<Token> extends `@${string}`
+          ? true
+          : false;
 
 interface DigitCounters {
   '0': [];
@@ -406,10 +411,18 @@ type StripDoubledAt<S extends string> = S extends `${infer Before}@@${infer Afte
   ? StripDoubledAt<`${Before}${After}`>
   : S;
 
-export type UsedPlaceholderStyles<Q extends string> = Normalize<Q> extends infer Text extends string
+type StripDollarAction<S extends string> = S extends `${infer Before}$action${infer After}`
+  ? StripDollarAction<`${Before}${After}`>
+  : S;
+
+// Lowercased so the `$action` strip is case-insensitive, matching how
+// IsMergeActionPseudoColumn resolves it. Case is irrelevant to the three
+// characters this scans for, so nothing else is affected.
+export type UsedPlaceholderStyles<Q extends string> = Lowercase<Normalize<Q>> extends infer Text extends
+  string
   ?
       | (Text extends `${string}?${string}` ? 'question' : never)
-      | (Text extends `${string}$${string}` ? 'dollar' : never)
+      | (StripDollarAction<Text> extends `${string}$${string}` ? 'dollar' : never)
       | (StripDoubledAt<Text> extends `${string}@${string}` ? 'at' : never)
   : never;
 
