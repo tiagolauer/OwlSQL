@@ -50,6 +50,12 @@ export function parseFlags(args: string[]): Map<string, string> {
     }
 
     if (BOOLEAN_FLAGS.has(name)) {
+      // The value used to be dropped on the floor, so `--check=false` turned
+      // the check on and failed the build it was meant to skip (issue #241).
+      if (equalsIndex !== -1) {
+        throw new Error(`--${name} does not take a value.`);
+      }
+
       flags.set(name, '');
       continue;
     }
