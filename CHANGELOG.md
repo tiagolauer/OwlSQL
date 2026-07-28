@@ -7,6 +7,7 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 ### Added
 
 - Integration tests running the adapters and `owlsql generate` against real PostgreSQL, MySQL, and SQL Server instances, alongside the existing faked-driver tests.
+- A type-instantiation budget (`npm run test:perf`) that fails CI when a change makes the type-level parser measurably more expensive.
 
 ## [0.1.8] - 2026-07-24
 

@@ -17,6 +17,7 @@
   "include": ["src", "tests", "vitest.config.ts"],
   "exclude": [
     "src/ts-plugin",
+    "tests/perf",
     "tests/ts-plugin-sql-context.test.ts",
     "tests/ts-plugin-completions.test.ts",
     "tests/ts-plugin-hover.test.ts",
