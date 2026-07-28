@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["tests/cli-codegen-edge.test.ts"],
+  "exclude": []
+}

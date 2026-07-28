@@ -1,7 +1,7 @@
 # ts-plugin recording demo
 
 A minimal project for recording a GIF/screenshot of
-[`@owlsql/core/ts-plugin`](../../README.md#editor-autocomplete) in
+[`@owlsql/ts-plugin`](../../README.md#editor-autocomplete) in
 action. This one is meant to be **opened in a real VSCode window and typed
 into** — unlike [`examples/playground`](../playground), which is meant for
 StackBlitz.
