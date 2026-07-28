@@ -357,18 +357,25 @@ type InsertParamTypes<DB extends SchemaLike, Q extends string> = ParseStatement<
   ? [InsertColumnList<Q>] extends [never]
     ? unknown[]
     : InsertColumnList<Q> extends { columns: infer Columns extends string[]; rest: infer AfterColumns extends string }
-      ? AfterKeyword<AfterColumns, 'values'> extends infer AfterValues
-        ? AfterValues extends string
-          ? ScanValuesGroups<AfterValues, DB, Src['table'], Columns, [], [], []> extends {
-              indexed: infer Indexed extends unknown[];
-              sequential: infer Sequential extends unknown[];
-              sequentialNames: infer SequentialNames extends string[];
-              rest: infer Rest extends string;
-            }
-            ? ScanParams<Rest, DB, [Src], '', '', Indexed, Sequential, SequentialNames>
+      ? // `AfterValues extends string` is distributive (AfterValues is a naked
+        // type parameter), so an INSERT with no VALUES clause - INSERT ...
+        // SELECT - collapsed the whole conditional to `never` instead of
+        // reaching the unknown[] fallback, leaving a rest parameter that no
+        // call can satisfy (issue #230).
+        [AfterKeyword<AfterColumns, 'values'>] extends [never]
+        ? unknown[]
+        : AfterKeyword<AfterColumns, 'values'> extends infer AfterValues
+          ? AfterValues extends string
+            ? ScanValuesGroups<AfterValues, DB, Src['table'], Columns, [], [], []> extends {
+                indexed: infer Indexed extends unknown[];
+                sequential: infer Sequential extends unknown[];
+                sequentialNames: infer SequentialNames extends string[];
+                rest: infer Rest extends string;
+              }
+              ? ScanParams<Rest, DB, [Src], '', '', Indexed, Sequential, SequentialNames>
+              : unknown[]
             : unknown[]
           : unknown[]
-        : unknown[]
       : unknown[]
   : unknown[];
 
