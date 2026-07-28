@@ -270,6 +270,55 @@ describe('findSources', () => {
     ]);
   });
 
+  // Regression for #242: the alias group used to consume the word after the
+  // table. When the first table had no alias that word was the next `join`
+  // keyword, so the joined table was never scanned at all.
+  it('captures a joined source when the first table has no alias', () => {
+    const sources = findSources('select posts.title from users join posts on users.id = posts.user_id');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+      { table: 'posts', alias: 'posts' },
+    ]);
+  });
+
+  it('captures an aliased joined source when the first table has no alias', () => {
+    const sources = findSources('select p.title from users join posts p on users.id = p.user_id');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+      { table: 'posts', alias: 'p' },
+    ]);
+  });
+
+  it('does not read the USING keyword as an alias', () => {
+    const sources = findSources('select posts.title from users join posts using (id)');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+      { table: 'posts', alias: 'posts' },
+    ]);
+  });
+
+  it('captures a comma-joined FROM list', () => {
+    const sources = findSources('select users.id, posts.title from users, posts where users.id = 1');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+      { table: 'posts', alias: 'posts' },
+    ]);
+  });
+
+  it('does not read a SELECT-list comma as another table', () => {
+    const sources = findSources('select id, name from users');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+    ]);
+  });
+
+  it('does not read a comma inside a WHERE clause as another table', () => {
+    const sources = findSources('select id from users where id in (1, 2)');
+    expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
+      { table: 'users', alias: 'users' },
+    ]);
+  });
+
   it('ignores a FROM inside a $$ dollar-quoted body (issue #209 repro)', () => {
     const sources = findSources('select id, name from users where note = $$ pulled from orders $$');
     expect(sources.map((s) => ({ table: s.table, alias: s.alias }))).toEqual([
@@ -384,6 +433,13 @@ describe('findSourceByAlias', () => {
   it('returns null for an alias that is not present', () => {
     const sources = findSources('select u.id from users u');
     expect(findSourceByAlias(sources, 'p')).toBeNull();
+  });
+
+  // Matches how the type-level FindSourceByName resolves: alias first, then the
+  // table name. A qualifier that names the table is never a wrong diagnostic.
+  it('falls back to the table name when no alias matches', () => {
+    const sources = findSources('select users.id from users u');
+    expect(findSourceByAlias(sources, 'users')?.table).toBe('users');
   });
 });
 
