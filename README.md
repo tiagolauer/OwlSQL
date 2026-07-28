@@ -2,9 +2,9 @@
 
 > Write raw SQL. Get fully-typed results. No codegen, no ORM, no runtime parsing.
 
-OwlSQL (`@owlsql/core`) reads your SQL **inside TypeScript's type system** and
-infers the row shape directly from the query string and your schema — at edit
-time, in your IDE, with zero build step.
+OwlSQL (`@owlsql/core`) reads your SQL inside TypeScript's type system and
+infers the row shape from the query string and your schema. It happens as you
+type, in your editor. There is no build step.
 
 ```ts
 type DB = {
@@ -27,7 +27,7 @@ const d = await db.query('select id from users where id = $1', 7);
 ```
 
 Rename a column in the SQL, mistype a field, or select something that does not
-exist, and the result type changes immediately — before you run a single line.
+exist, and the result type changes immediately, before you run a single line.
 There is **no generated file to keep in sync** and **no SQL parser shipped to
 production**: all the work happens during type checking.
 
@@ -73,32 +73,32 @@ No install, no database — see [`examples/playground`](examples/playground).
 
 ## The problem
 
-I was building a TypeScript backend and deliberately chose **raw SQL** over an
-ORM — full control over the queries, predictable performance, no magic between
-my code and the database. That part worked great.
+I was building a TypeScript backend and picked raw SQL over an ORM on purpose.
+I wanted control over the queries and no layer of magic between my code and the
+database. That part worked.
 
-The pain was the **return types**. Every query handed me back `any[]` (or
-`unknown[]`), so I hand-wrote an interface for each result:
+The return types were the problem. Every query came back as `any[]` or
+`unknown[]`, so I wrote an interface by hand for each one:
 
 ```ts
 interface UserListRow { id: number; name: string }
 const rows = (await pool.query('select id, name from users')).rows as UserListRow[];
 ```
 
-Two problems showed up fast. **They drift** — someone adds `email` to the SQL
-and forgets the interface, so the type lies and the bug surfaces at runtime,
-usually in production. And **they're pure boilerplate** — the interface is the
-query restated in another syntax, the same column list typed twice.
+Those interfaces drift. Someone adds `email` to the SQL, forgets the interface,
+and the type quietly lies until it breaks in production. They are also
+boilerplate: the interface restates the query in a second syntax, so you type
+the same column list twice.
 
-The usual fixes trade one problem for another. ORMs replace the SQL with their
-own DSL and runtime, which is the thing I was avoiding. Codegen tools do give
-accurate types, but they bolt a generation step onto the build: a watcher, a
-CLI, a database connection at build time, generated files in version control.
+The usual fixes each cost something. ORMs replace your SQL with their own DSL
+and runtime, which was the thing I was trying to avoid. Codegen tools do give
+you accurate types, but they bolt a generation step onto the build, so now you
+have a watcher, a CLI, a database connection at build time, and generated files
+in version control.
 
-The query string is already the source of truth — so let the compiler read it.
-TypeScript's template literal types are powerful enough to parse a `SELECT` and
-map columns to a schema entirely at type-check time. No DSL, no generated
-files, no build step.
+The query string is already the source of truth, so the compiler may as well
+read it. TypeScript's template literal types can parse a `SELECT` and map its
+columns to a schema during type checking, which is what this library does.
 
 ## How it works
 
@@ -139,40 +139,42 @@ fail with a clear error below that).
 | | OwlSQL | Prisma | Kysely | pgTyped | Zapatos |
 | --- | --- | --- | --- | --- | --- |
 | You write | Raw SQL strings | Prisma's own query API | Builder method chains | Raw SQL in `.sql` files or tags | Helpers, or raw SQL via `db.sql` |
-| Build step | No (opt-in `generate` for the schema only) | **Yes** — `prisma generate` | No (optional `kysely-codegen`) | **Yes** — CLI against a live database | No (opt-in schema generation) |
-| Runtime query engine | None — the string is passed through verbatim | Yes — a TypeScript query compiler | Yes — compiles the chain to SQL every call | Minimal — runs a pre-extracted query | Yes — builds SQL from helper calls |
+| Build step | No (opt-in `generate` for the schema only) | Yes, `prisma generate` | No (optional `kysely-codegen`) | Yes, a CLI run against a live database | No (opt-in schema generation) |
+| Runtime query engine | None. Your string reaches the driver unchanged | Yes, a TypeScript query compiler | Yes, compiles the chain to SQL on every call | Minimal. Runs a query the CLI already extracted | Yes, builds SQL from helper calls |
 | Bundle (min/gzip) | No dependencies; ~175 lines of glue, the parser costs 0 bytes | ~1.6 MB / ~600 KB | 189 KB / 38.7 KB | 399 KB / 85 KB | No bundled engine beyond thin helpers |
 
-Kysely is the closest in spirit — no magic, full inference, a SQL-shaped mental
-model. The difference is what you type: its fluent builder versus SQL text. If
-you want to paste a query out of `psql`, a migration, or a DBA's email and have
-it just work, that's raw SQL, which is this library's whole premise.
+Kysely is the closest of these in spirit: no magic, and inference that goes all
+the way down. What differs is what you type. Its builder is a fluent API; here
+you type SQL. If you want to paste a query straight out of `psql` or a
+migration file and have it work, that is raw SQL, and that is the premise.
 
-This is deliberately **not** a runtime-speed benchmark. Query execution is
-dominated by your database and driver, not by the layer on top, and these tools
-have architectures too different for a queries/sec number to mean anything.
-[COMPARISON.md](COMPARISON.md) has the long version, with every number sourced.
+This is not a runtime-speed comparison, on purpose. Your database and driver
+dominate query execution, not the layer sitting on top of them, and these five
+tools have architectures too different for a queries-per-second figure to say
+anything. [COMPARISON.md](COMPARISON.md) has the long version, every number
+sourced.
 
 ## What it costs to compile
 
-Every tool here has a price. Codegen tools charge a build step; ORMs charge
-bundle size and a runtime engine. This one charges **compile time**, so it's
-worth publishing the number rather than leaving you to find out.
+Every tool in that table charges you something. Codegen tools charge a build
+step, ORMs charge bundle size and a runtime engine, and this one charges
+compile time. So here is the number.
 
-A fixture of **100 tables × 13 columns and 32 queries** — joins, `GROUP BY`,
-`CASE`, CTEs, `UNION`, strict mode and typed parameters — type-checks in:
+A fixture of 100 tables with 13 columns each, plus 32 queries covering joins,
+`GROUP BY`, `CASE`, CTEs, `UNION`, strict mode and typed parameters,
+type-checks in:
 
 | | |
 | --- | --- |
 | Type instantiations | 166,512 |
 | Check time | ~0.4s |
-| Runtime cost | 0 — nothing is parsed at request time |
+| Runtime cost | 0. Nothing parses SQL at request time |
 
-Measured with `tsc --extendedDiagnostics` on TypeScript 5.9.3. The cost is
-linear with a fixed overhead: roughly 96,000 instantiations for the schema
-itself, then ~2,200 per query. CI enforces a ceiling on that number, so a
-change that makes the parser work harder for the same answer fails the build
-rather than quietly slowing down every editor that opens your project.
+Measured with `tsc --extendedDiagnostics` on TypeScript 5.9.3. The cost grows
+linearly on top of a fixed overhead: about 96,000 instantiations go to the
+schema itself, then roughly 2,200 per query. CI holds that number to a ceiling,
+so a change that makes the parser work harder for the same answer fails the
+build instead of quietly slowing down every editor that opens your project.
 
 ## Tutorial
 
