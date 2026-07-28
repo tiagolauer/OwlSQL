@@ -49,7 +49,14 @@ type StripTrailingListPunctuation<S extends string> = S extends `${infer Rest})`
     ? StripTrailingListPunctuation<Rest>
     : S;
 
-export type CleanScanToken<S extends string> = StripTrailingListPunctuation<StripLeadingParens<S>>;
+// `$1::int` is the placeholder `$1` carrying a Postgres cast, not a name -
+// without stripping the cast the index is unreadable and the token stops
+// binding by position (issue #228).
+type StripCast<S extends string> = S extends `${infer Before}::${string}` ? Before : S;
+
+export type CleanScanToken<S extends string> = StripCast<
+  StripTrailingListPunctuation<StripLeadingParens<S>>
+>;
 
 export type CleanColumnToken<S extends string> = StripLeadingParens<S> extends infer Stripped extends string
   ? Stripped extends `${string}(${string}`
@@ -100,11 +107,18 @@ type DigitsToCounter<S extends string, Accumulated extends unknown[] = []> =
       : never
     : Accumulated;
 
+// The [never] guard is load-bearing: DigitsToCounter resolves to never for
+// anything that isn't all digits (`$1::int`, `$id`), and `never extends
+// [unknown, ...infer Position]` passes, which routed those tokens into the
+// numbered bucket at a bogus position instead of letting them fall through to
+// the named branch below (issue #228).
 type PlaceholderPosition<Token extends string> =
   CleanScanToken<Token> extends `$${infer Digits}`
-    ? DigitsToCounter<Digits> extends [unknown, ...infer Position extends unknown[]]
-      ? Position
-      : never
+    ? [DigitsToCounter<Digits>] extends [never]
+      ? never
+      : DigitsToCounter<Digits> extends [unknown, ...infer Position extends unknown[]]
+        ? Position
+        : never
     : never;
 
 // A bare `?` is never named - each occurrence is a distinct positional slot.
