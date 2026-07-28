@@ -981,7 +981,12 @@ This is a focused tool for the common read path, not a full SQL grammar:
   column name (e.g. both have `id`), the types are intersected rather than kept
   separate. Alias the columns to keep them distinct.
 - **Typed parameters need spaced operators.** `where id = $1` is typed;
-  `where id=$1` is not. `INSERT ... VALUES` parameters are matched
+  `where id=$1` is not. A placeholder inside a call is typed
+  (`lower($1)`, `coalesce($1, 0)`), but two placeholders glued into one
+  space-delimited token (`coalesce($1,$2)`) are not — write the comma with a
+  space. `= any($1)` and `= all($1)` compare against the whole list, so their
+  slot is an array of the column's type (`number[]`, not `number`).
+  `INSERT ... VALUES` parameters are matched
   positionally against the INSERT's column list — `insert into t (a, b)
   values ($1, $2)` types `$1`/`$2` as `a`/`b`; without an explicit column
   list they fall back to a flexible `unknown[]`. Placeholders inside a

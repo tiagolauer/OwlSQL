@@ -20,6 +20,7 @@ import type {
   MultipleStatementsError,
 } from './parse.js';
 import type { ParseWithClause } from './cte.js';
+import type { FunctionName } from './functions.js';
 
 type Operator = '=' | '<>' | '!=' | '<' | '>' | '<=' | '>=';
 
@@ -54,8 +55,32 @@ type StripTrailingListPunctuation<S extends string> = S extends `${infer Rest})`
 // binding by position (issue #228).
 type StripCast<S extends string> = S extends `${infer Before}::${string}` ? Before : S;
 
+type AfterLastOpenParen<S extends string> = S extends `${string}(${infer After}`
+  ? After extends `${string}(${string}`
+    ? AfterLastOpenParen<After>
+    : After
+  : S;
+
+// A placeholder is routinely written inside a call - `lower($1)`, `any($1)`,
+// `coalesce($1, 0)`. The scan splits on spaces, so the call is one token and
+// stripping only the trailing `)` left `lower($1`, which matches nothing: the
+// placeholder vanished and the tuple had no slot for a value the driver still
+// demands (issue #244).
+//
+// Two placeholders inside a single token (`f($1,$2)`, written without the
+// space) cannot both get a slot from a one-token scan, so that token is left
+// alone rather than handed a made-up single slot - the same "write it with
+// spaces" rule the README already states for `where id=$1`.
+type StripCallWrapper<S extends string> = S extends `${string}(${string}`
+  ? AfterLastOpenParen<S> extends infer Inner extends string
+    ? Inner extends `${string},${string}`
+      ? S
+      : Inner
+    : S
+  : S;
+
 export type CleanScanToken<S extends string> = StripCast<
-  StripTrailingListPunctuation<StripLeadingParens<S>>
+  StripCallWrapper<StripTrailingListPunctuation<StripLeadingParens<S>>>
 >;
 
 export type CleanColumnToken<S extends string> = StripLeadingParens<S> extends infer Stripped extends string
@@ -161,15 +186,28 @@ type SetSlot<
     ? [Head & Type, ...TupleRest]
     : [Type];
 
+// `= any($1)` / `= all($1)` compare the column against a whole array, so the
+// bound value is an array of the column's type, not one of them. Without this
+// the fix for #244 would hand the caller a confidently wrong element type for
+// the idiomatic Postgres way to bind a list.
+type ArrayWrappingFunction = 'any' | 'all' | 'some';
+
+type WrapArrayArgument<T, Token extends string> = Token extends `${string}(${string}`
+  ? Lowercase<FunctionName<Token>> extends ArrayWrappingFunction
+    ? T[]
+    : T
+  : T;
+
 type ParamType<
   DB extends SchemaLike,
   Sources extends Source[],
   Column extends string,
   Op extends string,
+  Token extends string = '',
 > = Lowercase<Op> extends ForcedNumberKeyword
   ? number
   : IsOperator<Op> extends true
-    ? ResolveColumnLoose<DB, Sources, Column>
+    ? WrapArrayArgument<ResolveColumnLoose<DB, Sources, Column>, Token>
     : unknown;
 
 type AddParam<
@@ -225,7 +263,7 @@ type ScanParamsRaw<
   ? IsPlaceholder<Head> extends true
     ? AddParam<
         Head,
-        ParamType<DB, Sources, PrevPrev, Prev>,
+        ParamType<DB, Sources, PrevPrev, Prev, Head>,
         Indexed,
         Sequential,
         SequentialNames
@@ -242,7 +280,7 @@ type ScanParamsRaw<
   : S extends ''
     ? { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames }
     : IsPlaceholder<S> extends true
-      ? AddParam<S, ParamType<DB, Sources, PrevPrev, Prev>, Indexed, Sequential, SequentialNames>
+      ? AddParam<S, ParamType<DB, Sources, PrevPrev, Prev, S>, Indexed, Sequential, SequentialNames>
       : { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames };
 
 type ScanParams<
