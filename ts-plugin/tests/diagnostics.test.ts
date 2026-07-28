@@ -52,6 +52,14 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
     ]);
   });
 
+  // Regression for #250: `select id from USERS` compiles to { id: number }[],
+  // so a warning on it is a false positive the user cannot act on.
+  it('accepts a table and a column written in a different case', () => {
+    expect(diagnosticsFor('select id from USERS')).toEqual([]);
+    expect(diagnosticsFor('SELECT ID FROM users')).toEqual([]);
+    expect(diagnosticsFor('select id from users where NAME = $1')).toEqual([]);
+  });
+
   it('reports an unknown table in the FROM clause', () => {
     expect(diagnosticsFor('select id from ghosts')).toEqual([
       { message: 'unknown table: ghosts', text: 'ghosts' },

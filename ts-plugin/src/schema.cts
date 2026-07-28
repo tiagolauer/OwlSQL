@@ -1,5 +1,24 @@
 import type * as ts from 'typescript';
 
+// SQL identifiers are matched case-insensitively by the type layer
+// (ResolveKey/CaseInsensitiveKey in src/parse.ts), so the plugin has to
+// resolve them the same way or it reports a warning on a query tsc types
+// perfectly - `select id from USERS` against a `users` table (issue #250).
+// The exact lookup runs first: it is the cheap path and the common one.
+function findPropertySymbol(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  name: string,
+): ts.Symbol | undefined {
+  const exact = checker.getPropertyOfType(type, name);
+  if (exact) {
+    return exact;
+  }
+
+  const lowered = name.toLowerCase();
+  return type.getProperties().find((symbol) => symbol.getName().toLowerCase() === lowered);
+}
+
 function scopeToTable(
   tableSymbols: ts.Symbol[],
   onlyTable: string | string[] | null,
@@ -8,8 +27,10 @@ function scopeToTable(
     return tableSymbols;
   }
 
-  const wanted = new Set(Array.isArray(onlyTable) ? onlyTable : [onlyTable]);
-  return tableSymbols.filter((symbol) => wanted.has(symbol.getName()));
+  const wanted = new Set(
+    (Array.isArray(onlyTable) ? onlyTable : [onlyTable]).map((name) => name.toLowerCase()),
+  );
+  return tableSymbols.filter((symbol) => wanted.has(symbol.getName().toLowerCase()));
 }
 
 function tableExists(
@@ -18,7 +39,7 @@ function tableExists(
   dbType: ts.Type,
   tableName: string,
 ): boolean {
-  if (checker.getPropertyOfType(dbType, tableName)) {
+  if (findPropertySymbol(checker, dbType, tableName)) {
     return true;
   }
   // A Record<string, ...>-shaped schema (this library's own documented
@@ -42,7 +63,7 @@ function resolveTableRowTypes(
   onlyTable: string | string[] | null,
 ): ts.Type[] {
   const tableSymbols = scopeToTable(dbType.getProperties(), onlyTable);
-  const resolvedNames = new Set(tableSymbols.map((symbol) => symbol.getName()));
+  const resolvedNames = new Set(tableSymbols.map((symbol) => symbol.getName().toLowerCase()));
   const rowTypes = tableSymbols.map((symbol) =>
     checker.getNonNullableType(checker.getTypeOfSymbolAtLocation(symbol, node)),
   );
@@ -58,7 +79,7 @@ function resolveTableRowTypes(
 
   const requestedNames = Array.isArray(onlyTable) ? onlyTable : [onlyTable];
   for (const name of requestedNames) {
-    if (!resolvedNames.has(name)) {
+    if (!resolvedNames.has(name.toLowerCase())) {
       rowTypes.push(indexType);
     }
   }
@@ -73,7 +94,7 @@ function resolveColumnType(
   node: ts.Node,
   columnName: string,
 ): ts.Type | null {
-  const columnSymbol = checker.getPropertyOfType(rowType, columnName);
+  const columnSymbol = findPropertySymbol(checker, rowType, columnName);
   if (columnSymbol) {
     return checker.getTypeOfSymbolAtLocation(columnSymbol, node);
   }
