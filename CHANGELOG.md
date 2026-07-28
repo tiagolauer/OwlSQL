@@ -35,12 +35,25 @@ An end-to-end audit of the library, the CLI, and the editor plugin; every entry 
 - `:name` placeholders are typed. The adapter has always bound them; the type layer produced an empty parameter tuple and strict mode flagged them as unknown columns ([#238](https://github.com/tiagolauer/OwlSQL/issues/238)).
 - The editor plugin no longer loses the joined table in a plain `from a join b`, marking every reference to it as an unknown alias. `JOIN ... USING` and comma-joined `FROM` lists are handled too ([#242](https://github.com/tiagolauer/OwlSQL/issues/242)).
 
+A second pass over the same ground, once those landed, found ten more; same rule, every one reproduced first.
+
+- A placeholder written inside a call gets its parameter slot. `lower($1)`, `coalesce($1, 0)` and `any($1)` were part of one unrecognized token, so the tuple had no slot for a value the driver still demanded and the correct call would not compile ([#244](https://github.com/tiagolauer/OwlSQL/issues/244)).
+- `insert into users(id, name) ...` — the column list glued to the target, with no space — no longer reads the table as `users(id,`, which cost the statement both its parameter types and its `RETURNING` columns ([#245](https://github.com/tiagolauer/OwlSQL/issues/245)).
+- `UPDATE t alias`, `DELETE FROM t AS alias` and `MERGE INTO t AS alias` keep the alias. Every reference through it reported `unknown alias` in strict mode and resolved to `unknown` without a word outside it ([#246](https://github.com/tiagolauer/OwlSQL/issues/246)).
+- A quoted identifier holding a space (`"first name"`, `[Order Details]`) stays in one piece instead of being split at the space — including in schemas `owlsql generate` writes itself, which quotes any name that isn't a plain identifier ([#247](https://github.com/tiagolauer/OwlSQL/issues/247)).
+- The mssql and node:sqlite parameter scanners no longer read a backslash before a closing quote as an escape. Neither engine has one, so `'C:\'` is a complete literal in both: SQL Server got a query referencing a parameter that was never declared, and SQLite silently returned the wrong result set ([#248](https://github.com/tiagolauer/OwlSQL/issues/248)).
+- Postgres's `@>`, `<@`, `?|` and `?&` are operators, not placeholders. `where tags @> $1` used to demand an extra argument and fail the placeholder-style check against a dollar executor ([#249](https://github.com/tiagolauer/OwlSQL/issues/249)).
+- The editor plugin resolves table and column names case-insensitively, the way the type layer always has. `select id from USERS` type-checked fine and still drew a warning ([#250](https://github.com/tiagolauer/OwlSQL/issues/250)).
+- A password containing an unencoded `@` (`mysql://root:p@ss@host/db`, which every driver accepts) is redacted whole. The pattern stopped at the first `@` and printed the rest of the password ([#251](https://github.com/tiagolauer/OwlSQL/issues/251)).
+
 ### Added
 
 - `owlsql generate` accepts a SQL Server named instance in the URL form (`mssql://user:pass@host\INSTANCE/db`), and explains what a valid connection string looks like when the URL cannot be parsed at all ([#239](https://github.com/tiagolauer/OwlSQL/issues/239)).
 - `owlsql generate` rejects a `--table` name that matches no table instead of silently generating a schema without it, and warns on an unmatched `--exclude` ([#240](https://github.com/tiagolauer/OwlSQL/issues/240)). Boolean flags now reject a value, so `--check=false` no longer turned the check on ([#241](https://github.com/tiagolauer/OwlSQL/issues/241)).
+- `= any($1)` and `= all($1)` type their parameter as an array of the column's type, and `@>`/`<@` join the `WHERE` operators whose right-hand value is typed from the column ([#244](https://github.com/tiagolauer/OwlSQL/issues/244), [#249](https://github.com/tiagolauer/OwlSQL/issues/249)).
+- `owlsql generate` maps a SQLite `JSON` column to `string` and an unrecognized declared type to `unknown`, instead of calling both `number` ([#252](https://github.com/tiagolauer/OwlSQL/issues/252)). An empty `--table`/`--exclude` list is now an error rather than a silently dropped filter ([#253](https://github.com/tiagolauer/OwlSQL/issues/253)).
 - Integration tests running the adapters and `owlsql generate` against real PostgreSQL, MySQL, and SQL Server instances, alongside the existing faked-driver tests.
-- A type-instantiation budget (`npm run test:perf`) that fails CI when a change makes the type-level parser measurably more expensive.
+- A type-instantiation budget (`npm run test:perf`) that fails CI when a change makes the type-level parser measurably more expensive. Its ceiling moved from 185,000 to 195,000 for [#247](https://github.com/tiagolauer/OwlSQL/issues/247): telling whether a query quotes anything means scanning it, so supporting quoted names with spaces costs roughly 4% on every query.
 - [VERSIONING.md](VERSIONING.md), stating what counts as a breaking change for a library whose public API is the types it infers.
 - CI now type-checks the library against TypeScript 7, which the `peerDependencies` range already claimed to support.
 
