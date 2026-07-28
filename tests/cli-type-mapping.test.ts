@@ -141,9 +141,18 @@ describe('mapSqliteType', () => {
     expect(mapSqliteType('DATETIME')).toBe('string');
   });
 
-  it('falls back to number for NUMERIC-affinity types', () => {
+  it('maps the NUMERIC-affinity names to number', () => {
     expect(mapSqliteType('NUMERIC')).toBe('number');
     expect(mapSqliteType('DECIMAL(10,2)')).toBe('number');
+  });
+
+  // Regression for #252: a JSON column has NUMERIC affinity but holds text,
+  // and an unrecognized declared type says nothing about what is stored -
+  // both used to be typed `number`.
+  it('maps JSON to string and degrades an unrecognized type to unknown', () => {
+    expect(mapSqliteType('JSON')).toBe('string');
+    expect(mapSqliteType('jsonb')).toBe('string');
+    expect(mapSqliteType('GEOMETRY')).toBe('unknown');
   });
 
   it('accepts lowercase declared types', () => {
