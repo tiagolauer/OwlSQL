@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import schemaModule from '../src/ts-plugin/schema.cts';
-import { buildProgram } from './ts-plugin-test-helpers.js';
+import schemaModule from '../src/schema.cts';
+import { buildProgram } from './test-helpers.js';
 
 const { getColumnNames, getColumnType } = schemaModule;
 

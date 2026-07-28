@@ -7,7 +7,4 @@ export default defineConfig({
   resolve: {
     extensions: ['.mts', '.cts', '.ts', '.mjs', '.cjs', '.js', '.json'],
   },
-  test: {
-    include: ['tests/**/*.test.ts'],
-  },
 });

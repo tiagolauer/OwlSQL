@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import detectModule from '../src/ts-plugin/detect.cts';
-import { buildProgram } from './ts-plugin-test-helpers.js';
+import detectModule from '../src/detect.cts';
+import { buildProgram } from './test-helpers.js';
 
 const { matchQueryLiteral } = detectModule;
 

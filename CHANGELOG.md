@@ -4,11 +4,26 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the editor plugin moved out of this package into its own, [`@owlsql/ts-plugin`](ts-plugin/README.md). The `@owlsql/core/ts-plugin` subpath is gone. To migrate, install `@owlsql/ts-plugin` as a dev dependency and change the plugin name in your `tsconfig.json`:
+
+  ```json
+  {
+    "compilerOptions": {
+      "plugins": [{ "name": "@owlsql/ts-plugin" }]
+    }
+  }
+  ```
+
+  Nothing about what the plugin does changed. The split exists because the two halves reach different TypeScript versions: the library type-checks clean on TypeScript 7, while the plugin needs the classic compiler API that TypeScript 7 removed. A single package can only declare one peer range, and either choice would have misrepresented half the code.
+
 ### Added
 
 - Integration tests running the adapters and `owlsql generate` against real PostgreSQL, MySQL, and SQL Server instances, alongside the existing faked-driver tests.
 - A type-instantiation budget (`npm run test:perf`) that fails CI when a change makes the type-level parser measurably more expensive.
 - [VERSIONING.md](VERSIONING.md), stating what counts as a breaking change for a library whose public API is the types it infers.
+- CI now type-checks the library against TypeScript 7, which the `peerDependencies` range already claimed to support.
 
 ## [0.1.8] - 2026-07-24
 

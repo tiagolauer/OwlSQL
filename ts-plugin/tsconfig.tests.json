@@ -15,16 +15,5 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": [
-    "src/ts-plugin",
-    "tests/ts-plugin-sql-context.test.ts",
-    "tests/ts-plugin-completions.test.ts",
-    "tests/ts-plugin-hover.test.ts",
-    "tests/ts-plugin-detect.test.ts",
-    "tests/ts-plugin-schema.test.ts",
-    "tests/ts-plugin-proxy.test.ts",
-    "tests/ts-plugin-hover-crlf.test.ts",
-    "tests/ts-plugin-diagnostics.test.ts",
-    "tests/ts-plugin-test-helpers.ts"
-  ]
+  "include": ["src", "tests"]
 }

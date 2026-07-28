@@ -1,10 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import ts from 'typescript';
-import detectModule from '../src/ts-plugin/detect.cts';
-import schemaModule from '../src/ts-plugin/schema.cts';
-import sqlContext from '../src/ts-plugin/sql-context.cts';
-import { buildProgram } from './ts-plugin-test-helpers.js';
+import detectModule from '../src/detect.cts';
+import schemaModule from '../src/schema.cts';
+import sqlContext from '../src/sql-context.cts';
+import { buildProgram } from './test-helpers.js';
 
 const { matchQueryLiteral } = detectModule;
 const { getColumnType } = schemaModule;

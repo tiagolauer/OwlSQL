@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import sqlContext from '../src/ts-plugin/sql-context.cts';
+import sqlContext from '../src/sql-context.cts';
 
 const {
   getSelectListContext,

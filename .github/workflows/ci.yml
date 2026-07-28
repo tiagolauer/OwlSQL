@@ -42,6 +42,36 @@ jobs:
       - run: npm ci
       - run: npm run test:runtime
 
+  ts-plugin:
+    name: Editor plugin (TypeScript ${{ matrix.typescript }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        typescript: ['5.4', '5.6', '6.0']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save typescript@${{ matrix.typescript }}
+      - run: npm test --workspace @owlsql/ts-plugin
+
+  types-typescript-7:
+    name: Types (TypeScript 7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save typescript@7.0
+      - run: npm run test:types:core
+
   type-budget:
     name: Type-instantiation budget
     runs-on: ubuntu-latest
