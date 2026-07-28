@@ -8,6 +8,10 @@ const SQLITE_PARAM_PREFIXES: ReadonlySet<string> = new Set(['@', '$', ':']);
 const DML_KEYWORDS = new Set(['insert', 'update', 'delete', 'replace']);
 const INSERT_ROWID_KEYWORDS = new Set(['insert', 'replace']);
 const RESULT_KEYWORDS = new Set(['select', 'values', 'pragma', 'explain', 'with']);
+const STATEMENT_KEYWORDS = new Set([...DML_KEYWORDS, ...RESULT_KEYWORDS]);
+const RETURNING_KEYWORD = /\breturning\b/i;
+const WORD_OR_PAREN = /[()]|[A-Za-z_][A-Za-z0-9_]*/g;
+const WRITE_COUNTERS = 'select changes() as changes, last_insert_rowid() as rowid';
 
 function toSqliteValue(value: unknown): SqliteParam {
   if (typeof value === 'boolean') {
@@ -22,74 +26,97 @@ function toSqliteValue(value: unknown): SqliteParam {
   return value as SqliteParam;
 }
 
-function readLeadingKeyword(sql: string): string {
-  let rest = sql.trimStart();
+function skipLiteral(sql: string, openIndex: number): number {
+  let index = openIndex + 1;
 
-  while (rest.startsWith('--') || rest.startsWith('/*')) {
-    if (rest.startsWith('--')) {
-      const newline = rest.indexOf('\n');
-      rest = newline === -1 ? '' : rest.slice(newline + 1).trimStart();
-      continue;
+  while (index < sql.length) {
+    if (sql[index] === "'") {
+      if (sql[index + 1] === "'") {
+        index += 2;
+        continue;
+      }
+      return index + 1;
     }
-
-    const close = rest.indexOf('*/', 2);
-    rest = close === -1 ? '' : rest.slice(close + 2).trimStart();
+    index += 1;
   }
 
-  return /^[A-Za-z_][A-Za-z0-9_]*/.exec(rest)?.[0]?.toLowerCase() ?? '';
+  return sql.length;
 }
 
-function isWordChar(char: string | undefined): boolean {
-  return char !== undefined && /[A-Za-z0-9_]/.test(char);
-}
+// Blanks literal bodies and comments while keeping every offset, so keyword and
+// paren-depth scanning never reads text that isn't executable SQL.
+function maskLiteralsAndComments(sql: string): string {
+  let masked = '';
+  let index = 0;
 
-function containsKeywordOutsideLiterals(sql: string, keyword: string): boolean {
-  for (let index = 0; index < sql.length; index += 1) {
-    const char = sql[index];
+  while (index < sql.length) {
+    const char = sql[index] as string;
+    let end = -1;
 
     if (char === "'") {
-      index += 1;
-      while (index < sql.length) {
-        if (sql[index] === "'") {
-          if (sql[index + 1] === "'") {
-            index += 2;
-            continue;
-          }
-          break;
-        }
-        index += 1;
-      }
-      continue;
-    }
-
-    if (char === '-' && sql[index + 1] === '-') {
+      end = skipLiteral(sql, index);
+    } else if (char === '-' && sql[index + 1] === '-') {
       const newline = sql.indexOf('\n', index + 2);
-      index = newline === -1 ? sql.length : newline;
-      continue;
-    }
-
-    if (char === '/' && sql[index + 1] === '*') {
+      end = newline === -1 ? sql.length : newline;
+    } else if (char === '/' && sql[index + 1] === '*') {
       const close = sql.indexOf('*/', index + 2);
-      index = close === -1 ? sql.length : close + 1;
+      end = close === -1 ? sql.length : close + 2;
+    }
+
+    if (end === -1) {
+      masked += char;
+      index += 1;
       continue;
     }
 
-    if (
-      sql.slice(index, index + keyword.length).toLowerCase() === keyword &&
-      !isWordChar(sql[index - 1]) &&
-      !isWordChar(sql[index + keyword.length])
-    ) {
-      return true;
+    masked += ' '.repeat(end - index);
+    index = end;
+  }
+
+  return masked;
+}
+
+// The keyword that decides what the statement *does*. A CTE-led write leads
+// with `with`, so reading the first word alone classified `with x as (...)
+// insert into t ...` as a read and dropped its row count (issue #237); the
+// statement keyword is the first one at paren depth 0 after the WITH clause.
+function readStatementKeyword(sql: string): string {
+  const masked = maskLiteralsAndComments(sql);
+  const leading = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(masked)?.[1]?.toLowerCase() ?? '';
+
+  if (leading !== 'with') {
+    return leading;
+  }
+
+  let depth = 0;
+  WORD_OR_PAREN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = WORD_OR_PAREN.exec(masked)) !== null) {
+    const token = match[0];
+
+    if (token === '(') {
+      depth += 1;
+      continue;
+    }
+    if (token === ')') {
+      depth -= 1;
+      continue;
+    }
+
+    const word = token.toLowerCase();
+    if (depth === 0 && word !== 'with' && STATEMENT_KEYWORDS.has(word)) {
+      return word;
     }
   }
 
-  return false;
+  return leading;
 }
 
 function hasResultColumnsFromSql(sql: string): boolean {
-  const keyword = readLeadingKeyword(sql);
+  const keyword = readStatementKeyword(sql);
   if (DML_KEYWORDS.has(keyword)) {
-    return containsKeywordOutsideLiterals(sql, 'returning');
+    return RETURNING_KEYWORD.test(maskLiteralsAndComments(sql));
   }
   return RESULT_KEYWORDS.has(keyword);
 }
@@ -108,16 +135,35 @@ function hasResultColumns(statement: StatementSync, sql: string): boolean {
   }
 }
 
-function writeMeta(sql: string, result: ReturnType<StatementSync['run']>): QueryMeta {
-  const keyword = readLeadingKeyword(sql);
+function buildMeta(keyword: string, changes: number | bigint, rowid: number | bigint): QueryMeta {
   const meta: QueryMeta = {};
   if (DML_KEYWORDS.has(keyword)) {
-    meta.rowCount = result.changes;
+    meta.rowCount = changes;
   }
-  if (INSERT_ROWID_KEYWORDS.has(keyword) && result.changes !== 0) {
-    meta.lastInsertRowid = result.lastInsertRowid;
+  if (INSERT_ROWID_KEYWORDS.has(keyword) && changes !== 0) {
+    meta.lastInsertRowid = rowid;
   }
   return meta;
+}
+
+function writeMeta(keyword: string, result: ReturnType<StatementSync['run']>): QueryMeta {
+  return buildMeta(keyword, result.changes, result.lastInsertRowid);
+}
+
+// `all()` returns rows only, so a write with RETURNING has to read the counters
+// back off the connection - they still describe the statement that just ran.
+// Metadata is the bonus here and the rows are the answer, so a connection that
+// won't report them costs the caller its meta, never its result set.
+function returningMeta(db: DatabaseSync, keyword: string): QueryMeta {
+  try {
+    const counters = db.prepare(WRITE_COUNTERS).get() as
+      | { changes: number | bigint; rowid: number | bigint }
+      | undefined;
+
+    return counters === undefined ? {} : buildMeta(keyword, counters.changes, counters.rowid);
+  } catch {
+    return {};
+  }
 }
 
 export function createNodeSqliteExecutor(
@@ -127,21 +173,27 @@ export function createNodeSqliteExecutor(
     const statement = db.prepare(sql);
     const values = params.map(toSqliteValue);
     const { named, positional } = resolveMixedParameters(sql, SQLITE_PARAM_PREFIXES, values);
+    const keyword = readStatementKeyword(sql);
+    const hasNamed = Object.keys(named).length > 0;
 
     if (!hasResultColumns(statement, sql)) {
-      const result = Object.keys(named).length > 0
+      const result = hasNamed
         ? statement.run(named as Record<string, SqliteParam>, ...(positional as SqliteParam[]))
         : statement.run(...(positional as SqliteParam[]));
       return {
         rows: [],
-        meta: writeMeta(sql, result),
+        meta: writeMeta(keyword, result),
       };
     }
 
-    if (Object.keys(named).length > 0) {
-      return statement.all(named as Record<string, SqliteParam>, ...(positional as SqliteParam[]));
+    const rows = hasNamed
+      ? statement.all(named as Record<string, SqliteParam>, ...(positional as SqliteParam[]))
+      : statement.all(...(positional as SqliteParam[]));
+
+    if (!DML_KEYWORDS.has(keyword)) {
+      return rows;
     }
 
-    return statement.all(...(positional as SqliteParam[]));
+    return { rows, meta: returningMeta(db, keyword) };
   };
 }
