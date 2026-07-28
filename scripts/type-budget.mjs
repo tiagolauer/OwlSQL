@@ -7,7 +7,13 @@ const TABLE_COUNT = 100;
 const FILLER_COLUMNS = 6;
 const SHAPE_REPEATS = 4;
 
-const MAX_INSTANTIATIONS = 185_000;
+// Raised from 185,000 for #247: a quoted identifier may hold a space, and
+// finding out whether one does costs a full-string scan per query - roughly
+// 4% on every query, quoted or not, since the only way to skip the rewrite is
+// to look for a quote first. The alternative was leaving `"first name"` and
+// `[Order Details]` unusable, including in schemas `owlsql generate` writes
+// itself.
+const MAX_INSTANTIATIONS = 195_000;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');

@@ -926,7 +926,7 @@ this.**
 | Joins | `select u.name, p.title from users u join posts p on u.id = p.user_id` |
 | `LEFT`/`RIGHT`/`FULL` nullability | outer-joined side(s) become `T \| null` |
 | Qualified / mixed star | `select u.*, p.title from ...`, `select *, extra from ...` |
-| Quoted / schema-qualified ids | `select "id" from public."users"` |
+| Quoted / schema-qualified ids | `select "id" from public."users"`, `select "first name" from [Order Details]` |
 | Trailing semicolon | `select id from users;` |
 | Typed parameters | `where id = $1` → `query(sql, id: number)` |
 | Strict mode | `{ strict: true }` → unknown column becomes a `QueryTypeError` (`SELECT` list, `WHERE`, and `JOIN ... ON`) |
@@ -998,8 +998,10 @@ This is a focused tool for the common read path, not a full SQL grammar:
   a repeated `$n` occupies a single slot.
 - **Quoted identifiers** use `"..."` (standard), `[...]` (SQL Server), or
   `` `...` `` (MySQL — escape the backtick with `\`` inside the template
-  literal). Schema-qualified tables (`public.users`) resolve by their final
-  segment (`users`).
+  literal). A quoted name may contain spaces (`"first name"`,
+  `[Order Details]`) — which is what quoting is for, and what `owlsql
+  generate` writes when a real column is named that way. Schema-qualified
+  tables (`public.users`) resolve by their final segment (`users`).
 - **`TOP` supports a plain count, `TOP N PERCENT`, `TOP N WITH TIES`, and
   `TOP N PERCENT WITH TIES`** (`PERCENT` before `WITH TIES`, the only order
   T-SQL accepts) — none of
