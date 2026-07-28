@@ -49,7 +49,14 @@ type StripTrailingListPunctuation<S extends string> = S extends `${infer Rest})`
     ? StripTrailingListPunctuation<Rest>
     : S;
 
-export type CleanScanToken<S extends string> = StripTrailingListPunctuation<StripLeadingParens<S>>;
+// `$1::int` is the placeholder `$1` carrying a Postgres cast, not a name -
+// without stripping the cast the index is unreadable and the token stops
+// binding by position (issue #228).
+type StripCast<S extends string> = S extends `${infer Before}::${string}` ? Before : S;
+
+export type CleanScanToken<S extends string> = StripCast<
+  StripTrailingListPunctuation<StripLeadingParens<S>>
+>;
 
 export type CleanColumnToken<S extends string> = StripLeadingParens<S> extends infer Stripped extends string
   ? Stripped extends `${string}(${string}`
@@ -59,13 +66,23 @@ export type CleanColumnToken<S extends string> = StripLeadingParens<S> extends i
 
 export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends '?'
   ? true
-  : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@'
+  : // MERGE's `$action` is a pseudo-column, not a placeholder - ResolveColumnType
+    // already types it as the branch that fired, so counting it here handed the
+    // caller an extra parameter slot (issue #231).
+    Lowercase<CleanScanToken<Token>> extends '$action'
     ? false
-    : CleanScanToken<Token> extends `$${string}`
-      ? true
-      : CleanScanToken<Token> extends `@${string}`
+    : CleanScanToken<Token> extends `$$${string}` | `@@${string}` | '$' | '@' | ':'
+      ? false
+      : CleanScanToken<Token> extends `$${string}`
         ? true
-        : false;
+        : CleanScanToken<Token> extends `@${string}`
+          ? true
+          : // `:name` is the third prefix the node:sqlite adapter binds, and it
+            // was the only one the type layer didn't know about (issue #238).
+            // A `::` cast never reaches here - CleanScanToken strips it.
+            CleanScanToken<Token> extends `:${string}`
+            ? true
+            : false;
 
 interface DigitCounters {
   '0': [];
@@ -100,11 +117,18 @@ type DigitsToCounter<S extends string, Accumulated extends unknown[] = []> =
       : never
     : Accumulated;
 
+// The [never] guard is load-bearing: DigitsToCounter resolves to never for
+// anything that isn't all digits (`$1::int`, `$id`), and `never extends
+// [unknown, ...infer Position]` passes, which routed those tokens into the
+// numbered bucket at a bogus position instead of letting them fall through to
+// the named branch below (issue #228).
 type PlaceholderPosition<Token extends string> =
   CleanScanToken<Token> extends `$${infer Digits}`
-    ? DigitsToCounter<Digits> extends [unknown, ...infer Position extends unknown[]]
-      ? Position
-      : never
+    ? [DigitsToCounter<Digits>] extends [never]
+      ? never
+      : DigitsToCounter<Digits> extends [unknown, ...infer Position extends unknown[]]
+        ? Position
+        : never
     : never;
 
 // A bare `?` is never named - each occurrence is a distinct positional slot.
@@ -343,18 +367,25 @@ type InsertParamTypes<DB extends SchemaLike, Q extends string> = ParseStatement<
   ? [InsertColumnList<Q>] extends [never]
     ? unknown[]
     : InsertColumnList<Q> extends { columns: infer Columns extends string[]; rest: infer AfterColumns extends string }
-      ? AfterKeyword<AfterColumns, 'values'> extends infer AfterValues
-        ? AfterValues extends string
-          ? ScanValuesGroups<AfterValues, DB, Src['table'], Columns, [], [], []> extends {
-              indexed: infer Indexed extends unknown[];
-              sequential: infer Sequential extends unknown[];
-              sequentialNames: infer SequentialNames extends string[];
-              rest: infer Rest extends string;
-            }
-            ? ScanParams<Rest, DB, [Src], '', '', Indexed, Sequential, SequentialNames>
+      ? // `AfterValues extends string` is distributive (AfterValues is a naked
+        // type parameter), so an INSERT with no VALUES clause - INSERT ...
+        // SELECT - collapsed the whole conditional to `never` instead of
+        // reaching the unknown[] fallback, leaving a rest parameter that no
+        // call can satisfy (issue #230).
+        [AfterKeyword<AfterColumns, 'values'>] extends [never]
+        ? unknown[]
+        : AfterKeyword<AfterColumns, 'values'> extends infer AfterValues
+          ? AfterValues extends string
+            ? ScanValuesGroups<AfterValues, DB, Src['table'], Columns, [], [], []> extends {
+                indexed: infer Indexed extends unknown[];
+                sequential: infer Sequential extends unknown[];
+                sequentialNames: infer SequentialNames extends string[];
+                rest: infer Rest extends string;
+              }
+              ? ScanParams<Rest, DB, [Src], '', '', Indexed, Sequential, SequentialNames>
+              : unknown[]
             : unknown[]
           : unknown[]
-        : unknown[]
       : unknown[]
   : unknown[];
 
@@ -385,10 +416,18 @@ type StripDoubledAt<S extends string> = S extends `${infer Before}@@${infer Afte
   ? StripDoubledAt<`${Before}${After}`>
   : S;
 
-export type UsedPlaceholderStyles<Q extends string> = Normalize<Q> extends infer Text extends string
+type StripDollarAction<S extends string> = S extends `${infer Before}$action${infer After}`
+  ? StripDollarAction<`${Before}${After}`>
+  : S;
+
+// Lowercased so the `$action` strip is case-insensitive, matching how
+// IsMergeActionPseudoColumn resolves it. Case is irrelevant to the three
+// characters this scans for, so nothing else is affected.
+export type UsedPlaceholderStyles<Q extends string> = Lowercase<Normalize<Q>> extends infer Text extends
+  string
   ?
       | (Text extends `${string}?${string}` ? 'question' : never)
-      | (Text extends `${string}$${string}` ? 'dollar' : never)
+      | (StripDollarAction<Text> extends `${string}$${string}` ? 'dollar' : never)
       | (StripDoubledAt<Text> extends `${string}@${string}` ? 'at' : never)
   : never;
 

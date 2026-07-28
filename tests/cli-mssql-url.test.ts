@@ -26,6 +26,35 @@ describe('mssqlUrlToConfig', () => {
       options: { encrypt: false, trustServerCertificate: true },
     });
   });
+
+  // Regression for #239: a backslash is a forbidden host character, so this URL
+  // used to die inside `new URL` with a bare "Invalid URL".
+  it('splits a named instance out of the host', () => {
+    expect(mssqlUrlToConfig('mssql://sa:S3cret@localhost\\SQLEXPRESS/app')).toEqual({
+      server: 'localhost',
+      user: 'sa',
+      password: 'S3cret',
+      database: 'app',
+      options: { encrypt: true, trustServerCertificate: false, instanceName: 'SQLEXPRESS' },
+    });
+  });
+
+  it('keeps a named instance alongside an explicit port', () => {
+    const config = mssqlUrlToConfig('mssql://host\\PROD:1433/db');
+    expect(config.server).toBe('host');
+    expect(config.port).toBe(1433);
+    expect(config.options.instanceName).toBe('PROD');
+  });
+
+  it('explains what a valid connection string looks like instead of throwing "Invalid URL"', () => {
+    expect(() => mssqlUrlToConfig('mssql://host:notaport/db')).toThrow(
+      /Invalid SQL Server connection URL.*ADO string/s,
+    );
+  });
+
+  it('does not leak the password when the URL cannot be parsed', () => {
+    expect(() => mssqlUrlToConfig('mssql://sa:S3cret@host:notaport/db')).not.toThrow(/S3cret/);
+  });
 });
 
 describe('detectDialect for SQL Server inputs', () => {

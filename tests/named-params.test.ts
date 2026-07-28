@@ -55,6 +55,41 @@ describe('collectNamedParameters', () => {
     const sql = "select * from t where a = 'it\\'s @fake' and b = @id";
     expect(collectNamedParameters(sql, AT_DOLLAR_COLON)).toEqual(['@id']);
   });
+
+  it('skips a parameter-looking word inside a line comment', () => {
+    const sql = 'select * from t where a = @x -- ping @alice\n and b = @y';
+    expect(collectNamedParameters(sql, AT_DOLLAR_COLON)).toEqual(['@x', '@y']);
+  });
+
+  it('skips a parameter-looking word inside a block comment', () => {
+    const sql = 'select * from t where a = @x /* @todo drop @this */ and b = @y';
+    expect(collectNamedParameters(sql, AT_DOLLAR_COLON)).toEqual(['@x', '@y']);
+  });
+
+  it('skips a parameter-looking word inside an unterminated block comment', () => {
+    expect(collectNamedParameters('select @x /* @todo', AT_DOLLAR_COLON)).toEqual(['@x']);
+  });
+
+  it('does not treat a quote inside a comment as a literal delimiter', () => {
+    const sql = "select * from t where a = @x -- it's fine\n and b = @y";
+    expect(collectNamedParameters(sql, AT_DOLLAR_COLON)).toEqual(['@x', '@y']);
+  });
+
+  it('skips a parameter-looking word inside a quoted identifier', () => {
+    expect(
+      collectNamedParameters('select "@a", `@b`, [@c] from t where x = @real', AT_DOLLAR_COLON),
+    ).toEqual(['@real']);
+  });
+
+  it('still treats a -- inside a string literal as literal text', () => {
+    const sql = "select * from t where a = '-- @fake' and b = @id";
+    expect(collectNamedParameters(sql, AT_DOLLAR_COLON)).toEqual(['@id']);
+  });
+
+  it('handles a doubled quote inside a literal', () => {
+    const sql = "select * from t where a = 'it''s @fake' and b = @id";
+    expect(collectNamedParameters(sql, AT_DOLLAR_COLON)).toEqual(['@id']);
+  });
 });
 
 describe('resolveMixedParameters', () => {
@@ -71,6 +106,22 @@ describe('resolveMixedParameters', () => {
     expect(resolveMixedParameters(sql, AT_DOLLAR_COLON, [7])).toEqual({
       named: {},
       positional: [7],
+    });
+  });
+
+  it('does not let a commented-out placeholder shift the values after it', () => {
+    const sql = 'select * from t where a = @x -- ping @alice\n and b = @y';
+    expect(resolveMixedParameters(sql, AT_DOLLAR_COLON, [1, 2])).toEqual({
+      named: { '@x': 1, '@y': 2 },
+      positional: [],
+    });
+  });
+
+  it('does not consume a value for a ? inside a comment', () => {
+    const sql = 'select * from t where a = ? /* is ? right */ and b = ?';
+    expect(resolveMixedParameters(sql, AT_DOLLAR_COLON, [1, 2])).toEqual({
+      named: {},
+      positional: [1, 2],
     });
   });
 });

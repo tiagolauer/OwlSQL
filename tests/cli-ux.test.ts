@@ -28,7 +28,20 @@ describe('sqlite URL forms', () => {
     expect(normalizeSqlitePath('sqlite://./app.db')).toBe('./app.db');
     expect(normalizeSqlitePath('sqlite:./app.db')).toBe('./app.db');
     expect(normalizeSqlitePath('file://./app.db')).toBe('./app.db');
+    // Regression for #236: detectDialect accepts this spelling, so the prefix
+    // has to be stripped here too - it used to reach existsSync verbatim.
+    expect(normalizeSqlitePath('file:./app.db')).toBe('./app.db');
     expect(normalizeSqlitePath('./app.db')).toBe('./app.db');
+  });
+
+  it.skipIf(!sqliteAvailable)('introspects through a file: URL', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      await runGenerate({ url: `file:${file}`, out });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it.skipIf(!sqliteAvailable)('introspects through a sqlite:// URL', async () => {
@@ -78,6 +91,46 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
       await expect(runGenerate({ url: file, out, tables: ['nope'] })).rejects.toThrow(
         'Available tables: users, posts',
       );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Regression for #240: a typo used to be honored silently, so the table it
+  // was meant to name simply went missing from the generated schema.
+  it('rejects a --table name that matches no table, even when others match', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      await expect(
+        runGenerate({ url: file, out, tables: ['users', 'ordrs'] }),
+      ).rejects.toThrow('--table matched no such table: ordrs');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('warns but still generates when --exclude names a table that is not there', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      const result = await runGenerate({ url: file, out, exclude: ['posts', 'ordrs'] });
+      expect(result).toEqual({
+        kind: 'written',
+        warnings: ['--exclude matched no such table: ordrs'],
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports no warnings when every filter name matches', async () => {
+    const { dir, file } = createDatabase();
+    try {
+      const out = join(dir, 'schema.ts');
+      expect(await runGenerate({ url: file, out, exclude: ['posts'] })).toEqual({
+        kind: 'written',
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

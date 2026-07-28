@@ -12,14 +12,29 @@ function isRequestSource(source: MssqlQueryable): source is ConnectionPool | Tra
   return typeof (source as { request?: unknown }).request === 'function';
 }
 
+// A ConnectionPool or an already-open Transaction each need `.request()` called
+// to get a Request bound to that connection/transaction; a Request passed
+// directly is already bound and used as-is - this is what lets a caller route a
+// query through an open transaction instead of always implicitly starting a
+// new, separately-committed request.
+//
+// That Request is reused across every query() on this executor, and node-mssql
+// throws on `input()` for a name it has already seen and never clears the bag
+// between calls - so without the reset a second query with the same @name
+// failed, and one with different names silently carried the first query's
+// values along (issue #235).
+function requestFor(source: MssqlQueryable): Request {
+  if (isRequestSource(source)) {
+    return source.request();
+  }
+
+  source.parameters = {};
+  return source;
+}
+
 export function createMssqlExecutor(source: MssqlQueryable): DialectExecutor<'at'> {
   return async (sql, params) => {
-    // A ConnectionPool or an already-open Transaction each need `.request()`
-    // called to get a Request bound to that connection/transaction; a
-    // Request passed directly is already bound and used as-is - this is what
-    // lets a caller route a query through an open transaction instead of
-    // always implicitly starting a new, separately-committed request.
-    const request = isRequestSource(source) ? source.request() : source;
+    const request = requestFor(source);
 
     collectNamedParameters(sql, MSSQL_PARAM_PREFIXES).forEach((name, index) => {
       request.input(name.slice(1), params[index] ?? null);

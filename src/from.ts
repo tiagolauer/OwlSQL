@@ -29,7 +29,9 @@ type ClauseBoundary =
   | 'union'
   | 'except'
   | 'intersect'
-  | 'for';
+  | 'for'
+  | 'returning'
+  | 'output';
 
 type IsBoundary<Word extends string> = Lowercase<Word> extends ClauseBoundary
   ? true

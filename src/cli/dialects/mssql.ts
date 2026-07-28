@@ -51,22 +51,48 @@ export interface MssqlConnectionConfig {
   options: {
     encrypt: boolean;
     trustServerCertificate: boolean;
+    instanceName?: string;
   };
 }
 
 const MSSQL_URL_PATTERN = /^(mssql|sqlserver):\/\//i;
 
+const INSTANCE_SEPARATOR = '\\';
+
+// `host\INSTANCE` is the default shape of a Windows SQL Server install, and a
+// backslash is a forbidden host character, so `new URL` rejects the URL
+// outright. Percent-encoding it first keeps the authority parseable (the host
+// stays opaque for a non-special scheme, so its case survives) and the instance
+// is split back out below into the driver's own instanceName option (#239).
+function parseMssqlUrl(url: string): URL {
+  try {
+    return new URL(url.split(INSTANCE_SEPARATOR).join('%5C'));
+  } catch {
+    throw new Error(
+      'Invalid SQL Server connection URL. Expected mssql://user:password@host[\\INSTANCE][:port]/database, or an ADO string such as "Server=host;Database=db;User Id=user;Password=password".',
+    );
+  }
+}
+
 export function mssqlUrlToConfig(url: string): MssqlConnectionConfig {
-  const parsed = new URL(url);
+  const parsed = parseMssqlUrl(url);
   const flags = parsed.searchParams;
 
+  const host = decodeURIComponent(parsed.hostname);
+  const separatorIndex = host.indexOf(INSTANCE_SEPARATOR);
+  const instanceName = separatorIndex === -1 ? '' : host.slice(separatorIndex + 1);
+
   const config: MssqlConnectionConfig = {
-    server: decodeURIComponent(parsed.hostname),
+    server: separatorIndex === -1 ? host : host.slice(0, separatorIndex),
     options: {
       encrypt: flags.get('encrypt') !== 'false',
       trustServerCertificate: flags.get('trustServerCertificate') === 'true',
     },
   };
+
+  if (instanceName) {
+    config.options.instanceName = instanceName;
+  }
 
   if (parsed.username) {
     config.user = decodeURIComponent(parsed.username);

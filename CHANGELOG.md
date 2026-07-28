@@ -18,8 +18,27 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
   Nothing about what the plugin does changed. The split exists because the two halves reach different TypeScript versions: the library type-checks clean on TypeScript 7, while the plugin needs the classic compiler API that TypeScript 7 removed. A single package can only declare one peer range, and either choice would have misrepresented half the code.
 
+### Fixed
+
+An end-to-end audit of the library, the CLI, and the editor plugin; every entry below was reproduced before it was fixed.
+
+- Placeholders no longer collapse into a single unusable slot. A cast on a numbered placeholder (`$1::int`) now still binds by index, and two distinct `$name` placeholders get a slot each instead of intersecting into `never` ([#228](https://github.com/tiagolauer/OwlSQL/issues/228)).
+- `UPDATE`/`DELETE` without a `FROM`/`USING` clause no longer gains a fabricated second source that matched every table in the schema, which made every `RETURNING` column report `ambiguous column` in strict mode ([#229](https://github.com/tiagolauer/OwlSQL/issues/229)).
+- `INSERT ... SELECT` is callable again: its parameter tuple resolved to `never`, which rejects every call including the zero-argument one. It now falls back to `unknown[]` as documented ([#230](https://github.com/tiagolauer/OwlSQL/issues/230)).
+- `MERGE ... OUTPUT $action` no longer demands an extra argument or fails the placeholder-style check against the mssql executor — `$action` is a pseudo-column, not a placeholder ([#231](https://github.com/tiagolauer/OwlSQL/issues/231)).
+- A semicolon inside a quoted identifier (`"id;x"`, `` `id;x` ``, `[id;x]`) is no longer read as a stacked statement ([#232](https://github.com/tiagolauer/OwlSQL/issues/232)).
+- Strict mode now validates the `WHERE` clause of an `UPDATE`/`DELETE` written without `RETURNING`, which it previously skipped entirely ([#233](https://github.com/tiagolauer/OwlSQL/issues/233)).
+- The mssql and node:sqlite parameter scanners skip SQL comments and quoted identifiers. A `@name`/`$name`/`?` inside a comment was bound as a real parameter, shifting every value after it ([#234](https://github.com/tiagolauer/OwlSQL/issues/234)).
+- `createMssqlExecutor(request)` works for more than one query: a caller-supplied `Request` is reset before binding, instead of throwing on a repeated parameter name and leaking the previous query's values ([#235](https://github.com/tiagolauer/OwlSQL/issues/235)).
+- `owlsql generate --url file:./app.db` works; the bare `file:` prefix was detected but never stripped ([#236](https://github.com/tiagolauer/OwlSQL/issues/236)).
+- The node:sqlite adapter reports write metadata for a CTE-led write (`with ... insert ...`) and for a write with `RETURNING`, both of which previously reported none ([#237](https://github.com/tiagolauer/OwlSQL/issues/237)).
+- `:name` placeholders are typed. The adapter has always bound them; the type layer produced an empty parameter tuple and strict mode flagged them as unknown columns ([#238](https://github.com/tiagolauer/OwlSQL/issues/238)).
+- The editor plugin no longer loses the joined table in a plain `from a join b`, marking every reference to it as an unknown alias. `JOIN ... USING` and comma-joined `FROM` lists are handled too ([#242](https://github.com/tiagolauer/OwlSQL/issues/242)).
+
 ### Added
 
+- `owlsql generate` accepts a SQL Server named instance in the URL form (`mssql://user:pass@host\INSTANCE/db`), and explains what a valid connection string looks like when the URL cannot be parsed at all ([#239](https://github.com/tiagolauer/OwlSQL/issues/239)).
+- `owlsql generate` rejects a `--table` name that matches no table instead of silently generating a schema without it, and warns on an unmatched `--exclude` ([#240](https://github.com/tiagolauer/OwlSQL/issues/240)). Boolean flags now reject a value, so `--check=false` no longer turned the check on ([#241](https://github.com/tiagolauer/OwlSQL/issues/241)).
 - Integration tests running the adapters and `owlsql generate` against real PostgreSQL, MySQL, and SQL Server instances, alongside the existing faked-driver tests.
 - A type-instantiation budget (`npm run test:perf`) that fails CI when a change makes the type-level parser measurably more expensive.
 - [VERSIONING.md](VERSIONING.md), stating what counts as a breaking change for a library whose public API is the types it infers.

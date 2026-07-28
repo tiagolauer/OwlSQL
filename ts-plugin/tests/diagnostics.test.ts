@@ -254,4 +254,26 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
       { message: 'unknown column: naem', text: 'naem' },
     ]);
   });
+
+  // Regression for #242: the joined table was never scanned when the first
+  // table had no alias, so every reference to it read as an unknown alias.
+  it('reports nothing for a plain join written without aliases', () => {
+    expect(
+      diagnosticsFor('select posts.title from users join posts on users.id = posts.user_id'),
+    ).toEqual([]);
+  });
+
+  it('reports nothing for a join written with USING', () => {
+    expect(diagnosticsFor('select posts.title from users join posts using (id)')).toEqual([]);
+  });
+
+  it('reports nothing for a comma-joined FROM list', () => {
+    expect(diagnosticsFor('select posts.title from users, posts where users.id = 1')).toEqual([]);
+  });
+
+  it('still reports a typo on a joined table written without aliases', () => {
+    expect(
+      diagnosticsFor('select posts.titel from users join posts on users.id = posts.user_id'),
+    ).toEqual([{ message: 'unknown column: titel', text: 'titel' }]);
+  });
 });

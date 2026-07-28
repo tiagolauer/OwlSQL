@@ -1,4 +1,5 @@
-import type { Params } from '../src/index.js';
+import type { Params, Executor } from '../src/index.js';
+import { createTypedDb } from '../src/index.js';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2)
@@ -67,7 +68,31 @@ type MixedLiteralAndPlaceholderRows = Expect<
   >
 >;
 
+// Regression for #230: an INSERT with no VALUES clause has to reach the
+// documented unknown[] fallback. It used to collapse to `never`, which is a
+// rest parameter no call - not even the zero-argument one - can satisfy.
+type InsertSelectFallsBackToUnknownParams = Expect<
+  Equal<Params<DB, 'insert into users (id, name) select id, name from users'>, unknown[]>
+>;
+
+type InsertSelectWithPlaceholderFallsBackToUnknownParams = Expect<
+  Equal<
+    Params<DB, 'insert into users (id, name) select id, name from users where id = $1'>,
+    unknown[]
+  >
+>;
+
+declare const executor: Executor;
+
+// The tuple assertions above are only half the story: `never` also has to stop
+// reaching the call site, where it rejected even the zero-argument call.
+export async function insertSelectIsCallable() {
+  return createTypedDb<DB>(executor).query('insert into users (id, name) select id, name from users');
+}
+
 export type Assertions = [
+  InsertSelectFallsBackToUnknownParams,
+  InsertSelectWithPlaceholderFallsBackToUnknownParams,
   ParenthesizedWhereGroupResolvesColumns,
   NestedParenGroupsResolveColumns,
   OnConflictUpdatePlaceholderTyped,

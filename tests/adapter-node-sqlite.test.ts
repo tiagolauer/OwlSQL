@@ -62,6 +62,20 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
     }
   });
 
+  // Regression for #238: the adapter has always bound `:name`, but the type
+  // layer typed the query as taking no parameters at all.
+  it('routes :name placeholders through the named-parameters object', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const result = await db.query('select id, name from users where id = :id', 1);
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([{ id: 1, name: 'ada' }]);
+    }
+  });
+
   it('ignores named-parameter lookalikes inside string literals', async () => {
     const sqlite = seededDatabase();
     const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
@@ -162,6 +176,59 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
       expect(rows.value).toEqual([{ name: 'lin' }]);
     }
   });
+
+  // Regression for #237: the leading keyword of a CTE-led write is `with`,
+  // which classified it as a read and dropped its row count.
+  it('reports metadata for a write led by a WITH clause', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const inserted = await db.query(
+      "with seed as (select 'hopper' as name) insert into users (name) select name from seed",
+    );
+    expect(isOk(inserted)).toBe(true);
+    if (isOk(inserted)) {
+      expect(inserted.meta?.rowCount).toBe(1);
+      expect(inserted.meta?.lastInsertRowid).toBe(3);
+    }
+
+    const updated = await db.query(
+      'with targets as (select id from users where id = 1) update users set name = ? where id in (select id from targets)',
+      'ada-lovelace',
+    );
+    expect(isOk(updated)).toBe(true);
+    if (isOk(updated)) {
+      expect(updated.meta).toEqual({ rowCount: 1 });
+    }
+
+    // A CTE-led read is still a read.
+    const read = await db.query('with seed as (select 1 as one) select one from seed');
+    expect(isOk(read)).toBe(true);
+    if (isOk(read)) {
+      expect(read.meta).toBeUndefined();
+    }
+  });
+
+  // Regression for #237: a row-returning write went down the `all()` path,
+  // which returned the rows bare and reported no metadata at all.
+  it('reports metadata for a write with RETURNING', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const inserted = await db.query('insert into users (name) values (?) returning id', 'hopper');
+    expect(isOk(inserted)).toBe(true);
+    if (isOk(inserted)) {
+      expect(inserted.value).toEqual([{ id: 3 }]);
+      expect(inserted.meta).toEqual({ rowCount: 1, lastInsertRowid: 3 });
+    }
+
+    const deleted = await db.query('delete from users where id = ? returning name', 1);
+    expect(isOk(deleted)).toBe(true);
+    if (isOk(deleted)) {
+      expect(deleted.value).toEqual([{ name: 'ada' }]);
+      expect(deleted.meta).toEqual({ rowCount: 1 });
+    }
+  });
 });
 
 describe('createNodeSqliteExecutor column detection fallback', () => {
@@ -213,7 +280,7 @@ describe('createNodeSqliteExecutor column detection fallback', () => {
 
     await expect(
       executor('insert into users (name) values (?) returning id', ['grace']),
-    ).resolves.toEqual([{ id: 8 }]);
+    ).resolves.toEqual({ rows: [{ id: 8 }], meta: {} });
     expect(returningStatement.all).toHaveBeenCalledWith('grace');
     expect(returningStatement.run).not.toHaveBeenCalled();
   });

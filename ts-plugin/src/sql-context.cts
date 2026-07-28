@@ -10,7 +10,17 @@ const QUALIFIED_TRAILING_TOKEN = /(?:([A-Za-z_][A-Za-z0-9_]*)\.)?([A-Za-z0-9_]*)
 const FROM_JOIN_TABLE_START = /(?:\bfrom|\bjoin)\s+([A-Za-z0-9_]*)$/i;
 const FROM_LIST_COMMA_START = /,\s*([A-Za-z0-9_]*)$/;
 const FROM_TABLE = /\bfrom\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)/i;
-const FROM_OR_JOIN_SOURCE = /\b(from|join)\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)(?:\s+(as\s+)?([A-Za-z_][A-Za-z0-9_]*))?/gid;
+// The alias sits in a lookahead so it is never consumed. As a plain group it
+// swallowed whatever followed the table - including the `join` keyword of the
+// next source, which then went unscanned and turned every reference to that
+// table into a false "unknown alias" (issue #242). A comma anchor picks up
+// old-style comma-joined FROM lists, and is only honored inside the FROM
+// clause so a SELECT-list comma is not read as another table.
+const FROM_OR_JOIN_SOURCE =
+  /(?:\b(?:from|join)\s+|,\s*)(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<table>[A-Za-z_][A-Za-z0-9_]*)(?=(?:\s+(?:as\s+)?(?<alias>[A-Za-z_][A-Za-z0-9_]*))?)/gid;
+const FROM_KEYWORD = /\bfrom\b/i;
+const CLAUSE_AFTER_FROM =
+  /\b(?:where|group|having|order|limit|offset|union|except|intersect|window|fetch|for|returning|set|values)\b/i;
 const WORD_CHAR = /[A-Za-z0-9_]/;
 const WORD_START_CHAR = /[A-Za-z_]/;
 // Postgres dollar-quoted string opener: `$$` or `$tag$`, where the tag is an
@@ -20,6 +30,7 @@ const DOLLAR_QUOTE_OPEN = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/;
 
 const RESERVED_AFTER_SOURCE = new Set([
   'on',
+  'using',
   'where',
   'join',
   'inner',
@@ -28,12 +39,21 @@ const RESERVED_AFTER_SOURCE = new Set([
   'full',
   'outer',
   'cross',
+  'natural',
+  'lateral',
   'group',
   'order',
   'having',
   'limit',
   'offset',
+  'fetch',
   'union',
+  'except',
+  'intersect',
+  'window',
+  'for',
+  'returning',
+  'values',
   'set',
   'as',
 ]);
@@ -335,17 +355,30 @@ function findSources(fullLiteralText: string): QuerySource[] {
   // heuristic scanner can compute anyway.
   const { remainder, remainderStart, cteNames } = stripWithClause(stripped);
   const cteNameSet = new Set(cteNames.map((name) => name.toLowerCase()));
+  const fromClause = fromClauseRange(remainder);
   const sources: QuerySource[] = [];
 
   FROM_OR_JOIN_SOURCE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = FROM_OR_JOIN_SOURCE.exec(remainder)) !== null) {
-    const table = match[2];
-    const tableSpan = (match as unknown as { indices?: Array<[number, number] | undefined> }).indices?.[2];
+    const groups = match.groups;
+    const spans = (
+      match as unknown as {
+        indices?: { groups?: Record<string, [number, number] | undefined> };
+      }
+    ).indices?.groups;
+    const table = groups?.['table'];
+    const tableSpan = spans?.['table'];
     if (!table || !tableSpan || cteNameSet.has(table.toLowerCase())) {
       continue;
     }
-    const rawAlias = match[4] ?? null;
+    if (
+      match[0].startsWith(',') &&
+      (match.index < fromClause.start || match.index >= fromClause.end)
+    ) {
+      continue;
+    }
+    const rawAlias = groups?.['alias'] ?? null;
     const alias = rawAlias && !RESERVED_AFTER_SOURCE.has(rawAlias.toLowerCase()) ? rawAlias : table;
     sources.push({
       table,
@@ -358,9 +391,30 @@ function findSources(fullLiteralText: string): QuerySource[] {
   return sources;
 }
 
+function fromClauseRange(text: string): { start: number; end: number } {
+  const from = FROM_KEYWORD.exec(text);
+  if (!from) {
+    return { start: -1, end: -1 };
+  }
+
+  const start = from.index;
+  const boundary = CLAUSE_AFTER_FROM.exec(text.slice(start + from[0].length));
+  const end =
+    boundary === null ? text.length : start + from[0].length + boundary.index;
+
+  return { start, end };
+}
+
+// Falls back to the table name, the way the type-level FindSourceByName in
+// src/parse.ts already resolves either way. A source this scanner failed to
+// pick up is then simply not reported on, instead of being reported wrongly.
 function findSourceByAlias(sources: QuerySource[], alias: string): QuerySource | null {
   const lowerAlias = alias.toLowerCase();
-  return sources.find((source) => source.alias.toLowerCase() === lowerAlias) ?? null;
+  return (
+    sources.find((source) => source.alias.toLowerCase() === lowerAlias) ??
+    sources.find((source) => source.table.toLowerCase() === lowerAlias) ??
+    null
+  );
 }
 
 function getQualifierBefore(text: string, wordStart: number): string | null {

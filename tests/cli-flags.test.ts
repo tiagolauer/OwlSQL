@@ -61,4 +61,12 @@ describe('parseFlags', () => {
     expect(flags.has('check')).toBe(true);
     expect(flags.get('url')).toBe('postgres://localhost/db');
   });
+
+  // Regression for #241: the value was dropped, so --check=false enabled the
+  // check and exited 1 on drift - the opposite of what was asked for.
+  it('rejects a value on a boolean flag instead of ignoring it', () => {
+    expect(() => parseFlags(['--check=false'])).toThrow('--check does not take a value.');
+    expect(() => parseFlags(['--help=no'])).toThrow('--help does not take a value.');
+    expect(() => parseFlags(['--version=1'])).toThrow('--version does not take a value.');
+  });
 });

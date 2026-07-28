@@ -42,6 +42,27 @@ type SemicolonInsideCommentIsFine = Expect<
   >
 >;
 
+// Regression for #232: quoted identifiers are left intact for the parser, so
+// their bodies are the last place a raw `;` survives the masking pass.
+type SemicolonInsideDoubleQuotedIdentifierIsFine = Expect<
+  Equal<Query<DB, 'select "id;x" from users'>, { 'id;x': unknown }[]>
+>;
+
+type SemicolonInsideBacktickIdentifierIsFine = Expect<
+  Equal<Query<DB, 'select `id;x` from users'>, { 'id;x': unknown }[]>
+>;
+
+type SemicolonInsideBracketIdentifierIsFine = Expect<
+  Equal<Query<DB, 'select [id;x] from users'>, { 'id;x': unknown }[]>
+>;
+
+type QuotedIdentifierDoesNotHideARealStackedStatement = Expect<
+  Equal<
+    Query<DB, 'select "id" from users; drop table users'>,
+    QueryTypeError<'multiple statements are not supported: found a semicolon before the end of the query'>[]
+  >
+>;
+
 type NonTrailingSemicolonIsRejectedInStrictMode = Expect<
   Equal<
     StrictRow<DB, 'select id from users; select name from users'>,
@@ -74,6 +95,10 @@ export type Assertions = [
   SemicolonInsideLiteralIsFine,
   SemicolonInsideDollarQuotedLiteralIsFine,
   SemicolonInsideCommentIsFine,
+  SemicolonInsideDoubleQuotedIdentifierIsFine,
+  SemicolonInsideBacktickIdentifierIsFine,
+  SemicolonInsideBracketIdentifierIsFine,
+  QuotedIdentifierDoesNotHideARealStackedStatement,
   NonTrailingSemicolonIsRejectedInStrictMode,
   NonTrailingSemicolonIsRejectedInNonStrictMode,
   NonTrailingSemicolonIsRejectedForParams,

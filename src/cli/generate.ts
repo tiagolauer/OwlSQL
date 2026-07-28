@@ -17,9 +17,9 @@ export interface GenerateOptions {
 }
 
 export type GenerateResult =
-  | { kind: 'written' }
-  | { kind: 'upToDate' }
-  | { kind: 'drift'; summary: string };
+  | { kind: 'written'; warnings?: string[] }
+  | { kind: 'upToDate'; warnings?: string[] }
+  | { kind: 'drift'; summary: string; warnings?: string[] };
 
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
 
@@ -102,6 +102,18 @@ const INTROSPECTORS: Record<Dialect, (connection: ConnectionInfo) => Promise<Tab
   mssql: introspectMssql,
 };
 
+// A name in --table/--exclude that matches nothing is a typo, and silently
+// honoring it means a table quietly missing from the generated schema, found
+// much later as an `unknown` row type (issue #240).
+function unmatchedNames(requested: string[] | undefined, tables: TableSchema[]): string[] {
+  if (requested === undefined) {
+    return [];
+  }
+
+  const available = new Set(tables.map((table) => table.name.toLowerCase()));
+  return requested.filter((name) => !available.has(name.toLowerCase()));
+}
+
 function filterTables(tables: TableSchema[], options: GenerateOptions): TableSchema[] {
   const include = options.tables?.map((name) => name.toLowerCase());
   const exclude = options.exclude?.map((name) => name.toLowerCase());
@@ -165,23 +177,37 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
     throw new Error('No tables found. Check the connection URL and --schema, if provided.');
   }
 
+  const availableNames = introspected.map((table) => table.name).join(', ');
+  const missing = unmatchedNames(options.tables, introspected);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `--table matched no such table: ${missing.join(', ')}. Available tables: ${availableNames}`,
+    );
+  }
+
   const tables = filterTables(introspected, options);
 
   if (tables.length === 0) {
-    throw new Error(
-      `No tables left after filtering. Available tables: ${introspected
-        .map((table) => table.name)
-        .join(', ')}`,
-    );
+    throw new Error(`No tables left after filtering. Available tables: ${availableNames}`);
   }
+
+  // An unmatched --exclude only warns: excluding a table that isn't there is
+  // still the outcome the caller asked for, and scripts legitimately exclude
+  // tables that exist in some environments and not others.
+  const notExcluded = unmatchedNames(options.exclude, introspected);
+  const warnings =
+    notExcluded.length === 0
+      ? {}
+      : { warnings: [`--exclude matched no such table: ${notExcluded.join(', ')}`] };
 
   const source = renderSchema(tables);
 
   if (options.check) {
     const existing = await readExistingFile(options.out);
     return existing === source
-      ? { kind: 'upToDate' }
-      : { kind: 'drift', summary: summarizeDrift(existing, source) };
+      ? { kind: 'upToDate', ...warnings }
+      : { kind: 'drift', summary: summarizeDrift(existing, source), ...warnings };
   }
 
   try {
@@ -193,5 +219,5 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
     throw error;
   }
 
-  return { kind: 'written' };
+  return { kind: 'written', ...warnings };
 }

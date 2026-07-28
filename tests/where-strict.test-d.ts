@@ -16,6 +16,12 @@ type ValidWhereStillResolves = Expect<
   Equal<StrictQuery<DB, 'select id from users where name = $1'>, { id: number }[]>
 >;
 
+// Regression for #238: a `:name` placeholder is a placeholder, not a column,
+// so strict mode must not try to resolve it against the schema.
+type ColonPlaceholderIsNotValidatedAsAColumn = Expect<
+  Equal<StrictQuery<DB, 'select id from users where name = :name'>, { id: number }[]>
+>;
+
 type UnknownColumnOnComparisonLhs = Expect<
   Equal<
     StrictQuery<DB, "select id from users where naem = 'x'">,
@@ -225,6 +231,7 @@ type NotFormComposesWithAndBoundary = Expect<
 
 export type WhereStrictLock = [
   ValidWhereStillResolves,
+  ColonPlaceholderIsNotValidatedAsAColumn,
   UnknownColumnOnComparisonLhs,
   UnknownColumnOnLike,
   UnknownColumnOnIn,

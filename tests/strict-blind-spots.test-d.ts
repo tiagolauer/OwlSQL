@@ -77,7 +77,41 @@ type LooseAmbiguityKeepsFirstMatch = Expect<
   >
 >;
 
+// Regression for #233: a write with no RETURNING projects nothing, and the
+// empty-row short circuit used to return before the WHERE clause was ever
+// scanned - so strict mode passed a typo in the one place it costs most.
+type DeleteWithoutReturningStillValidatesWhere = Expect<
+  Equal<
+    StrictRow<DB, 'delete from users where naem = 1'>,
+    QueryTypeError<'unknown column: naem'>
+  >
+>;
+
+type UpdateWithoutReturningStillValidatesWhere = Expect<
+  Equal<
+    StrictRow<DB, 'update users set name = 1 where naem = 1'>,
+    QueryTypeError<'unknown column: naem'>
+  >
+>;
+
+type ValidDeleteWhereStillResolvesToTheEmptyRow = Expect<
+  Equal<StrictRow<DB, 'delete from users where id = 1'>, Record<string, never>>
+>;
+
+type DeleteWithoutAWhereClauseIsUnaffected = Expect<
+  Equal<StrictRow<DB, 'delete from users'>, Record<string, never>>
+>;
+
+type NonStrictDeleteIgnoresTheTypo = Expect<
+  Equal<Query<DB, 'delete from users where naem = 1'>, Record<string, never>[]>
+>;
+
 export type Assertions = [
+  DeleteWithoutReturningStillValidatesWhere,
+  UpdateWithoutReturningStillValidatesWhere,
+  ValidDeleteWhereStillResolvesToTheEmptyRow,
+  DeleteWithoutAWhereClauseIsUnaffected,
+  NonStrictDeleteIgnoresTheTypo,
   TypoInsideFunctionArgIsCaught,
   ValidFunctionArgResolves,
   NestedFunctionArgIsCaught,
