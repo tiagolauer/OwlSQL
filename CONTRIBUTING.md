@@ -107,11 +107,23 @@ If your change legitimately costs more, raise the budget in the same commit rath
 
 ## Publishing
 
-Both packages ship compiled JavaScript and declarations from their own `dist/`, wired into `prepublishOnly`:
+Both packages ship compiled JavaScript and declarations from their own `dist/`, wired into `prepublishOnly`.
+
+The library is published by the [Release workflow](.github/workflows/release.yml) rather than from a laptop, using npm's trusted publishing: the workflow's OIDC identity is what the registry trusts, so there is no npm token in this repository to leak or rotate. npm is restricting tokens that bypass 2FA for direct publishing, which is the other half of the reason.
 
 ```bash
 npm version <patch|minor|major>
-npm publish            # runs test:types, then build, then publishes dist/
+git push --follow-tags origin master
+```
+
+Then run **Actions → Release → Run workflow**, or publish a GitHub Release for the tag — either triggers it. The workflow runs `npm publish --provenance`, and `prepublishOnly` puts the type tests, the runtime tests and the build in front of that, so a red build cannot reach the registry.
+
+This needs the package's *Trusted publisher* to be configured once on npmjs.com (package → Settings → Trusted publisher → GitHub Actions, repository `tiagolauer/OwlSQL`, workflow `release.yml`).
+
+Publishing by hand still works if you own the package and pass a real one-time password, which npm now requires for a direct publish:
+
+```bash
+npm publish --otp=<code from your authenticator>
 ```
 
 The editor plugin publishes separately, on its own version, from its own directory:
