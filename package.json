@@ -6,7 +6,7 @@
   "sideEffects": false,
   "types": "./dist/index.d.ts",
   "bin": {
-    "owlsql": "./dist/cli/index.js"
+    "owlsql": "dist/cli/index.js"
   },
   "exports": {
     ".": {
