@@ -1,6 +1,12 @@
 import type { Trim, FirstWord, DropFirstWord, IsKeyword, ExtractParenGroup } from './string.js';
 import type { TakeUntilClauseBoundary } from './from.js';
-import type { AfterKeyword, SchemaLike, Source, ResolveColumnType, QueryTypeError } from './parse.js';
+import type {
+  SplitAtTopLevelKeyword,
+  SchemaLike,
+  Source,
+  ResolveColumnType,
+  QueryTypeError,
+} from './parse.js';
 import type { IsPlaceholder, CleanColumnToken } from './params.js';
 
 export type ExtractSelectWhereText<AfterFromRest extends string> = Trim<AfterFromRest> extends ''
@@ -9,9 +15,19 @@ export type ExtractSelectWhereText<AfterFromRest extends string> = Trim<AfterFro
     ? TakeUntilClauseBoundary<DropFirstWord<Trim<AfterFromRest>>>
     : '';
 
-export type ExtractUpdateDeleteWhereText<S extends string> = [AfterKeyword<S, 'where'>] extends [never]
+// Depth-tracked, because a SET assignment can hold a subquery with a WHERE of
+// its own. Reading the first `where` in the string picked that one up: the
+// subquery's columns were checked against the outer target and the real WHERE
+// went unchecked, so a valid statement errored and a typo in the clause that
+// matters passed (issue #280). The [never] guard is load-bearing the same way
+// it is in ExtraSourcesAfterKeyword: SplitAtTopLevelKeyword resolves to never
+// when there is no top-level WHERE, and `never extends { after: infer R
+// extends string }` passes with R inferred as `string`.
+export type ExtractUpdateDeleteWhereText<S extends string> = [
+  SplitAtTopLevelKeyword<S, 'where'>,
+] extends [never]
   ? ''
-  : AfterKeyword<S, 'where'> extends infer Rest extends string
+  : SplitAtTopLevelKeyword<S, 'where'> extends { after: infer Rest extends string }
     ? TakeUntilClauseBoundary<Rest>
     : '';
 
