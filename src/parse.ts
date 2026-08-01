@@ -303,7 +303,17 @@ type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer B
     : never
   : never;
 
-type ParseStatementNormalized<S extends string> = FirstWord<S> extends infer Keyword extends string
+// A branch of a set operation may be parenthesized - that is the standard way
+// to give one its own ORDER BY or LIMIT - and the statement then opens with
+// `(` instead of a keyword, which matched nothing (issue #275). Unwrapping and
+// parsing what is inside keeps the documented rule that the row shape comes
+// from the first branch: whatever follows the group is another branch, and
+// branches have to be column-compatible.
+type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer AfterOpen}`
+  ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string }
+    ? ParseStatementNormalized<Trim<Inner>>
+    : never
+  : FirstWord<S> extends infer Keyword extends string
   ? IsKeyword<Keyword, 'select'> extends true
     ? ParseSelectBody<S>
     : IsKeyword<Keyword, 'insert'> extends true
@@ -962,12 +972,20 @@ type InferRowWithChecked<
   db: infer CteDB extends SchemaLike;
   query: infer EffectiveQuery extends string;
 }
-  ? ParseStatementNormalized<EffectiveQuery> extends {
-      columns: infer Columns extends string;
-      sources: infer Sources extends Source[];
-      whereText: infer WhereText extends string;
-      fromText: infer FromText extends string;
-    }
+  ? // The [never] guard is load-bearing, the same way it is in
+    // ExtraSourcesAfterKeyword: ParseStatementNormalized resolves to never for
+    // a statement it does not recognize, and `never extends { columns: infer C
+    // extends string, ... }` passes with every infer position resolving to its
+    // constraint, which built a row out of `string` keys instead of failing
+    // (issue #275).
+    [ParseStatementNormalized<EffectiveQuery>] extends [never]
+    ? never
+    : ParseStatementNormalized<EffectiveQuery> extends {
+          columns: infer Columns extends string;
+          sources: infer Sources extends Source[];
+          whereText: infer WhereText extends string;
+          fromText: infer FromText extends string;
+        }
     ? (CteDB & BuildDerivedSourceMap<CteDB, Sources, Strict>) extends infer EffectiveDB extends SchemaLike
       ? // The clause check wraps the empty row too: a write with no RETURNING
         // projects nothing, but its WHERE clause is still a set of column
