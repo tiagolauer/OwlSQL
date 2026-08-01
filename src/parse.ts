@@ -99,6 +99,19 @@ type StripDistinctClause<S extends string> = IsKeyword<FirstWord<Trim<S>>, 'dist
     ? Trim<DropFirstWord<Trim<S>>>
     : S;
 
+// A branch of a set operation ends the column list just as surely as FROM
+// does. Only FROM stopped the scan, so a branch written without one - the
+// anchor of a recursive CTE is usually `select 1` - ran straight past the
+// operator and swallowed the next branch: `select 1 union select 2` came back
+// keyed `'union select 2'` (issue #274). Depth-tracked, so a `union` inside a
+// parenthesized subquery in the select list is left alone.
+type IsSetOperator<Word extends string> = Lowercase<Word> extends
+  | 'union'
+  | 'intersect'
+  | 'except'
+  ? true
+  : false;
+
 type ColumnsBeforeFrom<
   S extends string,
   Depth extends unknown[] = [],
@@ -107,7 +120,9 @@ type ColumnsBeforeFrom<
   ? Depth extends []
     ? IsKeyword<Head, 'from'> extends true
       ? { columns: Trim<Accumulated>; afterFrom: Tail }
-      : ColumnsBeforeFrom<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
+      : IsSetOperator<Head> extends true
+        ? { columns: Trim<Accumulated>; afterFrom: null }
+        : ColumnsBeforeFrom<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
     : ColumnsBeforeFrom<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
   : Depth extends []
     ? IsKeyword<S, 'from'> extends true
