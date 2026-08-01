@@ -13,7 +13,13 @@ const SHAPE_REPEATS = 4;
 // to look for a quote first. The alternative was leaving `"first name"` and
 // `[Order Details]` unusable, including in schemas `owlsql generate` writes
 // itself.
-const MAX_INSTANTIATIONS = 195_000;
+//
+// Raised again from 195,000 for #266: normalizing whitespace now runs one pass
+// per character rather than one union match, which costs about 6% (five template
+// splits per query instead of one) and buys back a compiler crash - a tab beside
+// a newline, or any CRLF, used to exhaust the heap outright. Gating the passes
+// was measured and came out worse, see the note in src/string.ts.
+const MAX_INSTANTIATIONS = 200_000;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');
