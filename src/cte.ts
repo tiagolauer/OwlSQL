@@ -22,13 +22,26 @@ type CteNameAndRest<S extends string> = S extends `${infer NamePart}(${infer Aft
       : never
   : { name: FirstWord<S>; columns: null; rest: Trim<DropFirstWord<S>> };
 
+// `AS MATERIALIZED (...)` and `AS NOT MATERIALIZED (...)` are Postgres 12+
+// planner hints sitting between `as` and the body. Requiring the paren to
+// follow `as` directly rejected the whole WITH clause over them (issue #283).
+// Nothing else reads the hint: it changes how the CTE is executed, not what
+// it returns.
+type SkipMaterializedKeyword<S extends string> = IsKeyword<FirstWord<S>, 'materialized'> extends true
+  ? Trim<DropFirstWord<S>>
+  : IsKeyword<FirstWord<S>, 'not'> extends true
+    ? IsKeyword<FirstWord<Trim<DropFirstWord<S>>>, 'materialized'> extends true
+      ? Trim<DropFirstWord<Trim<DropFirstWord<S>>>>
+      : S
+    : S;
+
 type ParseCteEntry<S extends string> = CteNameAndRest<Trim<S>> extends {
   name: infer Name extends string;
   columns: infer Columns extends string[] | null;
   rest: infer Rest extends string;
 }
   ? IsKeyword<FirstWord<Rest>, 'as'> extends true
-    ? Trim<DropFirstWord<Rest>> extends `(${infer AfterOpen}`
+    ? SkipMaterializedKeyword<Trim<DropFirstWord<Rest>>> extends `(${infer AfterOpen}`
       ? ExtractParenGroup<AfterOpen> extends { inner: infer SubQuery extends string; rest: infer AfterQuery extends string }
         ? { name: Name; columns: Columns; query: Trim<SubQuery>; rest: Trim<AfterQuery> }
         : never
@@ -52,13 +65,21 @@ type SkipRecursiveKeyword<S extends string> = IsKeyword<FirstWord<S>, 'recursive
   ? Trim<DropFirstWord<S>>
   : S;
 
+// The [never] guard is load-bearing: ParseCteList resolves to never for a WITH
+// clause it cannot read, and `never extends { ctes: infer C extends
+// CteEntry[]; rest: infer R extends string }` passes with both infers falling
+// back to their constraints. That handed ResolveCteContext a `rest` of
+// `string` instead of a clean failure, and the query degraded into an index
+// signature row rather than reporting anything (issue #283).
 export type ParseWithClause<S extends string> = IsKeyword<FirstWord<S>, 'with'> extends true
-  ? ParseCteList<SkipRecursiveKeyword<Trim<DropFirstWord<S>>>> extends {
-      ctes: infer Ctes extends CteEntry[];
-      rest: infer Rest extends string;
-    }
-    ? { ctes: Ctes; rest: Rest }
-    : never
+  ? [ParseCteList<SkipRecursiveKeyword<Trim<DropFirstWord<S>>>>] extends [never]
+    ? never
+    : ParseCteList<SkipRecursiveKeyword<Trim<DropFirstWord<S>>>> extends {
+          ctes: infer Ctes extends CteEntry[];
+          rest: infer Rest extends string;
+        }
+      ? { ctes: Ctes; rest: Rest }
+      : never
   : never;
 
 type RenameKeys<Row, Keys extends string[], NewNames extends string[]> = NewNames extends [

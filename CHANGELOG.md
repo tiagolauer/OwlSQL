@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- `WITH t AS MATERIALIZED (...)` and its `NOT MATERIALIZED` twin parse again. The parser wanted the body's opening paren directly after `as`, so the Postgres 12 planner hint took the whole WITH clause down with it and the query degraded into an index signature row instead of reporting anything ([#283](https://github.com/tiagolauer/OwlSQL/issues/283)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
