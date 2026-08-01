@@ -45,6 +45,7 @@ A second pass over the same ground, once those landed, found ten more; same rule
 - Postgres's `@>`, `<@`, `?|` and `?&` are operators, not placeholders. `where tags @> $1` used to demand an extra argument and fail the placeholder-style check against a dollar executor ([#249](https://github.com/tiagolauer/OwlSQL/issues/249)).
 - The editor plugin resolves table and column names case-insensitively, the way the type layer always has. `select id from USERS` type-checked fine and still drew a warning ([#250](https://github.com/tiagolauer/OwlSQL/issues/250)).
 - A password containing an unencoded `@` (`mysql://root:p@ss@host/db`, which every driver accepts) is redacted whole. The pattern stopped at the first `@` and printed the rest of the password ([#251](https://github.com/tiagolauer/OwlSQL/issues/251)).
+- A query holding two different kinds of whitespace no longer takes the compiler down with it. A tab beside a newline, or a single CRLF pair, exhausted the heap and killed the whole `tsc` run, so a tab-indented multi-line query or a checkout with CRLF endings could not be compiled at all ([#266](https://github.com/tiagolauer/OwlSQL/issues/266)).
 
 ### Added
 

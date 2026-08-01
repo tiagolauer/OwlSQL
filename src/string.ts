@@ -12,10 +12,26 @@ export type TrimRight<S extends string> = S extends `${infer Rest}${Whitespace}`
 
 export type Trim<S extends string> = TrimLeft<TrimRight<S>>;
 
-type WhitespaceToSpace<S extends string> =
-  S extends `${infer Before}${NonSpaceWhitespace}${infer After}`
-    ? WhitespaceToSpace<`${Before} ${After}`>
+type ReplaceWhitespace<S extends string, W extends NonSpaceWhitespace> =
+  S extends `${infer Before}${W}${infer After}`
+    ? ReplaceWhitespace<`${Before} ${After}`, W>
     : S;
+
+// One pass per character instead of a union in the match position. A union
+// there makes TypeScript infer Before and After as one candidate per member
+// and the rebuilt string cross-products them, so any query holding two
+// distinct whitespace kinds - a tab plus a newline, or a single CRLF pair -
+// exhausted the compiler heap (issue #266). Gating the passes behind a
+// HasQuoteChar-style check costs more than it saves here: that test needs the
+// union back in match position, which measured 3k instantiations worse than
+// letting all five passes miss.
+type WhitespaceToSpace<S extends string> = ReplaceWhitespace<
+  ReplaceWhitespace<
+    ReplaceWhitespace<ReplaceWhitespace<ReplaceWhitespace<S, '\t'>, '\n'>, '\r'>,
+    '\f'
+  >,
+  '\v'
+>;
 
 type CollapseSpaces<S extends string> = S extends `${infer Before}  ${infer After}`
   ? CollapseSpaces<`${Before} ${After}`>
