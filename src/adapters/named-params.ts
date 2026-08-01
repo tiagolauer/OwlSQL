@@ -85,7 +85,12 @@ function skipNonParameterRegion(sql: string, index: number): number {
   return -1;
 }
 
-type ParameterToken = { kind: 'positional' } | { kind: 'named'; name: string };
+const INDEXED_PARAM_BODY = /^[0-9]+$/;
+
+type ParameterToken =
+  | { kind: 'positional' }
+  | { kind: 'named'; name: string }
+  | { kind: 'indexed'; name: string; position: number };
 
 function scanParameters(
   sql: string,
@@ -117,7 +122,16 @@ function scanParameters(
 
       const body = NAMED_PARAM_BODY.exec(sql.slice(index + 1));
       if (body) {
-        visit({ kind: 'named', name: `${char}${body[0]}` });
+        const name = `${char}${body[0]}`;
+        // `$1` is Postgres numbering, not a name that happens to be a digit:
+        // the type layer sorts those slots by number and puts them ahead of
+        // the sequential ones, so binding them in the order they are written
+        // handed `$2` the value meant for `$1` (issue #267).
+        visit(
+          char === '$' && INDEXED_PARAM_BODY.test(body[0])
+            ? { kind: 'indexed', name, position: Number(body[0]) }
+            : { kind: 'named', name },
+        );
         index += 1 + body[0].length;
         continue;
       }
@@ -131,7 +145,7 @@ export function collectNamedParameters(sql: string, prefixes: ReadonlySet<string
   const names: string[] = [];
 
   scanParameters(sql, prefixes, (token) => {
-    if (token.kind === 'named' && !names.includes(token.name)) {
+    if (token.kind !== 'positional' && !names.includes(token.name)) {
       names.push(token.name);
     }
   });
@@ -144,12 +158,14 @@ export interface MixedParameters {
   positional: unknown[];
 }
 
-// Params<DB, Q> types one tuple slot per placeholder in first-occurrence
-// order, with repeated named placeholders (@id, $id, ...) deduped to their
-// first slot - matching collectNamedParameters' own dedup. A bare `?` is
-// never deduped: each occurrence consumes its own slot. This walks the SQL
-// once, in that same order, so `values` (built from that tuple) is
-// partitioned back into a named bag and an ordered positional list.
+// Params<DB, Q> lays the tuple out as the numbered slots followed by the
+// sequential ones. Numbered (`$1`) slots sit at their own position and a gap
+// still reserves one, so the block is as long as the highest number written.
+// Sequential slots - `@id`, `:id`, `$id`, `?` - come after it in
+// first-occurrence order, with repeated names deduped to their first slot,
+// matching collectNamedParameters. A bare `?` is never deduped. Reading the
+// highest number first is what lets the second walk resolve both kinds
+// against the same tuple the caller was typed against.
 export function resolveMixedParameters(
   sql: string,
   prefixes: ReadonlySet<string>,
@@ -158,9 +174,22 @@ export function resolveMixedParameters(
   const named: Record<string, unknown> = {};
   const bound = new Set<string>();
   const positional: unknown[] = [];
-  let valueIndex = 0;
+  let indexedCount = 0;
 
   scanParameters(sql, prefixes, (token) => {
+    if (token.kind === 'indexed' && token.position > indexedCount) {
+      indexedCount = token.position;
+    }
+  });
+
+  let valueIndex = indexedCount;
+
+  scanParameters(sql, prefixes, (token) => {
+    if (token.kind === 'indexed') {
+      named[token.name] = values[token.position - 1] ?? null;
+      return;
+    }
+
     if (token.kind === 'positional') {
       positional.push(values[valueIndex] ?? null);
       valueIndex += 1;
