@@ -245,7 +245,7 @@ type RestAfterKeyword<S extends string, Keyword extends string> = AfterKeyword<
 // isn't the statement's own single target. Depth-tracked (unlike
 // AfterKeyword) so a "from"/"using" inside a subquery in the SET list isn't
 // mistaken for the clause introducer.
-type SplitAtTopLevelKeyword<
+export type SplitAtTopLevelKeyword<
   S extends string,
   Keyword extends string,
   Depth extends unknown[] = [],
