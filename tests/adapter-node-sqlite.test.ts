@@ -319,3 +319,50 @@ describe('createNodeSqliteExecutor column detection fallback', () => {
     expect(statement.run).not.toHaveBeenCalled();
   });
 });
+
+describe.skipIf(!sqliteAvailable)('numbered placeholders bind by index', () => {
+  it('gives $1 the first tuple slot even when $2 appears first', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select id, name from users where name = $2 and id = $1', [1, 'ada']),
+    ).resolves.toEqual([{ id: 1, name: 'ada' }]);
+  });
+
+  it('binds each numbered placeholder to its own slot, not its textual position', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select $2 as second, $1 as first', ['for-one', 'for-two']),
+    ).resolves.toEqual([{ second: 'for-two', first: 'for-one' }]);
+  });
+
+  it('places sequential placeholders after the numbered block', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select id, name from users where name = @who and id = $1', [1, 'ada']),
+    ).resolves.toEqual([{ id: 1, name: 'ada' }]);
+  });
+
+  it('reserves a slot for a gap in the numbering', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select $3 as third, $1 as first', ['for-one', 'unused', 'for-three']),
+    ).resolves.toEqual([{ third: 'for-three', first: 'for-one' }]);
+  });
+
+  it('repeats one value for a numbered placeholder used twice', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select id, name from users where id = $1 or id = $1', [2]),
+    ).resolves.toEqual([{ id: 2, name: 'grace' }]);
+  });
+});
