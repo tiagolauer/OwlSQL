@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A name that hides a real table now replaces it instead of merging with it. A CTE was only shadowed for the outer query, so a later CTE body still saw the real table's other columns ([#285](https://github.com/tiagolauer/OwlSQL/issues/285)), and a derived table whose alias reused a table name was intersected with it rather than hiding it ([#286](https://github.com/tiagolauer/OwlSQL/issues/286)). Strict mode accepted `select name from (select id from users) users` and typed a column the query cannot produce.
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
