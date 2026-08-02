@@ -13,6 +13,9 @@ interface DB {
     name: string;
     team_id: number;
   };
+  users2: {
+    onboarding: string;
+  };
 }
 
 type DistinctColumnsResolve = Expect<
@@ -52,6 +55,27 @@ type StrictDistinctResolves = Expect<
   Equal<StrictRow<DB, 'select distinct id from users'>, { id: number }>
 >;
 
+// Regression for #289: Postgres accepts the glued spelling too, and the first
+// word of it is `on(team_id)`, which failed the whole-word compare - so the ON
+// group leaked into the column list and was read as a call to a function
+// named `on`, aliased to the column beside it.
+type GluedDistinctOnGroupStripped = Expect<
+  Equal<Query<DB, 'select distinct on(team_id) id from users'>, { id: number }[]>
+>;
+
+type GluedDistinctOnResolvesInStrictMode = Expect<
+  Equal<StrictRow<DB, 'select distinct on(team_id) id, name from users'>, { id: number; name: string }>
+>;
+
+type GluedDistinctOnWithMultipleKeys = Expect<
+  Equal<Query<DB, 'select distinct on(team_id, name) id from users'>, { id: number }[]>
+>;
+
+// A column actually named `on` is still a column, not the keyword.
+type ColumnNamedOnIsUnaffected = Expect<
+  Equal<Query<DB, 'select distinct onboarding from users2'>, { onboarding: string }[]>
+>;
+
 export type Assertions = [
   DistinctColumnsResolve,
   DistinctUppercaseResolves,
@@ -60,4 +84,8 @@ export type Assertions = [
   DistinctCombinesWithTop,
   DistinctStar,
   StrictDistinctResolves,
+  GluedDistinctOnGroupStripped,
+  GluedDistinctOnResolvesInStrictMode,
+  GluedDistinctOnWithMultipleKeys,
+  ColumnNamedOnIsUnaffected,
 ];
