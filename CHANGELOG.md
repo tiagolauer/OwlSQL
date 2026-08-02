@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A placeholder inside a multi-argument call in INSERT VALUES gets its tuple slot. `values (coalesce(?, 0), ?)` typed one slot for two placeholders, and with `@name` the consequence was silent: the caller could pass only one value, the adapter bound it to the first name and bound the second to null, and the INSERT succeeded having written into the wrong column ([#269](https://github.com/tiagolauer/OwlSQL/issues/269)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
