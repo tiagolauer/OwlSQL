@@ -340,7 +340,12 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
         }
       : IsKeyword<Keyword, 'update'> extends true
         ? {
-            columns: ReturningOrOutputColumns<S, 'where'>;
+            // `from` stops the OUTPUT list as well as `where`: T-SQL writes
+            // `UPDATE t SET ... OUTPUT inserted.id FROM t JOIN ...`, and with
+            // `where` as the only boundary the whole FROM clause was
+            // accumulated into the column list, where `inserted.id from users`
+            // parsed as one entry with `from users` as its alias (issue #300).
+            columns: ReturningOrOutputColumns<S, 'where' | 'from'>;
             sources: [
               ...SingleSource<RestAfterKeyword<S, 'update'>>,
               ...ExtraSourcesAfterKeyword<S, 'from'>,
@@ -350,7 +355,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
           }
         : IsKeyword<Keyword, 'delete'> extends true
           ? {
-              columns: ReturningOrOutputColumns<S, 'where'>;
+              columns: ReturningOrOutputColumns<S, 'where' | 'from'>;
               sources: [
                 ...SingleSource<RestAfterKeyword<S, 'from'>>,
                 ...ExtraSourcesAfterKeyword<S, 'using'>,

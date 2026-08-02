@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- The T-SQL `UPDATE ... OUTPUT ... FROM` and `DELETE ... OUTPUT ... FROM` forms type their OUTPUT columns. Only `where` ended the OUTPUT list, so the FROM clause was accumulated into it and `inserted.id from users` parsed as one entry with `from users` as its alias ([#300](https://github.com/tiagolauer/OwlSQL/issues/300)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
