@@ -2,7 +2,8 @@ import type * as ts from 'typescript';
 import sqlContext = require('./sql-context.cjs');
 import schemaModule = require('./schema.cjs');
 
-const { findSources, findSourceByAlias, stripStringLiterals, stripWithClause } = sqlContext;
+const { findSources, findCteQualifiers, findSourceByAlias, stripStringLiterals, stripWithClause } =
+  sqlContext;
 const { tableExists, columnExists } = schemaModule;
 
 const SELECT_KEYWORD = /^\s*select\b/i;
@@ -151,6 +152,7 @@ function whereTokenDiagnostics(
   dbType: ts.Type,
   literal: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral,
   sources: ReturnType<typeof findSources>,
+  cteQualifiers: Set<string>,
   token: { text: string; start: number },
 ): DiagnosticSpan[] {
   if (
@@ -167,6 +169,13 @@ function whereTokenDiagnostics(
   const columnStart = token.start + (dotIndex === -1 ? 0 : dotIndex + 1);
 
   if (qualifier) {
+    // A qualifier naming a CTE, or the alias a FROM/JOIN gave one, resolves in
+    // the type layer; findSources leaves CTEs out because their projected
+    // columns are not something this scanner can compute, so the reference has
+    // to be skipped rather than reported (issue #293).
+    if (cteQualifiers.has(qualifier.toLowerCase())) {
+      return [];
+    }
     const matchedSource = findSourceByAlias(sources, qualifier);
     if (!matchedSource) {
       return [{ start: token.start, length: qualifier.length, message: `unknown alias: ${qualifier}` }];
@@ -211,6 +220,7 @@ function findWhereDiagnostics(
   dbType: ts.Type,
   literal: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral,
   sources: ReturnType<typeof findSources>,
+  cteQualifiers: Set<string>,
   stripped: string,
   literalStart: number,
 ): DiagnosticSpan[] {
@@ -229,7 +239,7 @@ function findWhereDiagnostics(
       return;
     }
     diagnostics.push(
-      ...whereTokenDiagnostics(typescript, checker, dbType, literal, sources, {
+      ...whereTokenDiagnostics(typescript, checker, dbType, literal, sources, cteQualifiers, {
         text: prevToken.text,
         start: literalStart + prevToken.start,
       }),
@@ -312,6 +322,7 @@ function getQueryDiagnostics(
   }
 
   const sources = findSources(text);
+  const cteQualifiers = findCteQualifiers(text);
   const diagnostics: DiagnosticSpan[] = [];
 
   for (const source of sources) {
@@ -346,6 +357,9 @@ function getQueryDiagnostics(
     const columnStart = tokenStart + (dotIndex === -1 ? 0 : dotIndex + 1);
 
     if (qualifier) {
+      if (cteQualifiers.has(qualifier.toLowerCase())) {
+        continue;
+      }
       const matchedSource = findSourceByAlias(sources, qualifier);
       if (!matchedSource) {
         diagnostics.push({ start: tokenStart, length: qualifier.length, message: `unknown alias: ${qualifier}` });
@@ -377,7 +391,16 @@ function getQueryDiagnostics(
   }
 
   diagnostics.push(
-    ...findWhereDiagnostics(typescript, checker, dbType, literal, sources, stripped, literalStart),
+    ...findWhereDiagnostics(
+      typescript,
+      checker,
+      dbType,
+      literal,
+      sources,
+      cteQualifiers,
+      stripped,
+      literalStart,
+    ),
   );
 
   return diagnostics;

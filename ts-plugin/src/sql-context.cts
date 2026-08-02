@@ -345,7 +345,24 @@ function findFromTable(fullLiteralText: string): string | null {
   return match?.[1] ?? null;
 }
 
+// The qualifiers a CTE can be referenced through: its own name, plus whatever
+// alias the FROM/JOIN entry gives it. findSources drops those entries, so the
+// qualified checks in diagnostics.cts had nothing to match them against and
+// reported a plain `unknown alias` on a reference the type layer resolves
+// (issue #293). Under the plugin's "not reported on, instead of reported
+// wrongly" policy, a qualifier in this set is skipped rather than flagged.
+function findCteQualifiers(fullLiteralText: string): Set<string> {
+  return scanSources(fullLiteralText).cteQualifiers;
+}
+
 function findSources(fullLiteralText: string): QuerySource[] {
+  return scanSources(fullLiteralText).sources;
+}
+
+function scanSources(fullLiteralText: string): {
+  sources: QuerySource[];
+  cteQualifiers: Set<string>;
+} {
   const { stripped } = stripStringLiterals(fullLiteralText);
   // A CTE's inner query is its own private scope: its FROM/JOIN sources
   // belong to it, not to the outer statement, so scan only what follows the
@@ -355,6 +372,7 @@ function findSources(fullLiteralText: string): QuerySource[] {
   // heuristic scanner can compute anyway.
   const { remainder, remainderStart, cteNames } = stripWithClause(stripped);
   const cteNameSet = new Set(cteNames.map((name) => name.toLowerCase()));
+  const cteQualifiers = new Set(cteNameSet);
   const fromClause = fromClauseRange(remainder);
   const sources: QuerySource[] = [];
 
@@ -369,7 +387,14 @@ function findSources(fullLiteralText: string): QuerySource[] {
     ).indices?.groups;
     const table = groups?.['table'];
     const tableSpan = spans?.['table'];
-    if (!table || !tableSpan || cteNameSet.has(table.toLowerCase())) {
+    if (!table || !tableSpan) {
+      continue;
+    }
+    if (cteNameSet.has(table.toLowerCase())) {
+      const cteAlias = groups?.['alias'] ?? null;
+      if (cteAlias && !RESERVED_AFTER_SOURCE.has(cteAlias.toLowerCase())) {
+        cteQualifiers.add(cteAlias.toLowerCase());
+      }
       continue;
     }
     if (
@@ -388,7 +413,7 @@ function findSources(fullLiteralText: string): QuerySource[] {
     });
   }
 
-  return sources;
+  return { sources, cteQualifiers };
 }
 
 function fromClauseRange(text: string): { start: number; end: number } {
@@ -464,6 +489,7 @@ export = {
   getFromClauseContext,
   findFromTable,
   findSources,
+  findCteQualifiers,
   findSourceByAlias,
   getQualifierBefore,
   getWordAtOffset,

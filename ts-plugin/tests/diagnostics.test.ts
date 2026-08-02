@@ -284,4 +284,43 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
       diagnosticsFor('select posts.titel from users join posts on users.id = posts.user_id'),
     ).toEqual([{ message: 'unknown column: titel', text: 'titel' }]);
   });
+
+  // Regression for #293: findSources drops CTE names, so every alias- or
+  // name-qualified reference to a CTE was reported as an unknown alias while
+  // the core type layer resolves all of them.
+  describe('CTE-qualified references', () => {
+    it('does not report an alias given to a CTE', () => {
+      expect(
+        diagnosticsFor('with recent as (select id from users) select r.id from recent r'),
+      ).toEqual([]);
+    });
+
+    it('does not report a CTE referenced by its own name', () => {
+      expect(diagnosticsFor('with recent as (select id from users) select recent.id from recent')).toEqual(
+        [],
+      );
+    });
+
+    it('does not report a CTE alias in the WHERE clause', () => {
+      expect(
+        diagnosticsFor(
+          'with recent as (select id from users) select r.id from recent r where r.id = 1',
+        ),
+      ).toEqual([]);
+    });
+
+    it('does not report the query type-locked in tests/cte.test-d.ts', () => {
+      expect(
+        diagnosticsFor(
+          'with popular as (select id, title from posts) select u.name, p.title from users u join popular p on u.id = p.id',
+        ),
+      ).toEqual([]);
+    });
+
+    it('still reports a qualifier that is neither a source nor a CTE', () => {
+      expect(
+        diagnosticsFor('with recent as (select id from users) select z.id from recent r'),
+      ).toEqual([{ message: 'unknown alias: z', text: 'z' }]);
+    });
+  });
 });
