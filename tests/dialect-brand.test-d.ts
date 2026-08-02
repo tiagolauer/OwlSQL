@@ -50,6 +50,22 @@ export async function placeholderStyleCallSites() {
   // @ts-expect-error a question-style client rejects @name placeholders
   await mysqlDb.query('select id from users where id = @id', 1);
 
+  // Regression for #298: `$action` used to be stripped as a substring, so a
+  // name that merely starts with it left no dollar token behind, the query
+  // reported no placeholder style at all, and it passed the brand check for
+  // every dialect - while Params still demanded a value for it. No driver but
+  // Postgres can bind a `$name`.
+  // @ts-expect-error a question-style client rejects a $actionType placeholder
+  await mysqlDb.query('select id from users where name = $actionType', 'x');
+
+  // @ts-expect-error the underscore spelling is a name too
+  await mysqlDb.query('select id from users where name = $action_id', 'x');
+
+  // @ts-expect-error and so is a plain suffix
+  await mysqlDb.query('select id from users where name = $actionable', 'x');
+
+  await pgDb.query('select id from users where name = $actionType', 'x');
+
   await uncheckedDb.query('select id from users where id = $1', 1);
   await uncheckedDb.query('select id from users where id = ?', 1);
 
