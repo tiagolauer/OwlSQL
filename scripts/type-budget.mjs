@@ -26,7 +26,18 @@ const SHAPE_REPEATS = 4;
 // string; the ~4.5% is the two clause scans a write statement now runs
 // (`SplitAtTopLevelKeyword` for VALUES/SELECT and for SET) plus the extra
 // field on every parsed statement. Measured: 192,486 -> 201,322.
-const MAX_INSTANTIATIONS = 210_000;
+// Raised again from 210,000 for the 2026-08-02 audit batch, which landed 31
+// fixes at once. The fixture goes 192,486 -> 212,616 (+10.5%). Where it went,
+// measured per change on its own branch: correlated subqueries carry the outer
+// FROM list into every subquery scan (+7.2k, #273), strict mode now resolves
+// the INSERT column list and SET targets (+8.8k, #282) and the SELECT half of
+// an INSERT ... SELECT (+1.6k, #272), JOIN ... USING carries its merged
+// columns (+2.2k, #284), a repeated placeholder reports the conflict rather
+// than collapsing to never (+1.5k, #302), and comparison parameters drop null
+// (+1.5k, #299). Two changes paid part of it back: the comment/literal scan
+// now dispatches on the character it already read (-7.7k, #287) and the bare
+// alias split stops building a candidate it discards (-1k, #276).
+const MAX_INSTANTIATIONS = 225_000;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');
