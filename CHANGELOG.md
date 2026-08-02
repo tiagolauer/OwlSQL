@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A raw `%` in an mssql connection URL explains itself instead of dying with a bare `URI malformed`. `new URL` accepts a broken percent sequence, so the throw came out of `decodeURIComponent` afterwards, outside the try/catch built to explain malformed URLs — and passwords with special characters are exactly where a stray `%` shows up ([#306](https://github.com/tiagolauer/OwlSQL/issues/306)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

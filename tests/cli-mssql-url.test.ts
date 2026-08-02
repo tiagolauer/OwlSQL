@@ -55,6 +55,26 @@ describe('mssqlUrlToConfig', () => {
   it('does not leak the password when the URL cannot be parsed', () => {
     expect(() => mssqlUrlToConfig('mssql://sa:S3cret@host:notaport/db')).not.toThrow(/S3cret/);
   });
+
+  // Regression for #306: `new URL` keeps a broken percent sequence verbatim, so
+  // the throw came out of decodeURIComponent as a bare "URI malformed".
+  it('explains an incomplete percent-escape instead of throwing "URI malformed"', () => {
+    expect(() => mssqlUrlToConfig('mssql://sa:p%ss@host/db')).toThrow(
+      /Invalid SQL Server connection URL.*%25/s,
+    );
+  });
+
+  it.each([
+    ['user', 'mssql://p%ss:S3cret@host/db'],
+    ['host', 'mssql://sa:S3cret@ho%st/db'],
+    ['database', 'mssql://sa:S3cret@host/d%b'],
+  ])('explains an incomplete percent-escape in the %s', (_part, url) => {
+    expect(() => mssqlUrlToConfig(url)).toThrow(/incomplete percent-escape/);
+  });
+
+  it('does not leak the password when a percent-escape is incomplete', () => {
+    expect(() => mssqlUrlToConfig('mssql://sa:S3cret%@host/db')).not.toThrow(/S3cret/);
+  });
 });
 
 describe('detectDialect for SQL Server inputs', () => {
