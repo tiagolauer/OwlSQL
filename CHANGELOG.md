@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A named parameter written in a CTE body and again in the outer query binds once, the way the adapters have always bound it. The type layer scanned the two halves with separate name registries and demanded a value per occurrence, so the caller passed one value too many and every parameter after the duplicate shifted by one: on mssql the next `@name` silently received the duplicated value and its own was dropped, on node:sqlite the query returned no rows ([#268](https://github.com/tiagolauer/OwlSQL/issues/268)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
