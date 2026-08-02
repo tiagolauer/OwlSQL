@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- Strict mode checks the target of a write that has no RETURNING and no WHERE - which is to say, the everyday INSERT. `insert into ghosts (name) values ($1)`, `delete from ghosts` and `update ghosts set name = $1` were all accepted, because table existence was only ever verified as a side effect of resolving some column ([#271](https://github.com/tiagolauer/OwlSQL/issues/271)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

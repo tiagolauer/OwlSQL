@@ -878,6 +878,22 @@ type IsSelectAll<Columns extends string> = Trim<Columns> extends '*' ? true : fa
 
 type EmptyRow = Record<string, never>;
 
+// A write projecting nothing still names a table, and until now nothing looked
+// it up: table existence was only ever checked as a side effect of resolving
+// some column, in RETURNING or in WHERE. So `insert into ghosts (name) values
+// ($1)` - the everyday INSERT, and the most common write typo there is -
+// passed strict mode, while adding `returning id` to it failed properly
+// (issue #271).
+type EmptyRowChecked<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Strict extends boolean,
+> = Strict extends true
+  ? AllKnownTables<DB, Sources> extends true
+    ? EmptyRow
+    : QueryTypeError<`unknown table: ${FirstUnknownTable<DB, Sources>}`>
+  : EmptyRow;
+
 // A CTE shadows a real table of the same name for the rest of the query -
 // only its own projected columns stay visible. Merging the CTE map into DB
 // with a plain intersection doesn't do that: object intersection is
@@ -1013,7 +1029,7 @@ type InferRowWithChecked<
           FromText,
           Strict,
           Trim<Columns> extends ''
-            ? EmptyRow
+            ? EmptyRowChecked<EffectiveDB, Sources, Strict>
             : IsSelectAll<Columns> extends true
               ? StarRow<EffectiveDB, Sources, Strict>
               : BuildSelection<
