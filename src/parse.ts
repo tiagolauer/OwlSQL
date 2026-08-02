@@ -85,13 +85,25 @@ type StripTopClause<S extends string> = IsKeyword<FirstWord<Trim<S>>, 'top'> ext
     : S
   : S;
 
-type StripDistinctOn<S extends string> = IsKeyword<FirstWord<S>, 'on'> extends true
-  ? Trim<DropFirstWord<S>> extends `(${infer AfterOpen}`
+// Postgres accepts `distinct on (a)` and `distinct on(a)` alike. The glued
+// spelling makes the first word `on(a)`, which fails a whole-word compare, so
+// the ON group leaked into the column list and `on(team_id)` was read as a
+// call to a function named `on` aliased to the column beside it (issue #289).
+type AfterDistinctOnKeyword<S extends string> = IsKeyword<FirstWord<S>, 'on'> extends true
+  ? Trim<DropFirstWord<S>>
+  : Trim<S> extends `${infer Head}(${infer AfterOpen}`
+    ? IsKeyword<Head, 'on'> extends true
+      ? `(${AfterOpen}`
+      : never
+    : never;
+
+type StripDistinctOn<S extends string> = [AfterDistinctOnKeyword<S>] extends [never]
+  ? S
+  : AfterDistinctOnKeyword<S> extends `(${infer AfterOpen}`
     ? ExtractParenGroup<AfterOpen> extends { rest: infer Rest extends string }
       ? Trim<Rest>
       : S
-    : S
-  : S;
+    : S;
 
 type StripDistinctClause<S extends string> = IsKeyword<FirstWord<Trim<S>>, 'distinct'> extends true
   ? StripDistinctOn<Trim<DropFirstWord<Trim<S>>>>

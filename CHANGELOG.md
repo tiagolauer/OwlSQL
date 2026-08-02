@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- `select distinct on(team_id) id from users` - the glued spelling Postgres accepts alongside the spaced one - types its projection. The first word of it is `on(team_id)`, which failed the whole-word compare, so the ON group was never stripped and leaked into the column list as a call to a function named `on`, aliased to the column beside it; `id` came back `unknown` in both modes ([#289](https://github.com/tiagolauer/OwlSQL/issues/289)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
