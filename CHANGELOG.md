@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- Strict mode validates the SELECT half of an `INSERT ... SELECT`. The INSERT branch read the target and the RETURNING clause and stopped, so `insert into users (name) select naem from ghosts where nope = 1` - an unknown table, an unknown column and a second unknown column in the WHERE - was accepted whole ([#272](https://github.com/tiagolauer/OwlSQL/issues/272)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

@@ -290,11 +290,44 @@ type ExtraSourcesAfterKeyword<S extends string, Keyword extends string> = [
     ? ParseFromClause<AfterClause>
     : [];
 
+// The SELECT half of an `INSERT ... SELECT`. The INSERT branch reads the
+// target and the RETURNING/OUTPUT clause and stops there, so the trailing
+// SELECT was never parsed as a statement: its sources, its columns and its
+// WHERE did not exist as far as validation was concerned, and
+// `insert into users (name) select naem from ghosts where nope = 1` - three
+// mistakes in one line - passed strict mode (issue #272).
+type InsertSelectText<S extends string> = [SplitAtTopLevelKeyword<S, 'select'>] extends [never]
+  ? ''
+  : SplitAtTopLevelKeyword<S, 'select'> extends { after: infer After extends string }
+    ? `select ${After}`
+    : '';
+
+// Reported as the row, the way every other strict failure is. The nested query
+// resolves through the same entry point, so its own CTEs, joins and clause
+// checks all apply.
+type ApplyNestedSelectCheck<
+  DB extends SchemaLike,
+  QueryText extends string,
+  Strict extends boolean,
+  Row,
+> = QueryText extends ''
+  ? Row
+  : Strict extends true
+    ? Row extends QueryTypeError<string>
+      ? Row
+      : InferRowWith<DB, QueryText, true> extends QueryTypeError<infer Message>
+        ? QueryTypeError<Message>
+        : Row
+    : Row;
+
 export interface ParsedStatement {
   columns: string;
   sources: Source[];
   whereText: string;
   fromText: string;
+  // Empty unless the statement is an `INSERT ... SELECT`, whose SELECT half is
+  // a statement of its own.
+  nestedSelect: string;
 }
 
 type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer Body
@@ -308,12 +341,13 @@ type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer B
             columns: Columns;
             sources: ParseFromClause<AfterFrom>;
             whereText: ExtractSelectWhereText<RestAfterFromClause<AfterFrom>>;
+            nestedSelect: '';
             // Kept as raw text rather than pre-extracted ON conditions: the
             // JOIN ON check only runs in strict mode, and this way the scan
             // is never instantiated for a non-strict query.
             fromText: TakeFromClause<AfterFrom>;
           }
-        : { columns: Columns; sources: []; whereText: ''; fromText: '' }
+        : { columns: Columns; sources: []; whereText: ''; fromText: ''; nestedSelect: '' }
       : never
     : never
   : never;
@@ -337,6 +371,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
           sources: SingleSource<RestAfterKeyword<S, 'into'>>;
           whereText: '';
           fromText: '';
+          nestedSelect: InsertSelectText<S>;
         }
       : IsKeyword<Keyword, 'update'> extends true
         ? {
@@ -347,6 +382,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
             ];
             whereText: ExtractUpdateDeleteWhereText<S>;
             fromText: '';
+            nestedSelect: '';
           }
         : IsKeyword<Keyword, 'delete'> extends true
           ? {
@@ -357,6 +393,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
               ];
               whereText: ExtractUpdateDeleteWhereText<S>;
               fromText: '';
+              nestedSelect: '';
             }
           : IsKeyword<Keyword, 'merge'> extends true
             ? {
@@ -369,6 +406,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
                 sources: SingleSource<RestAfterKeyword<S, 'into'>>;
                 whereText: '';
                 fromText: '';
+                nestedSelect: '';
               }
             : never
   : never;
@@ -1000,13 +1038,18 @@ type InferRowWithChecked<
           sources: infer Sources extends Source[];
           whereText: infer WhereText extends string;
           fromText: infer FromText extends string;
+          nestedSelect: infer NestedSelect extends string;
         }
     ? (CteDB & BuildDerivedSourceMap<CteDB, Sources, Strict>) extends infer EffectiveDB extends SchemaLike
       ? // The clause check wraps the empty row too: a write with no RETURNING
         // projects nothing, but its WHERE clause is still a set of column
         // references strict mode has to validate - and UPDATE/DELETE is where
         // a wrong one costs the most (issue #233).
-        ApplyWhereCheck<
+        ApplyNestedSelectCheck<
+          DB,
+          NestedSelect,
+          Strict,
+          ApplyWhereCheck<
           EffectiveDB,
           Sources,
           WhereText,
@@ -1024,6 +1067,7 @@ type InferRowWithChecked<
                     : [],
                   Strict
                 >
+        >
         >
       : never
     : never
