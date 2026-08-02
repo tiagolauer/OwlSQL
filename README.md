@@ -125,8 +125,8 @@ lives in the `.d.ts` types.
 npm install @owlsql/core
 ```
 
-`typescript` is a peer dependency (**>= 5.0, < 8** — template literal type
-recursion needs 5.0; the ts-plugin does not load on TS 7). You almost
+`typescript` is a peer dependency (**>= 5.4, < 8** — 5.4 is the oldest
+version CI tests; the ts-plugin does not load on TS 7). You almost
 certainly already have it.
 
 The package is **ESM-only** (`import` only — `require()` is not supported).
