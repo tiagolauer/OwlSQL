@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A column wrapped in parentheses keeps its type. `select (id) as x from users` came back `{ x: unknown }` in both modes, because `IsFunctionCall` matched `(id)` - its leading `${string}` also matches the empty string - and typed it as a call to a function with no name. Strict mode even validated the column on the way there and still returned unknown ([#288](https://github.com/tiagolauer/OwlSQL/issues/288)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

@@ -468,10 +468,10 @@ type ParseColumnEntry<Entry extends string> = IsCaseExpression<Entry> extends tr
     : IsParenthesizedEntry<Entry> extends true
       ? SplitParenthesizedEntry<Entry> extends { expr: infer Expr extends string; after: infer After extends string }
         ? After extends ''
-          ? [Trim<Entry>, Expr]
+          ? [Trim<Entry>, UnwrapRedundantParens<Expr>]
           : IsKeyword<FirstWord<After>, 'as'> extends true
-            ? [Unquote<Trim<DropFirstWord<After>>>, Expr]
-            : [Unquote<Trim<After>>, Expr]
+            ? [Unquote<Trim<DropFirstWord<After>>>, UnwrapRedundantParens<Expr>]
+            : [Unquote<Trim<After>>, UnwrapRedundantParens<Expr>]
         : [Trim<Entry>, Trim<Entry>]
       : [FindTopLevelAsKeyword<Entry>] extends [never]
       ? Entry extends `${infer Expression} ${infer Alias}`
@@ -621,6 +621,40 @@ type QualifiedColumnType<
       : never
   : never;
 
+// `(id)` is a column someone wrapped in parentheses, which every dialect
+// accepts and people write around an expression they are editing. It used to
+// resolve as a call to a function named `''` - `IsFunctionCall` matched it
+// because its leading `${string}` also matches the empty string - and then as
+// a literal column named `(id)` once that was tightened, so it stayed
+// `unknown` either way, in strict mode too, after the column had already been
+// validated (issue #288).
+//
+// Only a group holding no parens of its own is unwrapped, which is enough for
+// a plain column and keeps `(a) + (b)` - where the outer match would be
+// spurious - out of it.
+type UnwrapRedundantParens<Expression extends string> = Expression extends `(${infer Inner})`
+  ? Inner extends `${string})${string}`
+    ? Expression
+    : IsKeyword<FirstWord<Trim<Inner>>, 'select'> extends true
+      ? Expression
+      : Trim<Inner>
+  : Expression;
+
+type ResolveColumnName<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Expression extends string,
+  Strict extends boolean,
+> = Qualifier<Expression> extends ''
+  ? BareColumnType<DB, Sources, Unquote<StripQualifier<Expression>>, Strict>
+  : QualifiedColumnType<
+      DB,
+      Sources,
+      Unquote<Qualifier<Expression>>,
+      Unquote<StripQualifier<Expression>>,
+      Strict
+    >;
+
 type OperatorChar = '*' | '+' | '-' | '/' | '%' | '|' | '<' | '>' | '=' | '^';
 
 type ContainsOperatorChar<S extends string> = S extends `${string}${OperatorChar}${string}`
@@ -762,15 +796,7 @@ export type ResolveColumnType<
       : [LiteralType<Expression>] extends [never]
         ? IsOperatorExpression<Expression> extends true
           ? unknown
-          : Qualifier<Expression> extends ''
-            ? BareColumnType<DB, Sources, Unquote<StripQualifier<Expression>>, Strict>
-            : QualifiedColumnType<
-                DB,
-                Sources,
-                Unquote<Qualifier<Expression>>,
-                Unquote<StripQualifier<Expression>>,
-                Strict
-              >
+          : ResolveColumnName<DB, Sources, Expression, Strict>
         : LiteralType<Expression>
     : ScalarSubqueryType<DB, ScalarSubqueryInner<Expression>, Strict>;
 
