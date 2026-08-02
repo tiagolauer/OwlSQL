@@ -454,6 +454,40 @@ type ColumnTypeAt<DB extends SchemaLike, Table extends string, Column extends st
         : unknown
     : unknown;
 
+// A VALUES entry is one token to this matcher, and StripCallWrapper gives up
+// on a call carrying an inner comma - so `coalesce(?, 0)` registered no
+// placeholder at all and the tuple came up a slot short. With `@name` that is
+// worse than a compile error: the caller can only pass one value, the runtime
+// scanner binds it to the first name it meets and binds the second to null, and
+// the INSERT succeeds having written values into the wrong columns (issue #269).
+//
+// Splitting the call's own argument list is enough: each argument is a token
+// again, and a single-argument call around a placeholder (`lower(?)`) is
+// something CleanScanToken already unwraps.
+type CallArguments<Entry extends string> = Entry extends `${string}(${infer AfterOpen}`
+  ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string }
+    ? SplitColumnList<Inner>
+    : []
+  : [];
+
+type AddCallArgumentParams<
+  Arguments extends string[],
+  Type,
+  Indexed extends unknown[],
+  Sequential extends unknown[],
+  SequentialNames extends string[],
+> = Arguments extends [infer Head extends string, ...infer Tail extends string[]]
+  ? IsPlaceholder<Trim<Head>> extends true
+    ? AddParam<Trim<Head>, Type, Indexed, Sequential, SequentialNames> extends {
+        indexed: infer NextIndexed extends unknown[];
+        sequential: infer NextSequential extends unknown[];
+        sequentialNames: infer NextSequentialNames extends string[];
+      }
+      ? AddCallArgumentParams<Tail, Type, NextIndexed, NextSequential, NextSequentialNames>
+      : never
+    : AddCallArgumentParams<Tail, Type, Indexed, Sequential, SequentialNames>
+  : { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames };
+
 type MatchInsertValues<
   DB extends SchemaLike,
   Table extends string,
@@ -486,7 +520,27 @@ type MatchInsertValues<
             NextSequentialNames
           >
         : never
-      : MatchInsertValues<DB, Table, ColumnsTail, ValuesTail, Indexed, Sequential, SequentialNames>
+      : AddCallArgumentParams<
+            CallArguments<Trim<Head>>,
+            ColumnTypeAt<DB, Table, ColumnHead>,
+            Indexed,
+            Sequential,
+            SequentialNames
+          > extends {
+            indexed: infer NextIndexed extends unknown[];
+            sequential: infer NextSequential extends unknown[];
+            sequentialNames: infer NextSequentialNames extends string[];
+          }
+        ? MatchInsertValues<
+            DB,
+            Table,
+            ColumnsTail,
+            ValuesTail,
+            NextIndexed,
+            NextSequential,
+            NextSequentialNames
+          >
+        : never
     : { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames }
   : { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames };
 
