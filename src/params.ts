@@ -225,16 +225,41 @@ type WrapArrayArgument<T, Token extends string> = Token extends `${string}(${str
     : T
   : T;
 
+// `= NULL` never matches a row, so a comparison parameter that accepts null
+// types a query that silently returns nothing (issue #299). The `| null` on a
+// column belongs to the result side - it says a row can come back with that
+// column empty, including the one a LEFT JOIN invents - not to the value you
+// compare against.
+//
+// `is distinct from` is the exception, and the reason this is keyed on the
+// operator: comparing against null is the entire point of it.
+type NullTolerantOperator = 'distinct';
+
+// `unknown extends T` holds only for `unknown` itself, and the guard matters:
+// NonNullable<unknown> is `{}`, which would quietly reject the null a column
+// this scan could not resolve is still allowed to take.
+type ComparisonValue<T, Op extends string> = Lowercase<Op> extends NullTolerantOperator
+  ? T
+  : unknown extends T
+    ? T
+    : NonNullable<T>;
+
 type ParamType<
   DB extends SchemaLike,
   Sources extends Source[],
   Column extends string,
   Op extends string,
   Token extends string = '',
+  InAssignment extends boolean = false,
 > = Lowercase<Op> extends ForcedNumberKeyword
   ? number
   : IsOperator<Op> extends true
-    ? WrapArrayArgument<ResolveColumnLoose<DB, Sources, Column>, Token>
+    ? WrapArrayArgument<
+        InAssignment extends true
+          ? ResolveColumnLoose<DB, Sources, Column>
+          : ComparisonValue<ResolveColumnLoose<DB, Sources, Column>, Op>,
+        Token
+      >
     : unknown;
 
 type AddParam<
@@ -277,6 +302,23 @@ type AddParam<
       : never
   : never;
 
+// Which side of the statement the scan is on. A `=` in a SET assignment or a
+// VALUES tuple is a write, where null is a legitimate value to bind; a `=` in
+// a WHERE or an ON is a comparison, where it can never match. The scan is
+// linear and keeps only the two previous tokens, so the region has to be
+// carried along - `set a = $1, b = $2` gives the second placeholder no local
+// hint that it is still inside the SET clause.
+type AssignmentKeyword = 'set' | 'values';
+
+type ComparisonKeyword = 'where' | 'on' | 'having' | 'using' | 'join' | 'returning' | 'output';
+
+type NextAssignmentRegion<Token extends string, Current extends boolean> =
+  Lowercase<Token> extends AssignmentKeyword
+    ? true
+    : Lowercase<Token> extends ComparisonKeyword
+      ? false
+      : Current;
+
 type ScanParamsRaw<
   S extends string,
   DB extends SchemaLike,
@@ -286,11 +328,12 @@ type ScanParamsRaw<
   Indexed extends unknown[] = [],
   Sequential extends unknown[] = [],
   SequentialNames extends string[] = [],
+  InAssignment extends boolean = false,
 > = S extends `${infer Head} ${infer Tail}`
   ? IsPlaceholder<Head> extends true
     ? AddParam<
         Head,
-        ParamType<DB, Sources, PrevPrev, Prev, Head>,
+        ParamType<DB, Sources, PrevPrev, Prev, Head, InAssignment>,
         Indexed,
         Sequential,
         SequentialNames
@@ -299,15 +342,51 @@ type ScanParamsRaw<
         sequential: infer NextSequential extends unknown[];
         sequentialNames: infer NextSequentialNames extends string[];
       }
-      ? ScanParamsRaw<Tail, DB, Sources, PrevPrev, Prev, NextIndexed, NextSequential, NextSequentialNames>
+      ? ScanParamsRaw<
+          Tail,
+          DB,
+          Sources,
+          PrevPrev,
+          Prev,
+          NextIndexed,
+          NextSequential,
+          NextSequentialNames,
+          InAssignment
+        >
       : never
     : IsTransparentToken<Head> extends true
-      ? ScanParamsRaw<Tail, DB, Sources, PrevPrev, Prev, Indexed, Sequential, SequentialNames>
-      : ScanParamsRaw<Tail, DB, Sources, Prev, CleanColumnToken<Head>, Indexed, Sequential, SequentialNames>
+      ? ScanParamsRaw<
+          Tail,
+          DB,
+          Sources,
+          PrevPrev,
+          Prev,
+          Indexed,
+          Sequential,
+          SequentialNames,
+          InAssignment
+        >
+      : ScanParamsRaw<
+          Tail,
+          DB,
+          Sources,
+          Prev,
+          CleanColumnToken<Head>,
+          Indexed,
+          Sequential,
+          SequentialNames,
+          NextAssignmentRegion<Head, InAssignment>
+        >
   : S extends ''
     ? { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames }
     : IsPlaceholder<S> extends true
-      ? AddParam<S, ParamType<DB, Sources, PrevPrev, Prev, S>, Indexed, Sequential, SequentialNames>
+      ? AddParam<
+          S,
+          ParamType<DB, Sources, PrevPrev, Prev, S, InAssignment>,
+          Indexed,
+          Sequential,
+          SequentialNames
+        >
       : { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames };
 
 type ScanParams<
