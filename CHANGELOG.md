@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A named placeholder whose name starts with `action` (`$actionType`, `$action_id`, `$actionable`) is checked against the dialect again. MERGE's `$action` pseudo-column was stripped as a substring rather than as a whole token, so those names left no dollar placeholder behind, the query reported no placeholder style at all, and it passed the brand check against a mysql or sqlite client that can never bind a `$name` - while the parameter tuple still demanded a value for it ([#298](https://github.com/tiagolauer/OwlSQL/issues/298)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

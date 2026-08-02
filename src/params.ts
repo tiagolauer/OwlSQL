@@ -475,8 +475,17 @@ type StripDoubledAt<S extends string> = S extends `${infer Before}@@${infer Afte
   ? StripDoubledAt<`${Before}${After}`>
   : S;
 
+// Whole-token, because `$actionType` is a name that merely starts with the
+// pseudo-column's letters. Stripping the substring turned it into `type`, the
+// dollar scan then found nothing, and the query reported no placeholder style
+// at all - so it passed the brand check for every dialect while Params still
+// demanded a value for it, which is the guaranteed runtime failure the brand
+// exists to prevent (issue #298). IsPlaceholder already excluded only the
+// exact token; this is the same rule on the other side.
 type StripDollarAction<S extends string> = S extends `${infer Before}$action${infer After}`
-  ? StripDollarAction<`${Before}${After}`>
+  ? StartsWithIdentifierChar<After> extends true
+    ? `${Before}$action${StripDollarAction<After>}`
+    : `${Before}${StripDollarAction<After>}`
   : S;
 
 // A prefix only counts when a name or an index follows it, the same rule
