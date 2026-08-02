@@ -471,7 +471,22 @@ type ParseColumnEntry<Entry extends string> = IsCaseExpression<Entry> extends tr
           ? [Trim<Entry>, Expr]
           : IsKeyword<FirstWord<After>, 'as'> extends true
             ? [Unquote<Trim<DropFirstWord<After>>>, Expr]
-            : [Unquote<Trim<After>>, Expr]
+            : // What follows the group is not always an alias: an expression can
+              // continue past it (`(id + 1) * 2 as x`), and this branch used to
+              // take the whole tail as the name, so the real alias was lost
+              // inside a key reading `* 2 as x` (issue #290). The bare-entry
+              // branch below guards the same situation with IsOperatorExpression;
+              // this one had no such check.
+              IsOperatorExpression<After> extends true
+              ? [FindTopLevelAsKeyword<Entry>] extends [never]
+                ? [Trim<Entry>, Trim<Entry>]
+                : FindTopLevelAsKeyword<Entry> extends {
+                      expr: infer FullExpr extends string;
+                      alias: infer FullAlias extends string;
+                    }
+                  ? [Unquote<Trim<FullAlias>>, FullExpr]
+                  : [Trim<Entry>, Trim<Entry>]
+              : [Unquote<Trim<After>>, Expr]
         : [Trim<Entry>, Trim<Entry>]
       : [FindTopLevelAsKeyword<Entry>] extends [never]
       ? Entry extends `${infer Expression} ${infer Alias}`

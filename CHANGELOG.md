@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- An expression that continues after a parenthesized group keeps its alias. `select (id + 1) * 2 as x` produced a column keyed `* 2 as x`: the paren branch assumed everything after the closing paren was the alias, while the bare-entry branch has always guarded the same case ([#290](https://github.com/tiagolauer/OwlSQL/issues/290)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
