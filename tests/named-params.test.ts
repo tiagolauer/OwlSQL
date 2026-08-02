@@ -127,3 +127,34 @@ describe('resolveMixedParameters', () => {
     });
   });
 });
+
+// Regression for #304: the type layer gives `?NNN` no slot at all, so the
+// caller passes nothing, and this scanner used to read it as a bare `?` and
+// push a positional value node:sqlite could not place - "column index out of
+// range", which points nowhere useful.
+describe('numbered ? placeholders', () => {
+  it('rejects ?1 with a message that names the alternatives', () => {
+    expect(() => resolveMixedParameters('select id from t where id = ?1', AT_DOLLAR_COLON, [])).toThrow(
+      /Unsupported placeholder "\?1".*\$1.*:name/s,
+    );
+  });
+
+  it('rejects a multi-digit ?12', () => {
+    expect(() => resolveMixedParameters('select id from t where id = ?12', AT_DOLLAR_COLON, [])).toThrow(
+      /Unsupported placeholder "\?12"/,
+    );
+  });
+
+  it('leaves a bare ? alone', () => {
+    expect(resolveMixedParameters('select id from t where id = ?', AT_DOLLAR_COLON, [7])).toEqual({
+      named: {},
+      positional: [7],
+    });
+  });
+
+  it('does not fire on a ?NNN inside a literal or a comment', () => {
+    expect(
+      resolveMixedParameters("select '?1' from t where a = ? -- ?2\n", AT_DOLLAR_COLON, [7]),
+    ).toEqual({ named: {}, positional: [7] });
+  });
+});

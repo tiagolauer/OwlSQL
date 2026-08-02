@@ -365,4 +365,15 @@ describe.skipIf(!sqliteAvailable)('numbered placeholders bind by index', () => {
       executor('select id, name from users where id = $1 or id = $1', [2]),
     ).resolves.toEqual([{ id: 2, name: 'grace' }]);
   });
+
+  // Regression for #304: node:sqlite's anonymous-args API cannot bind a
+  // numbered slot, so this used to surface as "column index out of range".
+  it('rejects a ?NNN placeholder by name instead of by driver error', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(executor('select id from users where id = ?1', [])).rejects.toThrow(
+      /Unsupported placeholder "\?1"/,
+    );
+  });
 });
