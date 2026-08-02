@@ -321,6 +321,9 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
       expect(
         diagnosticsFor('with recent as (select id from users) select z.id from recent r'),
       ).toEqual([{ message: 'unknown alias: z', text: 'z' }]);
+    });
+  });
+
   // Regression for #294: the scanner pooled both branches of a set operation
   // into one scope, so a column name they share - which is every column, since
   // branches have to be compatible - came back as ambiguous.
