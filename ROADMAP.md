@@ -15,7 +15,7 @@ the editor tooling, not a promise of dates.
 - Official multi-database support: PostgreSQL, MySQL, SQLite, SQL Server
   (named `@params`, backtick identifiers, `TOP`, `OUTPUT`).
 - Ready-made driver adapters (`pg`, `mysql2`, `postgres.js`, `node:sqlite`,
-  Kysely) and a documented Drizzle recipe.
+  `mssql`, Kysely) and a documented Drizzle recipe.
 - `npx @owlsql/core generate` — schema introspection CLI for all four
   databases.
 - `@owlsql/ts-plugin` — in-editor column-name autocomplete and hover
