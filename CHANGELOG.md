@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A quoted identifier holding `--` or an apostrophe parses. Comment stripping and literal masking ran with no double-quote awareness, so the `--` in `"a--b"` was read as a line comment and ate the rest of the query, and the `'` in `"it's"` opened a literal mask - and quoted identifiers are the documented escape hatch for exactly these names. The scan now dispatches on the character it already read, which also makes it cheaper: 184,737 instantiations against master's 192,486 ([#287](https://github.com/tiagolauer/OwlSQL/issues/287)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

@@ -153,6 +153,26 @@ type HasMaskableToken<S extends string> = S extends
   ? true
   : false;
 
+// The body of a quoted identifier is a name, not SQL, so nothing inside it
+// opens a comment or a string literal. Without this the scan below read the
+// `--` in `"a--b"` as a line comment and ate the rest of the query, and the
+// `'` in `"it's"` as the start of a literal - and quoted identifiers are the
+// documented escape hatch for exactly those names (issue #287).
+type SplitQuotedIdentifier<S extends string, Close extends string> =
+  S extends `${infer Body}${Close}${infer Rest}` ? { body: Body; rest: Rest } : never;
+
+type CopyQuotedIdentifier<
+  S extends string,
+  Open extends string,
+  Close extends string,
+  Accumulated extends string,
+> = SplitQuotedIdentifier<S, Close> extends {
+  body: infer Body extends string;
+  rest: infer Rest extends string;
+}
+  ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}${Open}${Body}${Close}`>
+  : `${Accumulated}${Open}${S}`;
+
 export type StripCommentsAndMaskLiterals<
   S extends string,
   Accumulated extends string = '',
@@ -160,32 +180,57 @@ export type StripCommentsAndMaskLiterals<
   ? Accumulated
   : HasMaskableToken<S> extends false
     ? `${Accumulated}${S}`
-    : S extends `'${infer AfterQuote}`
-      ? SkipLiteralBody<AfterQuote> extends { rest: infer Rest extends string }
-        ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}''`>
-        : `${Accumulated}${S}`
-      : S extends `--${infer AfterDash}`
-        ? StripCommentsAndMaskLiterals<AfterLineComment<AfterDash>, `${Accumulated} `>
-        : S extends `/*${infer AfterBlock}`
-          ? StripCommentsAndMaskLiterals<AfterBlockComment<AfterBlock>, `${Accumulated} `>
-          : S extends `$${infer AfterDollar}`
-            ? [DollarQuoteOpen<AfterDollar>] extends [never]
-              ? S extends `${infer Head}${infer Rest}`
-                ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}${Head}`>
+    : S extends `${infer Opener}${infer AfterOpen}`
+      ? // One character comparison rather than three more whole-string pattern
+        // matches per step: this scan runs over every query, and the pattern
+        // form measured +15,778 instantiations on the fixture.
+        Opener extends IdentifierQuoteOpen
+        ? CopyQuotedIdentifier<AfterOpen, Opener, IdentifierQuoteClose[Opener], Accumulated>
+        : StripCommentsAndMaskLiteralsRest<S, Opener, AfterOpen, Accumulated>
+      : Accumulated;
+
+interface IdentifierQuoteClose {
+  '"': '"';
+  '[': ']';
+  '`': '`';
+}
+
+type IdentifierQuoteOpen = keyof IdentifierQuoteClose;
+
+// Everything below keys off the character already destructured by the caller,
+// so one step costs one comparison per case instead of a whole-string pattern
+// match per case.
+type StripCommentsAndMaskLiteralsRest<
+  S extends string,
+  Opener extends string,
+  AfterOpen extends string,
+  Accumulated extends string,
+> = Opener extends "'"
+  ? SkipLiteralBody<AfterOpen> extends { rest: infer Rest extends string }
+    ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}''`>
+    : `${Accumulated}${S}`
+  : Opener extends '-'
+    ? AfterOpen extends `-${infer AfterDash}`
+      ? StripCommentsAndMaskLiterals<AfterLineComment<AfterDash>, `${Accumulated} `>
+      : StripCommentsAndMaskLiterals<AfterOpen, `${Accumulated}${Opener}`>
+    : Opener extends '/'
+      ? AfterOpen extends `*${infer AfterBlock}`
+        ? StripCommentsAndMaskLiterals<AfterBlockComment<AfterBlock>, `${Accumulated} `>
+        : StripCommentsAndMaskLiterals<AfterOpen, `${Accumulated}${Opener}`>
+      : Opener extends '$'
+        ? [DollarQuoteOpen<AfterOpen>] extends [never]
+          ? StripCommentsAndMaskLiterals<AfterOpen, `${Accumulated}${Opener}`>
+          : DollarQuoteOpen<AfterOpen> extends {
+                tag: infer Tag extends string;
+                afterOpen: infer AfterBody extends string;
+              }
+            ? [SkipDollarQuotedBody<AfterBody, Tag>] extends [never]
+              ? `${Accumulated}${S}`
+              : SkipDollarQuotedBody<AfterBody, Tag> extends { rest: infer Rest extends string }
+                ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}''`>
                 : Accumulated
-              : DollarQuoteOpen<AfterDollar> extends {
-                    tag: infer Tag extends string;
-                    afterOpen: infer AfterOpen extends string;
-                  }
-                ? [SkipDollarQuotedBody<AfterOpen, Tag>] extends [never]
-                  ? `${Accumulated}${S}`
-                  : SkipDollarQuotedBody<AfterOpen, Tag> extends { rest: infer Rest extends string }
-                    ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}''`>
-                    : Accumulated
-                : Accumulated
-            : S extends `${infer Head}${infer Rest}`
-              ? StripCommentsAndMaskLiterals<Rest, `${Accumulated}${Head}`>
-              : Accumulated;
+            : Accumulated
+        : StripCommentsAndMaskLiterals<AfterOpen, `${Accumulated}${Opener}`>;
 
 // Everything downstream splits the query on spaces, so a quoted identifier
 // holding one - `"first name"`, `[Order Details]` - was torn in half: the
