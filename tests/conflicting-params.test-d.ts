@@ -39,7 +39,7 @@ type ConflictingColonPlaceholder = Expect<
 type ConflictKeepsTheOtherSlots = Expect<
   Equal<
     Params<DB, 'select id from users where id = $1 or name = $1 and email = $2'>,
-    [QueryTypeError<'conflicting types for $1'>, string | null]
+    [QueryTypeError<'conflicting types for $1'>, string]
   >
 >;
 
