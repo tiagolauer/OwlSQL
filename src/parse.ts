@@ -971,6 +971,9 @@ type ApplyWhereCheck<
 export type MultipleStatementsError =
   QueryTypeError<'multiple statements are not supported: found a semicolon before the end of the query'>;
 
+export type UnrecognizedStatementError =
+  QueryTypeError<'unsupported or unrecognized statement'>;
+
 export type InferRowWith<
   DB extends SchemaLike,
   Q extends string,
@@ -994,7 +997,13 @@ type InferRowWithChecked<
     // constraint, which built a row out of `string` keys instead of failing
     // (issue #275).
     [ParseStatementNormalized<EffectiveQuery>] extends [never]
-    ? never
+    ? // Strict mode says what happened. `never` is a correct answer - there is
+      // no row - but it explains nothing, and the message this used to produce
+      // was worse: `unknown table: ''`, which named no table and pointed a
+      // `selct` typo at the wrong layer entirely (issue #303).
+      Strict extends true
+      ? UnrecognizedStatementError
+      : never
     : ParseStatementNormalized<EffectiveQuery> extends {
           columns: infer Columns extends string;
           sources: infer Sources extends Source[];

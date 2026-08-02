@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A statement the parser does not recognize says so in strict mode: `QueryTypeError<'unsupported or unrecognized statement'>`. `truncate users`, a `selct` keyword typo and an empty query all resolved to a bare `never`, which explains nothing, and before the #275 guard landed they produced `unknown table: ''` - a message naming no table and pointing a keyword typo at the wrong layer ([#303](https://github.com/tiagolauer/OwlSQL/issues/303)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
