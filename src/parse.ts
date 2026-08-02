@@ -23,6 +23,7 @@ import type {
   ParseFromClause,
   RestAfterFromClause,
   TakeFromClause,
+  TakeUntilClauseBoundary,
   ExtractJoinOnText,
 } from './from.js';
 import type { IsCaseExpression, SplitCaseExpression, CaseExpressionType } from './case.js';
@@ -316,11 +317,93 @@ type ExtraFromTextAfterKeyword<S extends string, Keyword extends string> = [
     ? TakeFromClause<AfterClause>
     : '';
 
+// Nothing scanned the INSERT column list or the SET assignment targets against
+// the schema, so `insert into users (naem) values ($1)` and
+// `update users set naem = $1` both passed strict mode - guaranteed runtime
+// errors on every engine, and the kind of typo the mode exists to catch. The
+// documented list of unchecked clauses covers GROUP BY, HAVING and ORDER BY;
+// column names in write statements were never on it (issue #282).
+type AssignmentTarget<Entry extends string> = Trim<Entry> extends `${infer Before}=${string}`
+  ? Trim<Before>
+  : Trim<Entry>;
+
+// A row assignment (`set (a, b) = (1, 2)`) and anything else that is not a
+// plain name are left alone: this check reports a name the schema does not
+// have, and it must not invent a report for a shape it cannot read.
+type IsPlainColumnName<Column extends string> = Column extends '' | `${string}(${string}` | `${string} ${string}`
+  ? false
+  : true;
+
+type FirstUnknownWriteColumn<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Entries extends string[],
+> = Entries extends [infer Head extends string, ...infer Tail extends string[]]
+  ? AssignmentTarget<Head> extends infer Column extends string
+    ? IsPlainColumnName<Column> extends false
+      ? FirstUnknownWriteColumn<DB, Sources, Tail>
+      : ResolveColumnType<DB, Sources, Column, true> extends QueryTypeError<infer Message>
+        ? QueryTypeError<Message>
+        : FirstUnknownWriteColumn<DB, Sources, Tail>
+    : never
+  : never;
+
+type ApplyWriteColumnCheck<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  ColumnsText extends string,
+  Strict extends boolean,
+  Row,
+> = ColumnsText extends ''
+  ? // Cheapest test first: every SELECT carries an empty string here, and the
+    // structural `Row extends QueryTypeError` check below is not free on a
+    // wide row.
+    Row
+  : Strict extends true
+    ? Row extends QueryTypeError<string>
+      ? Row
+      : [FirstUnknownWriteColumn<DB, Sources, SplitColumnList<Trim<ColumnsText>>>] extends [never]
+        ? Row
+        : FirstUnknownWriteColumn<DB, Sources, SplitColumnList<Trim<ColumnsText>>>
+    : Row;
+
+// The column list of an INSERT, which is the first parenthesized group before
+// VALUES or the SELECT half - never the VALUES tuple itself.
+type FirstParenGroupInner<S extends string> = S extends `${string}(${infer AfterOpen}`
+  ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string }
+    ? Inner
+    : ''
+  : '';
+
+type BeforeTopLevelKeyword<S extends string, Keyword extends string> = [
+  SplitAtTopLevelKeyword<S, Keyword>,
+] extends [never]
+  ? ''
+  : SplitAtTopLevelKeyword<S, Keyword> extends { before: infer Before extends string }
+    ? Before
+    : '';
+
+type InsertColumnsText<S extends string> = BeforeTopLevelKeyword<S, 'values'> extends ''
+  ? FirstParenGroupInner<BeforeTopLevelKeyword<S, 'select'>>
+  : FirstParenGroupInner<BeforeTopLevelKeyword<S, 'values'>>;
+
+// The SET clause runs to the first clause boundary. `from` is not one of them,
+// so an `UPDATE ... FROM` keeps its FROM text in this string - harmless,
+// because only the text before each `=` is read.
+type UpdateSetText<S extends string> = [SplitAtTopLevelKeyword<S, 'set'>] extends [never]
+  ? ''
+  : SplitAtTopLevelKeyword<S, 'set'> extends { after: infer After extends string }
+    ? TakeUntilClauseBoundary<After>
+    : '';
+
 export interface ParsedStatement {
   columns: string;
   sources: Source[];
   whereText: string;
   fromText: string;
+  // Empty for everything but the two write branches that carry a column list:
+  // INSERT's, and UPDATE's SET assignment targets.
+  writeColumnsText: string;
 }
 
 type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer Body
@@ -334,12 +417,13 @@ type ParseSelectBody<S extends string> = StatementAfterSelect<S> extends infer B
             columns: Columns;
             sources: ParseFromClause<AfterFrom>;
             whereText: ExtractSelectWhereText<RestAfterFromClause<AfterFrom>>;
+            writeColumnsText: '';
             // Kept as raw text rather than pre-extracted ON conditions: the
             // JOIN ON check only runs in strict mode, and this way the scan
             // is never instantiated for a non-strict query.
             fromText: TakeFromClause<AfterFrom>;
           }
-        : { columns: Columns; sources: []; whereText: ''; fromText: '' }
+        : { columns: Columns; sources: []; whereText: ''; fromText: ''; writeColumnsText: '' }
       : never
     : never
   : never;
@@ -363,6 +447,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
           sources: SingleSource<RestAfterKeyword<S, 'into'>>;
           whereText: '';
           fromText: '';
+          writeColumnsText: InsertColumnsText<S>;
         }
       : IsKeyword<Keyword, 'update'> extends true
         ? {
@@ -378,6 +463,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
             ];
             whereText: ExtractUpdateDeleteWhereText<S>;
             fromText: ExtraFromTextAfterKeyword<S, 'from'>;
+            writeColumnsText: UpdateSetText<S>;
           }
         : IsKeyword<Keyword, 'delete'> extends true
           ? {
@@ -388,6 +474,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
               ];
               whereText: ExtractUpdateDeleteWhereText<S>;
               fromText: ExtraFromTextAfterKeyword<S, 'using'>;
+              writeColumnsText: '';
             }
           : IsKeyword<Keyword, 'merge'> extends true
             ? {
@@ -400,6 +487,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
                 sources: SingleSource<RestAfterKeyword<S, 'into'>>;
                 whereText: '';
                 fromText: '';
+                writeColumnsText: '';
               }
             : never
   : never;
@@ -1187,13 +1275,19 @@ type InferRowWithChecked<
           sources: infer Sources extends Source[];
           whereText: infer WhereText extends string;
           fromText: infer FromText extends string;
+          writeColumnsText: infer WriteColumnsText extends string;
         }
     ? ShadowedBy<CteDB, BuildDerivedSourceMap<CteDB, Sources, Strict>> extends infer EffectiveDB extends SchemaLike
       ? // The clause check wraps the empty row too: a write with no RETURNING
         // projects nothing, but its WHERE clause is still a set of column
         // references strict mode has to validate - and UPDATE/DELETE is where
         // a wrong one costs the most (issue #233).
-        ApplyWhereCheck<
+        ApplyWriteColumnCheck<
+          EffectiveDB,
+          Sources,
+          WriteColumnsText,
+          Strict,
+          ApplyWhereCheck<
           EffectiveDB,
           Sources,
           WhereText,
@@ -1211,6 +1305,7 @@ type InferRowWithChecked<
                     : [],
                   Strict
                 >
+        >
         >
       : never
     : never

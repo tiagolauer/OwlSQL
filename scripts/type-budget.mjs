@@ -19,7 +19,14 @@ const SHAPE_REPEATS = 4;
 // splits per query instead of one) and buys back a compiler crash - a tab beside
 // a newline, or any CRLF, used to exhaust the heap outright. Gating the passes
 // was measured and came out worse, see the note in src/string.ts.
-const MAX_INSTANTIATIONS = 200_000;
+// Raised again from 200,000 for #282: strict mode now resolves the INSERT
+// column list and the UPDATE SET targets against the schema, which are
+// guaranteed runtime errors nothing checked before. The check itself is gated
+// on a non-empty column text, so a SELECT pays only for carrying the empty
+// string; the ~4.5% is the two clause scans a write statement now runs
+// (`SplitAtTopLevelKeyword` for VALUES/SELECT and for SET) plus the extra
+// field on every parsed statement. Measured: 192,486 -> 201,322.
+const MAX_INSTANTIATIONS = 210_000;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');
