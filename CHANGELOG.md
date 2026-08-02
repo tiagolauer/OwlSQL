@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A placeholder reused against columns of different types says so. `where id = $1 or name = $1` intersected `number` with `string`, collapsed the tuple to `[never]` and made every call - including the zero-argument one - fail with an opaque "not assignable to never" chain. The query is still rejected, since pg refuses inconsistent deduced parameter types too, but now as `QueryTypeError<'conflicting types for $1'>` ([#302](https://github.com/tiagolauer/OwlSQL/issues/302)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

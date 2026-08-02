@@ -20,6 +20,7 @@ import type {
   AfterKeyword,
   SplitColumnList,
   MultipleStatementsError,
+  QueryTypeError,
 } from './parse.js';
 import type { ParseWithClause } from './cte.js';
 import type { FunctionName } from './functions.js';
@@ -186,16 +187,30 @@ type FindNameIndex<
     : FindNameIndex<Tail, Name, [...Position, unknown]>
   : never;
 
+// A repeated placeholder intersects the two types it was read with, and
+// `number & string` is `never`: the tuple became uncallable with any argument
+// list at all, including the empty one, behind an opaque "not assignable to
+// never" chain (issue #302). Rejecting the query is right - pg refuses
+// inconsistent deduced parameter types too - so this keeps the rejection and
+// adds the diagnosis. An earlier conflict is kept as it is rather than
+// intersected again, so the first placeholder that conflicts is the one named.
+type MergeSlot<Head, Type, Label extends string> = Head extends QueryTypeError<string>
+  ? Head
+  : [Head & Type] extends [never]
+    ? QueryTypeError<`conflicting types for ${Label}`>
+    : Head & Type;
+
 type SetSlot<
   Tuple extends unknown[],
   Position extends unknown[],
   Type,
+  Label extends string,
 > = Position extends [unknown, ...infer PositionRest extends unknown[]]
   ? Tuple extends [infer Head, ...infer TupleRest extends unknown[]]
-    ? [Head, ...SetSlot<TupleRest, PositionRest, Type>]
-    : [unknown, ...SetSlot<[], PositionRest, Type>]
+    ? [Head, ...SetSlot<TupleRest, PositionRest, Type, Label>]
+    : [unknown, ...SetSlot<[], PositionRest, Type, Label>]
   : Tuple extends [infer Head, ...infer TupleRest extends unknown[]]
-    ? [Head & Type, ...TupleRest]
+    ? [MergeSlot<Head, Type, Label>, ...TupleRest]
     : [Type];
 
 // `= any($1)` / `= all($1)` compare the column against a whole array, so the
@@ -248,14 +263,14 @@ type AddParam<
           : Existing extends unknown[]
             ? {
                 indexed: Indexed;
-                sequential: SetSlot<Sequential, Existing, Type>;
+                sequential: SetSlot<Sequential, Existing, Type, CleanScanToken<Token>>;
                 sequentialNames: SequentialNames;
               }
             : never
         : never
     : Position extends unknown[]
       ? {
-          indexed: SetSlot<Indexed, Position, Type>;
+          indexed: SetSlot<Indexed, Position, Type, CleanScanToken<Token>>;
           sequential: Sequential;
           sequentialNames: SequentialNames;
         }
