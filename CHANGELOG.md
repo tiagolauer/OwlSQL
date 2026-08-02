@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- Strict mode validates the `JOIN ... ON` conditions inside `UPDATE ... FROM` and `DELETE ... USING`. The joined sources were registered, so selecting from them worked, but the ON expressions were never checked because both branches passed an empty FROM text to the check - `... join refunds r on r.nope = o.id` was accepted silently ([#281](https://github.com/tiagolauer/OwlSQL/issues/281)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

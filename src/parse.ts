@@ -290,6 +290,20 @@ type ExtraSourcesAfterKeyword<S extends string, Keyword extends string> = [
     ? ParseFromClause<AfterClause>
     : [];
 
+// The FROM/USING clause text of a write, for the same JOIN ... ON check a
+// SELECT gets. Both branches hardcoded an empty string, so a mistyped column
+// in `update users set ... from orders o join refunds r on r.nope = o.id` was
+// accepted silently even though the joined sources themselves were registered
+// (issue #281). Mirrors ParseSelectBody, which keeps the clause as raw text
+// and lets ExtractJoinOnText scan it only in strict mode.
+type ExtraFromTextAfterKeyword<S extends string, Keyword extends string> = [
+  SplitAtTopLevelKeyword<S, Keyword>,
+] extends [never]
+  ? ''
+  : SplitAtTopLevelKeyword<S, Keyword> extends { after: infer AfterClause extends string }
+    ? TakeFromClause<AfterClause>
+    : '';
+
 export interface ParsedStatement {
   columns: string;
   sources: Source[];
@@ -346,7 +360,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
               ...ExtraSourcesAfterKeyword<S, 'from'>,
             ];
             whereText: ExtractUpdateDeleteWhereText<S>;
-            fromText: '';
+            fromText: ExtraFromTextAfterKeyword<S, 'from'>;
           }
         : IsKeyword<Keyword, 'delete'> extends true
           ? {
@@ -356,7 +370,7 @@ type ParseStatementNormalized<S extends string> = Trim<S> extends `(${infer Afte
                 ...ExtraSourcesAfterKeyword<S, 'using'>,
               ];
               whereText: ExtractUpdateDeleteWhereText<S>;
-              fromText: '';
+              fromText: ExtraFromTextAfterKeyword<S, 'using'>;
             }
           : IsKeyword<Keyword, 'merge'> extends true
             ? {
