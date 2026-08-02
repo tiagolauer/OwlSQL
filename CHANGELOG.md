@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A parameter compared against a nullable column no longer accepts null. `where email = $1` typed its slot `string | null`, and passing null compiles into a query that matches nothing, since `= NULL` is never true. The `| null` belongs to the result side - most visibly with a LEFT JOIN, where it means a missing match, not a value to compare against. `is distinct from` keeps null, and so do SET assignments and INSERT values, where storing null is ordinary ([#299](https://github.com/tiagolauer/OwlSQL/issues/299)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

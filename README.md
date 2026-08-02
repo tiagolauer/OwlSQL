@@ -1008,7 +1008,10 @@ This is a focused tool for the common read path, not a full SQL grammar:
   query, ahead of placeholders in the outer query that follows the `WITH`
   clause. Numbered placeholders bind by
   their index (`$2` fills the second tuple slot even when it appears first);
-  a repeated `$n` occupies a single slot.
+  a repeated `$n` occupies a single slot. A parameter compared against a
+  nullable column is typed without the `null` (`= NULL` never matches a row);
+  `is distinct from` keeps it, and so do `SET` assignments and `INSERT`
+  values, where storing null is ordinary.
 - **Quoted identifiers** use `"..."` (standard), `[...]` (SQL Server), or
   `` `...` `` (MySQL — escape the backtick with `\`` inside the template
   literal). A quoted name may contain spaces (`"first name"`,
