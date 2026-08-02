@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- Strict mode checks the INSERT column list and the UPDATE SET targets. `insert into users (naem) values ($1)` and `update users set naem = $1` were both accepted, although each is a guaranteed runtime error on every engine; the documented list of unchecked clauses covers GROUP BY, HAVING and ORDER BY, never write-statement column names. MAX_INSTANTIATIONS moves 200,000 -> 210,000: the fixture goes from 192,486 to 201,322, the cost of the two clause scans a write now runs ([#282](https://github.com/tiagolauer/OwlSQL/issues/282)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
