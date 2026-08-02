@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- The editor plugin stops flagging every qualified reference to a CTE as an unknown alias. `with recent as (...) select r.id from recent r`, the same reference by the CTE's own name, and the same in a WHERE clause all resolve cleanly in the type layer; the plugin dropped CTE names from its source list and had nothing left to match the qualifier against ([#293](https://github.com/tiagolauer/OwlSQL/issues/293)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
