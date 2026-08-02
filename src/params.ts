@@ -416,15 +416,6 @@ type ScanParams<
   ? [...FinalIndexed, ...FinalSequential]
   : never;
 
-type ZipIntersectIndexed<A extends unknown[], B extends unknown[]> = A extends [
-  infer AHead,
-  ...infer ATail extends unknown[],
-]
-  ? B extends [infer BHead, ...infer BTail extends unknown[]]
-    ? [AHead & BHead, ...ZipIntersectIndexed<ATail, BTail>]
-    : A
-  : B;
-
 // The column list starts right after the target name, which is not always a
 // word boundary: `insert into users(id, name)` glues it to the table, so
 // dropping the first word ate the first column too (issue #245).
@@ -609,26 +600,33 @@ type InsertParamTypes<DB extends SchemaLike, Q extends string> = ParseStatement<
 
 type CteScanEntry = [name: string, query: string, columns: string[] | null];
 
-type CteBodyParamScan<DB extends SchemaLike, Ctes extends CteScanEntry[]> = Ctes extends [
-  infer Head extends CteScanEntry,
-  ...infer Tail extends CteScanEntry[],
-]
+// The registry threads through every CTE body and on into the outer query,
+// rather than each scan starting a fresh one and the results being
+// concatenated. A name registry is what dedups a repeated placeholder to one
+// slot, so a `@since` written in a CTE body and again outside it used to get
+// two slots while the adapters - which dedupe by name over the whole
+// statement - bound one value. Every parameter after the duplicate then
+// shifted by one: on mssql the next `@name` silently received the duplicated
+// value, on node:sqlite the query matched nothing (issue #268).
+type CteBodyParamScan<
+  DB extends SchemaLike,
+  Ctes extends CteScanEntry[],
+  Indexed extends unknown[] = [],
+  Sequential extends unknown[] = [],
+  SequentialNames extends string[] = [],
+> = Ctes extends [infer Head extends CteScanEntry, ...infer Tail extends CteScanEntry[]]
   ? [ParseStatement<Head[1]>] extends [never]
-    ? CteBodyParamScan<DB, Tail>
+    ? CteBodyParamScan<DB, Tail, Indexed, Sequential, SequentialNames>
     : ParseStatement<Head[1]> extends { sources: infer Sources extends Source[] }
-      ? ScanParamsRaw<Head[1], DB, Sources> extends {
-          indexed: infer HeadIndexed extends unknown[];
-          sequential: infer HeadSequential extends unknown[];
+      ? ScanParamsRaw<Head[1], DB, Sources, '', '', Indexed, Sequential, SequentialNames> extends {
+          indexed: infer NextIndexed extends unknown[];
+          sequential: infer NextSequential extends unknown[];
+          sequentialNames: infer NextSequentialNames extends string[];
         }
-        ? CteBodyParamScan<DB, Tail> extends {
-            indexed: infer TailIndexed extends unknown[];
-            sequential: infer TailSequential extends unknown[];
-          }
-          ? { indexed: ZipIntersectIndexed<HeadIndexed, TailIndexed>; sequential: [...HeadSequential, ...TailSequential] }
-          : never
+        ? CteBodyParamScan<DB, Tail, NextIndexed, NextSequential, NextSequentialNames>
         : never
-      : CteBodyParamScan<DB, Tail>
-  : { indexed: []; sequential: [] };
+      : CteBodyParamScan<DB, Tail, Indexed, Sequential, SequentialNames>
+  : { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames };
 
 type StripDoubledAt<S extends string> = S extends `${infer Before}@@${infer After}`
   ? StripDoubledAt<`${Before}${After}`>
@@ -689,21 +687,31 @@ type OuterAndCteParams<
   CteDB extends SchemaLike,
   EffectiveQuery extends string,
   Sources extends Source[],
-> = ScanParamsRaw<EffectiveQuery, CteDB, Sources> extends {
-  indexed: infer OuterIndexed extends unknown[];
-  sequential: infer OuterSequential extends unknown[];
-}
-  ? [ParseWithClause<Normalize<Q>>] extends [never]
-    ? [...OuterIndexed, ...OuterSequential]
-    : ParseWithClause<Normalize<Q>> extends { ctes: infer Ctes extends CteScanEntry[] }
-      ? CteBodyParamScan<CteDB, Ctes> extends {
-          indexed: infer CteIndexed extends unknown[];
-          sequential: infer CteSequential extends unknown[];
-        }
-        ? [...ZipIntersectIndexed<CteIndexed, OuterIndexed>, ...CteSequential, ...OuterSequential]
-        : unknown[]
+> = [ParseWithClause<Normalize<Q>>] extends [never]
+  ? ScanParams<EffectiveQuery, CteDB, Sources>
+  : ParseWithClause<Normalize<Q>> extends { ctes: infer Ctes extends CteScanEntry[] }
+    ? CteBodyParamScan<CteDB, Ctes> extends {
+        indexed: infer CteIndexed extends unknown[];
+        sequential: infer CteSequential extends unknown[];
+        sequentialNames: infer CteSequentialNames extends string[];
+      }
+      ? // Seeding the outer scan with what the CTE bodies produced replaces the
+        // old concatenation: the numbered slots merge at their own positions
+        // the way SetSlot already merges a repeat, the sequential ones come
+        // out CTE-first in textual order, and a name already registered by a
+        // CTE body now resolves to its existing slot instead of a second one.
+        ScanParams<
+          EffectiveQuery,
+          CteDB,
+          Sources,
+          '',
+          '',
+          CteIndexed,
+          CteSequential,
+          CteSequentialNames
+        >
       : unknown[]
-  : unknown[];
+    : unknown[];
 
 // Same guard InferRowWith applies (issue #206): the parameter tuple is
 // derived from the merged text too, so a stacked statement would otherwise
