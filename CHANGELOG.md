@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- `owlsql generate` picks up SQLite generated columns. `PRAGMA table_info` omits them, so a `generated always as (...)` column, VIRTUAL or STORED, was missing from the schema while `select *` returned it — the generated `DB` disagreed with every read, and strict mode and the editor plugin flagged valid queries touching those columns ([#292](https://github.com/tiagolauer/OwlSQL/issues/292)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

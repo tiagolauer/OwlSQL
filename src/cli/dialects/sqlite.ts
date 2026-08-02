@@ -56,6 +56,16 @@ interface SqliteTableInfoRow {
   type: string;
   notnull: number;
   pk: number;
+  hidden: number;
+}
+
+// table_xinfo's `hidden` flag: 0 ordinary, 1 a virtual table's hidden column,
+// 2 a VIRTUAL generated column, 3 a STORED one. `select *` returns 0, 2 and 3
+// and skips 1, so this is the set that has to match the schema (issue #292).
+const VISIBLE_HIDDEN_FLAGS = new Set([0, 2, 3]);
+
+function isVisibleColumn(column: SqliteTableInfoRow): boolean {
+  return VISIBLE_HIDDEN_FLAGS.has(column.hidden);
 }
 
 function isRowidAlias(column: SqliteTableInfoRow, primaryKeyCount: number): boolean {
@@ -109,9 +119,15 @@ export async function introspectSqlite(connection: ConnectionInfo): Promise<Tabl
       .all() as { name: string }[];
 
     return tableRows.map((tableRow) => {
-      const columns = db
-        .prepare(`PRAGMA table_info(${quoteIdentifier(tableRow.name)})`)
-        .all() as unknown as SqliteTableInfoRow[];
+      // table_xinfo rather than table_info: the latter omits generated columns
+      // entirely, so a `total real generated always as (...)` column was missing
+      // from the schema while `select *` returned it, and strict mode plus the
+      // editor plugin flagged every valid query touching it (issue #292).
+      const columns = (
+        db
+          .prepare(`PRAGMA table_xinfo(${quoteIdentifier(tableRow.name)})`)
+          .all() as unknown as SqliteTableInfoRow[]
+      ).filter(isVisibleColumn);
 
       const primaryKeyCount = columns.filter((column) => column.pk > 0).length;
 
