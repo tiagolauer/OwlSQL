@@ -284,4 +284,37 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
       diagnosticsFor('select posts.titel from users join posts on users.id = posts.user_id'),
     ).toEqual([{ message: 'unknown column: titel', text: 'titel' }]);
   });
+
+  // Regression for #294: the scanner pooled both branches of a set operation
+  // into one scope, so a column name they share - which is every column, since
+  // branches have to be compatible - came back as ambiguous.
+  describe('set operations', () => {
+    it('does not report a shared column name across UNION branches', () => {
+      expect(diagnosticsFor('select id from users union select id from posts')).toEqual([]);
+    });
+
+    it('does not report across UNION ALL, INTERSECT or EXCEPT either', () => {
+      expect(diagnosticsFor('select id from users union all select id from posts')).toEqual([]);
+      expect(diagnosticsFor('select id from users intersect select id from posts')).toEqual([]);
+      expect(diagnosticsFor('select id from users except select id from posts')).toEqual([]);
+    });
+
+    it('still reports a typo in the first branch', () => {
+      expect(diagnosticsFor('select nope from users union select id from posts')).toEqual([
+        { message: 'unknown column: nope', text: 'nope' },
+      ]);
+    });
+
+    it('still reports an ambiguous column inside the first branch itself', () => {
+      expect(
+        diagnosticsFor('select id from users join posts on users.id = posts.user_id union select id from posts'),
+      ).toEqual([{ message: 'ambiguous column: id', text: 'id' }]);
+    });
+
+    it('does not cut the statement at a union inside a subquery', () => {
+      expect(
+        diagnosticsFor('select nope from users where id in (select id from posts union select id from posts)'),
+      ).toEqual([{ message: 'unknown column: nope', text: 'nope' }]);
+    });
+  });
 });

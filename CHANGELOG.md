@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- The editor plugin stops reporting `ambiguous column` on the branches of a set operation. It pooled every FROM/JOIN in the statement into one scope, so the columns a `union` shares - which is all of them, since branches have to be column-compatible - looked like they came from two tables at once, putting a squiggle on nearly every UNION. Diagnostics now cover the first branch, which is also the branch the core takes the row shape from ([#294](https://github.com/tiagolauer/OwlSQL/issues/294)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

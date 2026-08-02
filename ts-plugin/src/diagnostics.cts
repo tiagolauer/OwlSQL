@@ -285,6 +285,40 @@ function columnTokenFromEntry(entry: ColumnEntry): { token: string; offset: numb
   return { token, offset: leadingWhitespace };
 }
 
+// Only the first branch of a set operation is diagnosed. The scanner pools
+// every FROM/JOIN in the statement into one scope, so both branches of a
+// `union` shared a source list and any column name they had in common - which
+// is every column, since branches have to be compatible - came back as
+// `ambiguous column` (issue #294). The core types a set operation by its first
+// branch, and truncating here matches that: later branches are not reported
+// on, instead of being reported wrongly. Truncation keeps every offset before
+// the cut, so spans stay aligned with the source.
+const SET_OPERATOR = /\b(?:union|intersect|except)\b/gi;
+
+function parenDepthAt(text: string, index: number): number {
+  let depth = 0;
+  for (let i = 0; i < index; i += 1) {
+    const char = text[i];
+    if (char === '(') {
+      depth += 1;
+    } else if (char === ')') {
+      depth -= 1;
+    }
+  }
+  return depth;
+}
+
+function firstBranchEnd(stripped: string): number {
+  SET_OPERATOR.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = SET_OPERATOR.exec(stripped)) !== null) {
+    if (parenDepthAt(stripped, match.index) === 0) {
+      return match.index;
+    }
+  }
+  return stripped.length;
+}
+
 function getQueryDiagnostics(
   typescript: typeof ts,
   checker: ts.TypeChecker,
@@ -298,7 +332,9 @@ function getQueryDiagnostics(
   // computed against it drift out of alignment with literalStart (a raw
   // source position) by one character per preceding line break on a CRLF
   // file. Mirrors the same fix already applied to hover in index.cts.
-  const text = sourceFile.text.slice(literalStart, literal.getEnd() - 1);
+  const fullText = sourceFile.text.slice(literalStart, literal.getEnd() - 1);
+  const branchEnd = firstBranchEnd(stripStringLiterals(fullText).stripped);
+  const text = fullText.slice(0, branchEnd);
   const { stripped } = stripStringLiterals(text);
   // A CTE query's outer statement doesn't start at offset 0 - skip the
   // WITH-clause prefix (mirroring ParseWithClause in src/cte.ts) so the
