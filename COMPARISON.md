@@ -136,8 +136,8 @@ check the source link and open an issue.
   `defineSchema`, and the `Result` helpers — about 175 lines of source
   across [`src/index.ts`](src/index.ts) and [`src/result.ts`](src/result.ts)
   combined, most of which is type declarations erased at compile time. The
-  parser itself (~1,700 lines across `src/parse.ts`/`src/from.ts`/etc.) is
-  100% types — it ships zero bytes to any runtime.
+  parser itself (a few thousand lines across `src/parse.ts`/`src/from.ts`/
+  etc.) is 100% types — it ships zero bytes to any runtime.
 - **DX trade-off, stated plainly**: this is the smallest surface area of
   the five because it does the least. No migrations, no relation loading, no
   query builder ergonomics (autocomplete for chained methods) — you write
