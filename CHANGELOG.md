@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- Strict mode accepts correlated subqueries, including the README's own scalar-subquery example, which it used to reject with `unknown alias: users`. The inner query was resolved against its own sources only, so a reference to the query it sits inside read as unknown. Outer sources are consulted as a fallback, not merged into the scope, so a name both levels carry is still the inner one and does not become ambiguous. A derived table that fails to type now also reports its own error instead of the outer query reporting the alias's columns as unknown ([#273](https://github.com/tiagolauer/OwlSQL/issues/273)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

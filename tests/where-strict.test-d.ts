@@ -139,10 +139,13 @@ type SubqueryInWhereIsSkippedNotValidated = Expect<
   >
 >;
 
+// The message names the mistake since #273: the derived table's own error is
+// surfaced instead of the outer query reporting the alias's columns as unknown,
+// which pointed at the wrong line entirely.
 type WhereErrorInsideDerivedTable = Expect<
   Equal<
     StrictQuery<DB, "select x.id from (select id from users where naem = 'x') x">,
-    QueryTypeError<'unknown column: id'>[]
+    QueryTypeError<'unknown column: naem'>[]
   >
 >;
 
