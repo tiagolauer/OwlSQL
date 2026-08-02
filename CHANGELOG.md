@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A Postgres `::` cast in the select list is no longer a strict-mode error. `select id::text as id_text from users` reported `unknown column: id::text`, because `:` is not an operator character and nothing stripped the suffix, so the whole token was looked up as a column name - and one cast poisoned the entire row. The operand is still resolved, so a typo in it is still caught; the column itself types `unknown`, since the cast decides the type ([#277](https://github.com/tiagolauer/OwlSQL/issues/277)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
