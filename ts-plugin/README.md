@@ -8,6 +8,15 @@ A TypeScript Language Service Plugin: it runs inside `tsserver`, the process tha
 npm install --save-dev @owlsql/ts-plugin
 ```
 
+> **Not on npm yet.** Until this package is published, build it from a clone
+> and install the folder instead:
+>
+> ```bash
+> git clone https://github.com/tiagolauer/OwlSQL
+> cd OwlSQL && npm install && npm run build --workspace @owlsql/ts-plugin
+> npm install --save-dev /path/to/OwlSQL/ts-plugin   # from your project
+> ```
+
 ```json
 {
   "compilerOptions": {
