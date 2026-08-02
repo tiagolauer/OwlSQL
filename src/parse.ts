@@ -931,7 +931,8 @@ type ScalarSubqueryType<
   DB extends SchemaLike,
   Q extends string,
   Strict extends boolean,
-> = InferRowWith<DB, Q, Strict> extends infer Row
+  OuterSources extends Source[] = [],
+> = InferRowWith<DB, Q, Strict, OuterSources> extends infer Row
   ? [Row] extends [never]
     ? unknown
     : Row extends QueryTypeError<string>
@@ -1047,7 +1048,7 @@ export type ResolveColumnType<
             ? CastExpressionType<DB, Sources, CastOperand, Strict>
             : ResolveColumnName<DB, Sources, Expression, Strict>
         : LiteralType<Expression>
-    : ScalarSubqueryType<DB, ScalarSubqueryInner<Expression>, Strict>;
+    : ScalarSubqueryType<DB, ScalarSubqueryInner<Expression>, Strict, Sources>;
 
 export type ResolveColumnLoose<
   DB extends SchemaLike,
@@ -1214,10 +1215,14 @@ export type ResolveCteContext<
       }
     : { db: DB; query: Normalize<Q> };
 
+// A LATERAL subquery is correlated by definition, and an ordinary derived
+// table may reference an outer source too; AllSources is the full FROM list of
+// the query these were parsed from, passed as the fallback scope (issue #273).
 type BuildDerivedSourceMap<
   DB extends SchemaLike,
   Sources extends Source[],
   Strict extends boolean,
+  AllSources extends Source[] = [],
   Accumulated extends Record<string, unknown> = Record<never, never>,
 > = Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
   ? Head extends { derivedQuery: infer Q extends string }
@@ -1225,21 +1230,51 @@ type BuildDerivedSourceMap<
         DB,
         Tail,
         Strict,
-        Accumulated & { [Key in Head['alias']]: Flatten<InferRowWith<DB, Q, Strict>> }
+        AllSources,
+        Accumulated & { [Key in Head['alias']]: Flatten<InferRowWith<DB, Q, Strict, AllSources>> }
       >
-    : BuildDerivedSourceMap<DB, Tail, Strict, Accumulated>
+    : BuildDerivedSourceMap<DB, Tail, Strict, AllSources, Accumulated>
   : Accumulated;
+
+// A derived table that fails to type replaces its own row with the error
+// object, and the outer query then reports the alias's columns as unknown -
+// pointing at the wrong thing entirely. Surfacing the inner error first keeps
+// the message on the mistake that caused it (issue #273).
+type FirstDerivedSourceError<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Strict extends boolean,
+  AllSources extends Source[],
+> = Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
+  ? Head extends { derivedQuery: infer Q extends string }
+    ? InferRowWith<DB, Q, Strict, AllSources> extends QueryTypeError<infer Message>
+      ? QueryTypeError<Message>
+      : FirstDerivedSourceError<DB, Tail, Strict, AllSources>
+    : FirstDerivedSourceError<DB, Tail, Strict, AllSources>
+  : never;
+
+type ApplyDerivedSourceCheck<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Strict extends boolean,
+  Row,
+> = Strict extends true
+  ? [FirstDerivedSourceError<DB, Sources, Strict, Sources>] extends [never]
+    ? Row
+    : FirstDerivedSourceError<DB, Sources, Strict, Sources>
+  : Row;
 
 type ApplyClauseError<
   DB extends SchemaLike,
   Sources extends Source[],
   ClauseText extends string,
   Row,
+  OuterSources extends Source[] = [],
 > = Trim<ClauseText> extends ''
   ? Row
-  : [WhereClauseError<DB, Sources, ClauseText>] extends [never]
+  : [WhereClauseError<DB, Sources, ClauseText, OuterSources>] extends [never]
     ? Row
-    : WhereClauseError<DB, Sources, ClauseText>;
+    : WhereClauseError<DB, Sources, ClauseText, OuterSources>;
 
 // JOIN ON conditions are validated the same way the WHERE clause is: the
 // operands are ordinary column references against the same sources, and a
@@ -1255,6 +1290,7 @@ type ApplyWhereCheck<
   FromText extends string,
   Strict extends boolean,
   Row,
+  OuterSources extends Source[] = [],
 > = Strict extends true
   ? Row extends QueryTypeError<string>
     ? Row
@@ -1262,7 +1298,8 @@ type ApplyWhereCheck<
         DB,
         Sources,
         ExtractJoinOnText<FromText>,
-        ApplyClauseError<DB, Sources, WhereText, Row>
+        ApplyClauseError<DB, Sources, WhereText, Row, OuterSources>,
+        OuterSources
       >
   : Row;
 
@@ -1282,14 +1319,16 @@ export type InferRowWith<
   DB extends SchemaLike,
   Q extends string,
   Strict extends boolean,
+  OuterSources extends Source[] = [],
 > = HasNonTrailingSemicolon<Q> extends true
   ? MultipleStatementsError
-  : InferRowWithChecked<DB, Q, Strict>;
+  : InferRowWithChecked<DB, Q, Strict, OuterSources>;
 
 type InferRowWithChecked<
   DB extends SchemaLike,
   Q extends string,
   Strict extends boolean,
+  OuterSources extends Source[] = [],
 > = ResolveCteContext<DB, Q, Strict> extends {
   db: infer CteDB extends SchemaLike;
   query: infer EffectiveQuery extends string;
@@ -1316,12 +1355,19 @@ type InferRowWithChecked<
           writeColumnsText: infer WriteColumnsText extends string;
           nestedSelect: infer NestedSelect extends string;
         }
-    ? ShadowedBy<CteDB, BuildDerivedSourceMap<CteDB, Sources, Strict>> extends infer EffectiveDB extends SchemaLike
+    ? ShadowedBy<
+        CteDB,
+        BuildDerivedSourceMap<CteDB, Sources, Strict, Sources>
+      > extends infer EffectiveDB extends SchemaLike
       ? // The clause check wraps the empty row too: a write with no RETURNING
         // projects nothing, but its WHERE clause is still a set of column
         // references strict mode has to validate - and UPDATE/DELETE is where
         // a wrong one costs the most (issue #233).
-        ApplyNestedSelectCheck<
+        ApplyDerivedSourceCheck<
+          CteDB,
+          Sources,
+          Strict,
+          ApplyNestedSelectCheck<
           DB,
           NestedSelect,
           Strict,
@@ -1347,7 +1393,9 @@ type InferRowWithChecked<
                     ? ParseColumnEntries<SplitColumnList<Columns>>
                     : [],
                   Strict
-                >
+                >,
+          OuterSources
+        >
         >
         >
         >

@@ -84,17 +84,32 @@ type HeadStartsSubquery<Head extends string, Tail extends string> = Head extends
       : false
   : false;
 
+// A correlated subquery references a column of the query it sits inside, which
+// is ordinary SQL - the README's own scalar-subquery example is one. The inner
+// scan only ever saw the inner query's sources, so every such reference read as
+// unknown (issue #273).
+//
+// The outer sources are a fallback rather than an addition to the scope: SQL
+// resolves the inner name first and only looks outward when it is not there, so
+// merging the two lists would instead invent an `ambiguous column` for every
+// name the two levels share. When the outer lookup fails too, the inner
+// message is the one reported - the reference was meant for the inner query.
 type ValidateWhereOperand<
   DB extends SchemaLike,
   Sources extends Source[],
   Operand extends string,
+  OuterSources extends Source[] = [],
 > = Operand extends '' ? never : IsPlaceholder<Operand> extends true ? never : ResolveColumnType<
   DB,
   Sources,
   Operand,
   true
 > extends QueryTypeError<infer Message>
-  ? QueryTypeError<Message>
+  ? OuterSources extends []
+    ? QueryTypeError<Message>
+    : ResolveColumnType<DB, OuterSources, Operand, true> extends QueryTypeError<string>
+      ? QueryTypeError<Message>
+      : never
   : never;
 
 type WhereScan<
@@ -102,26 +117,27 @@ type WhereScan<
   Sources extends Source[],
   S extends string,
   Prev extends string = '',
+  OuterSources extends Source[] = [],
 > = S extends `${infer Head} ${infer Tail}`
   ? HeadStartsSubquery<Head, Tail> extends true
     ? ExtractParenGroup<`${DropOneOpenParen<Head>} ${Tail}`> extends { rest: infer Rest extends string }
-      ? WhereScan<DB, Sources, Trim<Rest>>
+      ? WhereScan<DB, Sources, Trim<Rest>, '', OuterSources>
       : never
     : IsTriggerOperator<Head> extends true
-      ? ValidateWhereOperand<DB, Sources, Prev> extends infer Error
+      ? ValidateWhereOperand<DB, Sources, Prev, OuterSources> extends infer Error
         ? [Error] extends [never]
-          ? WhereScan<DB, Sources, Tail, CleanColumnToken<Head>>
+          ? WhereScan<DB, Sources, Tail, CleanColumnToken<Head>, OuterSources>
           : Error
         : never
       : IsAndOr<Head> extends true
-        ? ValidateWhereOperand<DB, Sources, Prev> extends infer Error
+        ? ValidateWhereOperand<DB, Sources, Prev, OuterSources> extends infer Error
           ? [Error] extends [never]
-            ? WhereScan<DB, Sources, Tail>
+            ? WhereScan<DB, Sources, Tail, '', OuterSources>
             : Error
           : never
         : IsTransparentToken<Head> extends true
-          ? WhereScan<DB, Sources, Tail, Prev>
-          : WhereScan<DB, Sources, Tail, CleanColumnToken<Head>>
+          ? WhereScan<DB, Sources, Tail, Prev, OuterSources>
+          : WhereScan<DB, Sources, Tail, CleanColumnToken<Head>, OuterSources>
   : // Terminal case: no trailing space left, so `S` is the final token of the
     // clause. Earlier operands are validated by the operator *after* them, but
     // the trailing operand has no following operator to trigger the check — so
@@ -130,10 +146,11 @@ type WhereScan<
     // operands are already short-circuited inside `ValidateWhereOperand`.
     IsTransparentToken<S> extends true
     ? never
-    : ValidateWhereOperand<DB, Sources, CleanColumnToken<S>>;
+    : ValidateWhereOperand<DB, Sources, CleanColumnToken<S>, OuterSources>;
 
 export type WhereClauseError<
   DB extends SchemaLike,
   Sources extends Source[],
   WhereText extends string,
-> = WhereScan<DB, Sources, Trim<WhereText>>;
+  OuterSources extends Source[] = [],
+> = WhereScan<DB, Sources, Trim<WhereText>, '', OuterSources>;
