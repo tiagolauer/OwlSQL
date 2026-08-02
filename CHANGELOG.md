@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- An unaliased function call whose arguments carry a space keeps its name. `select power(age, 2) from users` produced a column keyed `2)` in normal mode and `unknown column: power(age,` in strict mode, because the bare-alias fallback split the entry at its first space with no paren tracking - the same for `cast(id as text)`, `extract(epoch from created_at)` and `coalesce(name, 'anon')` ([#276](https://github.com/tiagolauer/OwlSQL/issues/276)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed

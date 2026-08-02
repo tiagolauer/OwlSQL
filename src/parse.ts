@@ -453,6 +453,25 @@ type FindTopLevelAsKeyword<
     : FindTopLevelAsKeyword<Tail, ApplyParenDelta<Depth, Head>, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
   : never;
 
+// The bare-alias fallback used to split the entry at its first space, with no
+// paren tracking, so an unaliased call whose arguments carry one - `power(age,
+// 2)`, `cast(id as text)`, `extract(epoch from created_at)` - was cut in half:
+// loose mode keyed the column `2)` and strict mode reported `unknown column:
+// power(age,` on valid SQL (issue #276). The split now happens at the first
+// space that is not inside a call, so an entry that is one call from end to
+// end has no alias to find.
+type SplitAtTopLevelSpace<
+  S extends string,
+  Depth extends unknown[] = [],
+  Accumulated extends string = '',
+> = S extends `${infer Head} ${infer Tail}`
+  ? ApplyParenDelta<Depth, Head> extends infer NextDepth extends unknown[]
+    ? NextDepth extends []
+      ? { expr: Accumulated extends '' ? Head : `${Accumulated} ${Head}`; alias: Tail }
+      : SplitAtTopLevelSpace<Tail, NextDepth, Accumulated extends '' ? Head : `${Accumulated} ${Head}`>
+    : never
+  : never;
+
 type ParseColumnEntry<Entry extends string> = IsCaseExpression<Entry> extends true
   ? SplitCaseExpression<Entry> extends { body: infer Body extends string; alias: infer Alias extends string }
     ? [Alias, `case ${Body} end`]
@@ -474,11 +493,16 @@ type ParseColumnEntry<Entry extends string> = IsCaseExpression<Entry> extends tr
             : [Unquote<Trim<After>>, Expr]
         : [Trim<Entry>, Trim<Entry>]
       : [FindTopLevelAsKeyword<Entry>] extends [never]
-      ? Entry extends `${infer Expression} ${infer Alias}`
-        ? IsOperatorExpression<Alias> extends true
-          ? [Trim<Entry>, Trim<Entry>]
-          : [Unquote<Trim<Alias>>, Trim<Expression>]
-        : [OutputName<Trim<Entry>>, Trim<Entry>]
+      ? [SplitAtTopLevelSpace<Entry>] extends [never]
+        ? [OutputName<Trim<Entry>>, Trim<Entry>]
+        : SplitAtTopLevelSpace<Entry> extends {
+              expr: infer Expression extends string;
+              alias: infer Alias extends string;
+            }
+          ? IsOperatorExpression<Alias> extends true
+            ? [Trim<Entry>, Trim<Entry>]
+            : [Unquote<Trim<Alias>>, Trim<Expression>]
+          : [OutputName<Trim<Entry>>, Trim<Entry>]
       : FindTopLevelAsKeyword<Entry> extends { expr: infer Expr extends string; alias: infer Alias extends string }
         ? [Unquote<Trim<Alias>>, Expr]
         : [OutputName<Trim<Entry>>, Trim<Entry>];
