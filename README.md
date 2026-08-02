@@ -1008,7 +1008,9 @@ This is a focused tool for the common read path, not a full SQL grammar:
   query, ahead of placeholders in the outer query that follows the `WITH`
   clause. Numbered placeholders bind by
   their index (`$2` fills the second tuple slot even when it appears first);
-  a repeated `$n` occupies a single slot.
+  a repeated `$n` occupies a single slot. SQLite's numbered `?NNN` form is
+  not typed and is rejected by the adapters with an explanation — write a
+  bare `?`, a `$n`, or a `:name` instead.
 - **Quoted identifiers** use `"..."` (standard), `[...]` (SQL Server), or
   `` `...` `` (MySQL — escape the backtick with `\`` inside the template
   literal). A quoted name may contain spaces (`"first name"`,

@@ -87,6 +87,8 @@ function skipNonParameterRegion(sql: string, index: number): number {
 
 const INDEXED_PARAM_BODY = /^[0-9]+$/;
 
+const NUMBERED_POSITIONAL_BODY = /^[0-9]+/;
+
 type ParameterToken =
   | { kind: 'positional' }
   | { kind: 'named'; name: string }
@@ -109,6 +111,18 @@ function scanParameters(
     const char = sql[index] as string;
 
     if (char === '?') {
+      // SQLite's `?NNN` binds by number, but nothing above here knows that: the
+      // type layer gives it no slot, so the caller is typed as passing nothing,
+      // and this scanner used to read it as a bare `?` and push a positional
+      // value the driver could not place, which surfaced as node:sqlite's
+      // "column index out of range" (issue #304). Saying so beats that.
+      const digits = NUMBERED_POSITIONAL_BODY.exec(sql.slice(index + 1));
+      if (digits) {
+        throw new Error(
+          `Unsupported placeholder "?${digits[0]}": numbered ? placeholders are not typed by OwlSQL. Use a bare "?", or a numbered "$${digits[0]}", or a named ":name" placeholder.`,
+        );
+      }
+
       visit({ kind: 'positional' });
       index += 1;
       continue;

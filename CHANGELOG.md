@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A SQLite `?NNN` placeholder is rejected with an explanation instead of the driver's "column index out of range". The type layer gives `?1` no slot at all, the parameter scanner read it as a bare `?` and pushed a value node:sqlite could not place, and the error that came back pointed nowhere useful. Write a bare `?`, a `$1`, or a `:name` ([#304](https://github.com/tiagolauer/OwlSQL/issues/304)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
