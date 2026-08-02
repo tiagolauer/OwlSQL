@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- The CLI no longer echoes a password when a connection URL is malformed in a way the blocklist misses. `jdbc:postgresql://user:pw@host/db` and `postgres//user:pw@host/db` (missing colon) match neither the scheme detector nor the credential patterns, so both fell through to sqlite and the "database file not found" error printed the raw string, password included, into terminal scrollback and CI logs. The echo is redacted at the point it is written, which covers the next gap too ([#278](https://github.com/tiagolauer/OwlSQL/issues/278)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
