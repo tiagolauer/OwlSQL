@@ -102,9 +102,20 @@ export type CleanColumnToken<S extends string> = StripLeadingParens<S> extends i
 // executor doesn't accept (issue #249). A bare `?` stays a placeholder -
 // that is exactly what it is in MySQL and SQLite, and no amount of text
 // alone can tell it apart from Postgres's jsonb existence operator.
-export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends '?'
-  ? true
-  : // MERGE's `$action` is a pseudo-column, not a placeholder - ResolveColumnType
+export type IsPlaceholder<Token extends string> = CleanScanToken<Token> extends `${string},${string}`
+  ? // Two placeholders glued into one space-delimited token (`in ($1,$2)`).
+    // CleanScanToken has already dropped a *trailing* comma, so a comma left
+    // inside the token means it holds more than one thing, and a one-token
+    // scan cannot hand out two slots. `$1,$2` used to pass the `$` body test
+    // (the body starts with a digit), fail DigitsToCounter, and fall through
+    // to the named branch as a single slot called `$1,$2` - one phantom
+    // parameter for two real ones, which pg rejects at bind time (issue
+    // #291). Not a placeholder, matching what the `?` spelling already did
+    // and the "write the comma with a space" rule the README states.
+    false
+  : CleanScanToken<Token> extends '?'
+    ? true
+    : // MERGE's `$action` is a pseudo-column, not a placeholder - ResolveColumnType
     // already types it as the branch that fired, so counting it here handed the
     // caller an extra parameter slot (issue #231).
     Lowercase<CleanScanToken<Token>> extends '$action'
