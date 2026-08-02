@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { detectDialect, redactCredentials } from '../src/cli/generate.js';
+import { introspectSqlite } from '../src/cli/dialects/sqlite.js';
+import { sqliteAvailable } from './sqlite-availability.js';
 
 describe('redactCredentials', () => {
   it('replaces the user:password segment with ***', () => {
@@ -56,5 +58,39 @@ describe('detectDialect error redaction', () => {
     expect(message).toContain('postgress://***@host/db');
     expect(message).not.toContain('S3cret');
     expect(message).not.toContain('user:');
+  });
+});
+
+// Regression for #278: a second scheme token ("jdbc:postgresql://") and a
+// missing colon ("postgres//") match neither SCHEME_PATTERN nor the credential
+// blocklist, so both land in the sqlite fallback, which echoed the raw string.
+describe.skipIf(!sqliteAvailable)('sqlite missing-file error redaction', () => {
+  it.each([
+    'jdbc:postgresql://user:S3cret@host/db',
+    'postgres//user:S3cret@host/db',
+  ])('does not echo the password for %s', async (url) => {
+    expect(detectDialect(url)).toBe('sqlite');
+
+    let message = '';
+    try {
+      await introspectSqlite({ url });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('SQLite database file not found');
+    expect(message).toContain('***@host/db');
+    expect(message).not.toContain('S3cret');
+  });
+
+  it('still names an ordinary missing path in full', async () => {
+    let message = '';
+    try {
+      await introspectSqlite({ url: './no-such-database.db' });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('"./no-such-database.db"');
   });
 });

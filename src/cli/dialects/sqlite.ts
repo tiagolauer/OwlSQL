@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { ConnectionInfo, TableSchema } from '../types.js';
+import { redactCredentials } from '../redact.js';
 
 export function mapSqliteType(declaredType: string): string {
   const type = declaredType.toUpperCase().trim();
@@ -105,8 +106,14 @@ export async function introspectSqlite(connection: ConnectionInfo): Promise<Tabl
     ? connection.url
     : normalizeSqlitePath(connection.url);
 
+  // Redacted because sqlite is where every string detectDialect does not
+  // recognize ends up, and some of those carry credentials: `jdbc:postgresql://
+  // user:pw@host/db` and `postgres//user:pw@host/db` match neither the scheme
+  // detector nor the credential blocklist, so the password reached stderr - and
+  // CI logs - intact (issue #278). Redacting at the echo covers the next
+  // blocklist gap without another pattern.
   if (!isMemoryDatabase(path) && !existsSync(path)) {
-    throw new Error(`SQLite database file not found: "${path}".`);
+    throw new Error(`SQLite database file not found: "${redactCredentials(path)}".`);
   }
 
   const db = new DatabaseSyncCtor(path, { readOnly: !isMemoryDatabase(path) });
