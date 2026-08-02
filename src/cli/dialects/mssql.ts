@@ -74,11 +74,26 @@ function parseMssqlUrl(url: string): URL {
   }
 }
 
+// `new URL` accepts a broken percent sequence and keeps it verbatim, so the
+// throw lands here instead, as a bare URIError with no hint of which input
+// caused it (#306). A raw `%` in a password is the likely reason, and the
+// decoded value never reaches the message: this is the credential half of the
+// URL.
+function decodeUrlPart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new Error(
+      'Invalid SQL Server connection URL: it contains an incomplete percent-escape. A literal % in a user, password or database name has to be written as %25. Expected mssql://user:password@host[\\INSTANCE][:port]/database, or an ADO string such as "Server=host;Database=db;User Id=user;Password=password".',
+    );
+  }
+}
+
 export function mssqlUrlToConfig(url: string): MssqlConnectionConfig {
   const parsed = parseMssqlUrl(url);
   const flags = parsed.searchParams;
 
-  const host = decodeURIComponent(parsed.hostname);
+  const host = decodeUrlPart(parsed.hostname);
   const separatorIndex = host.indexOf(INSTANCE_SEPARATOR);
   const instanceName = separatorIndex === -1 ? '' : host.slice(separatorIndex + 1);
 
@@ -95,14 +110,14 @@ export function mssqlUrlToConfig(url: string): MssqlConnectionConfig {
   }
 
   if (parsed.username) {
-    config.user = decodeURIComponent(parsed.username);
+    config.user = decodeUrlPart(parsed.username);
   }
   if (parsed.password) {
-    config.password = decodeURIComponent(parsed.password);
+    config.password = decodeUrlPart(parsed.password);
   }
   const database = parsed.pathname.replace(/^\//, '');
   if (database) {
-    config.database = decodeURIComponent(database);
+    config.database = decodeUrlPart(database);
   }
   if (parsed.port) {
     config.port = Number(parsed.port);
