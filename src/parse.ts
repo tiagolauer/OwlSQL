@@ -552,6 +552,25 @@ type FirstSourceTable<Sources extends Source[]> = Sources extends [
   ? Head['table']
   : '';
 
+// `a join b using (id)` produces one `id`, not two - that is what USING is for,
+// and referencing it bare is the whole point of the syntax. The source the
+// join merged carries the list, so its copy of the column does not count
+// towards ambiguity (issue #284).
+type ColumnListIncludes<List extends string, Column extends string> =
+  List extends `${infer Head},${infer Tail}`
+    ? IsKeyword<Trim<Head>, Column> extends true
+      ? true
+      : ColumnListIncludes<Tail, Column>
+    : IsKeyword<Trim<List>, Column>;
+
+type IsMergedColumn<Head extends Source, Column extends string> = Head extends {
+  mergedColumns: infer Merged extends string;
+}
+  ? Merged extends ''
+    ? false
+    : ColumnListIncludes<Merged, Column>
+  : false;
+
 type CountBareMatches<
   DB extends SchemaLike,
   Sources extends Source[],
@@ -560,7 +579,9 @@ type CountBareMatches<
 > = Sources extends [infer Head extends Source, ...infer Tail extends Source[]]
   ? [SourceColumnType<DB, Head, Column>] extends [never]
     ? CountBareMatches<DB, Tail, Column, Count>
-    : CountBareMatches<DB, Tail, Column, [...Count, unknown]>
+    : IsMergedColumn<Head, Column> extends true
+      ? CountBareMatches<DB, Tail, Column, Count>
+      : CountBareMatches<DB, Tail, Column, [...Count, unknown]>
   : Count;
 
 type BareColumnType<

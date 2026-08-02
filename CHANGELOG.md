@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- The merged column of a `JOIN ... USING` is no longer reported as ambiguous. `select id from a join b using (id)` produced `QueryTypeError<'ambiguous column: id'>` although USING makes one column out of the pair - referencing it bare is the whole point of the syntax. The joined table also keeps its own name as its alias, which used to be set to the literal word `using` ([#284](https://github.com/tiagolauer/OwlSQL/issues/284)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
