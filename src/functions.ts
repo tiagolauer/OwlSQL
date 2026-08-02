@@ -41,8 +41,15 @@ export interface FunctionReturnTypes {
   nth_value: unknown;
 }
 
+// The name has to be there. `${string}` happily matches the empty string, so
+// `(id)` - a column in parentheses, which is valid everywhere and something
+// people write around an expression - was read as a call to a function named
+// `''` and typed `unknown`, in strict mode too, after the column had already
+// resolved (issue #288).
 export type IsFunctionCall<Expr extends string> = Expr extends `${string}(${string})`
-  ? true
+  ? Trim<FunctionName<Expr>> extends ''
+    ? false
+    : true
   : false;
 
 export type FunctionName<Expr extends string> = Expr extends `${infer Name}(${string}`
