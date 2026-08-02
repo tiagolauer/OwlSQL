@@ -15,6 +15,11 @@ export interface Source {
   alias: string;
   nullable: boolean;
   derivedQuery?: string;
+  // The columns a `JOIN ... USING (...)` merges. USING makes one column out of
+  // the pair, so the name is not ambiguous the way the same name coming from
+  // two independent tables is - it is carried here because the count that
+  // decides ambiguity sees only the sources (issue #284).
+  mergedColumns?: string;
 }
 
 type ClauseBoundary =
@@ -169,7 +174,7 @@ type AliasOf<Segment extends string, Table extends string> =
   DropFirstWord<Segment> extends ''
     ? Table
     : FirstWord<DropFirstWord<Segment>> extends infer Next extends string
-      ? IsKeyword<Next, 'on'> extends true
+      ? IsKeyword<Next, 'on' | 'using'> extends true
         ? Table
         : IsKeyword<Next, 'as'> extends true
           ? FirstWord<DropFirstWord<DropFirstWord<Segment>>> extends infer Aliased extends string
@@ -213,6 +218,19 @@ type StripLateral<Segment extends string> = Trim<Segment> extends `${infer Head}
     : Trim<Segment>
   : Trim<Segment>;
 
+// The USING list of the join this segment belongs to. Only the spaced form is
+// read; `using(id)` glued to its paren keeps the old behaviour of no merge,
+// which errs on the side of the existing report rather than a silent one.
+type UsingColumnsOf<Segment extends string> = Segment extends `${infer Head} ${infer Tail}`
+  ? IsKeyword<Head, 'using'> extends true
+    ? Trim<Tail> extends `(${infer AfterOpen}`
+      ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string }
+        ? Inner
+        : ''
+      : ''
+    : UsingColumnsOf<Tail>
+  : '';
+
 type SegmentToSource<Segment extends string, Nullable extends boolean> = StripLateral<Segment> extends `(${string}`
   ? DerivedSegmentToSource<StripLateral<Segment>, Nullable>
   : CleanIdentifier<FirstWord<Segment>> extends infer Table extends string
@@ -220,6 +238,7 @@ type SegmentToSource<Segment extends string, Nullable extends boolean> = StripLa
         table: Table;
         alias: Unquote<AliasOf<Segment, Table>>;
         nullable: Nullable;
+        mergedColumns: UsingColumnsOf<Segment>;
       }
     : never;
 
@@ -238,7 +257,9 @@ type SegmentToSources<Segment extends string, Nullable extends boolean> = PartsT
 type MarkNullable<Sources extends Source[]> = {
   [Index in keyof Sources]: Sources[Index] extends { derivedQuery: infer Q extends string }
     ? { table: Sources[Index]['table']; alias: Sources[Index]['alias']; nullable: true; derivedQuery: Q }
-    : { table: Sources[Index]['table']; alias: Sources[Index]['alias']; nullable: true };
+    : Sources[Index] extends { mergedColumns: infer M extends string }
+      ? { table: Sources[Index]['table']; alias: Sources[Index]['alias']; nullable: true; mergedColumns: M }
+      : { table: Sources[Index]['table']; alias: Sources[Index]['alias']; nullable: true };
 };
 
 type CollectSources<
