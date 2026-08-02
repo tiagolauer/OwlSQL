@@ -8,9 +8,16 @@ StackBlitz.
 
 ## Setup
 
-1. In this folder: `npm install` (`@owlsql/core` is on npm; to test
-   unpublished changes instead, run `npm install && npm run build` at the
-   repo root and then `npm install ../.. typescript --no-save` here).
+1. Build the plugin, then install it here. `@owlsql/ts-plugin` is not on npm
+   yet, so it is not a dependency of this example — it comes from the
+   workspace:
+   ```bash
+   npm install && npm run build --workspace @owlsql/ts-plugin   # at the repo root
+   cd examples/ts-plugin-demo && npm install && npm install ../../ts-plugin --no-save
+   ```
+   (`@owlsql/core` does come from npm. To test unpublished changes to it as
+   well, run `npm run build` at the repo root too and add `../..` to that
+   last install.)
 2. Open **this folder** (`examples/ts-plugin-demo`) in VSCode — not the
    monorepo root, so the workspace TypeScript version resolves correctly.
 3. Command Palette → **"TypeScript: Select TypeScript Version" → "Use

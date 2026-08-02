@@ -769,7 +769,20 @@ library: everything else works by *type-checking* a finished query string;
 this works by hooking into the editor's completion request for a string
 that isn't even valid SQL yet.
 
-**Setup** — it ships as its own package, so install it first:
+**Setup** — it ships as its own package, so install it first.
+
+> **Not on npm yet.** `@owlsql/ts-plugin` has not been published; the
+> command below will be the install once it is. Until then, build it from a
+> clone of this repository and install that folder:
+>
+> ```bash
+> git clone https://github.com/tiagolauer/OwlSQL
+> cd OwlSQL && npm install && npm run build --workspace @owlsql/ts-plugin
+> cd /path/to/your/project
+> npm install --save-dev /path/to/OwlSQL/ts-plugin
+> ```
+>
+> Everything below this box is the same either way.
 
 ```bash
 npm install --save-dev @owlsql/ts-plugin
