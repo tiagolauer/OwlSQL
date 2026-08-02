@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A glued placeholder list (`where id in ($1,$2)`) no longer invents a single phantom slot for two placeholders. `$1,$2` passed the placeholder test, failed the index read, and was registered as one sequential parameter named `$1,$2`, so `db.query(sql, 1)` compiled and pg rejected it at bind time. A glued list is now no placeholder at all, which is what the `?` spelling already did and what the documented "write the comma with a space" rule says ([#291](https://github.com/tiagolauer/OwlSQL/issues/291)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
