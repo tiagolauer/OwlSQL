@@ -424,13 +424,27 @@ type FindOverKeyword<S extends string, Accumulated extends string = ''> =
 
 type StripLeadingOpenParen<S extends string> = Trim<S> extends `(${infer Rest}` ? Rest : never;
 
-type SplitWindowExpression<Entry extends string> = FindOverKeyword<Entry> extends {
-  expr: infer Expr extends string;
-  rest: infer Rest extends string;
-}
+// The [never] guard is load-bearing now that the paren is no longer required:
+// FindOverKeyword resolves to never for an entry with no OVER at all, and
+// `never extends { expr: infer E extends string; rest: infer R extends string }`
+// passes with both infers falling back to `string` - which the named-window
+// branch below would then accept as a window name.
+type SplitWindowExpression<Entry extends string> = [FindOverKeyword<Entry>] extends [never]
+  ? never
+  : FindOverKeyword<Entry> extends {
+        expr: infer Expr extends string;
+        rest: infer Rest extends string;
+      }
   ? StripLeadingOpenParen<Rest> extends infer AfterOpen extends string
     ? [AfterOpen] extends [never]
-      ? never
+      ? // `over w`, referring to a window declared in a WINDOW clause, is the
+        // other half of the syntax: what follows OVER is a name rather than an
+        // inline definition. Requiring the paren meant the entry was not
+        // recognized as a window expression at all, so it fell to the bare-alias
+        // split and `over w` became the alias of `sum(salary)` (issue #301).
+        Trim<Rest> extends ''
+        ? never
+        : { expr: Expr; after: Trim<DropFirstWord<Trim<Rest>>> }
       : ExtractParenGroup<AfterOpen> extends { rest: infer AfterClose extends string }
         ? { expr: Expr; after: Trim<AfterClose> }
         : never
