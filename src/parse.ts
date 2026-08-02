@@ -886,6 +886,19 @@ type EmptyRow = Record<string, never>;
 // selected. Omitting the shadowed keys first (case-insensitively, matching
 // how every other name lookup in this codebase already resolves) before
 // intersecting closes that gap.
+// Every place a name can hide a table of the same name needs the omit-then-
+// intersect pair, never a bare intersection: a CTE body seeing an earlier CTE
+// (issue #285), and a derived table whose alias reuses a real table name
+// (issue #286). Both used to intersect, which is additive, so the hidden
+// table's other columns stayed in scope and strict mode typed a column the
+// query cannot produce.
+// Gated on there being an overlay at all: OmitShadowedTables is a mapped type
+// over every table in the schema, and running it for the empty overlay a
+// plain query carries cost 10% of the whole type budget.
+export type ShadowedBy<DB, Overlay> = [keyof Overlay] extends [never]
+  ? DB
+  : OmitShadowedTables<DB, keyof Overlay & string> & Overlay;
+
 type OmitShadowedTables<DB, ShadowedNames extends string> = {
   [Key in keyof DB as Key extends string
     ? Lowercase<Key> extends Lowercase<ShadowedNames>
@@ -1001,7 +1014,7 @@ type InferRowWithChecked<
           whereText: infer WhereText extends string;
           fromText: infer FromText extends string;
         }
-    ? (CteDB & BuildDerivedSourceMap<CteDB, Sources, Strict>) extends infer EffectiveDB extends SchemaLike
+    ? ShadowedBy<CteDB, BuildDerivedSourceMap<CteDB, Sources, Strict>> extends infer EffectiveDB extends SchemaLike
       ? // The clause check wraps the empty row too: a write with no RETURNING
         // projects nothing, but its WHERE clause is still a set of column
         // references strict mode has to validate - and UPDATE/DELETE is where

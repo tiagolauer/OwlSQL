@@ -6,7 +6,7 @@ import type {
   ExtractParenGroup,
   SplitColumnList,
 } from './string.js';
-import type { SchemaLike, Flatten, QueryTypeError, SelectColumnKeys } from './parse.js';
+import type { SchemaLike, Flatten, QueryTypeError, SelectColumnKeys, ShadowedBy } from './parse.js';
 import type { InferRowWith } from './parse.js';
 
 type CteEntry = [name: string, query: string, columns: string[] | null];
@@ -122,6 +122,6 @@ export type BuildCteMap<
       DB,
       Tail,
       Strict,
-      Accumulated & { [Key in Head[0]]: CteRow<DB & Accumulated, Head[1], Head[2], Strict> }
+      Accumulated & { [Key in Head[0]]: CteRow<ShadowedBy<DB, Accumulated>, Head[1], Head[2], Strict> }
     >
   : Accumulated;
