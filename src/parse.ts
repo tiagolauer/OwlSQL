@@ -847,6 +847,22 @@ type IsMergeActionPseudoColumn<Expression extends string> = Lowercase<Expression
   ? true
   : false;
 
+// `id::text` is a column carrying a Postgres cast, not a column named
+// `id::text`. Nothing stripped the suffix and `:` is not an operator
+// character, so the whole token was looked up as a name and strict mode
+// reported `unknown column: id::text` on ordinary SQL - one cast poisoning
+// the whole row (issue #277). The operand is still resolved, so a typo in it
+// is still caught; the result is `unknown` because the cast is what decides
+// the type and this parser does not model SQL type names.
+type CastExpressionType<
+  DB extends SchemaLike,
+  Sources extends Source[],
+  Operand extends string,
+  Strict extends boolean,
+> = ResolveColumnType<DB, Sources, Operand, Strict> extends QueryTypeError<infer Message>
+  ? QueryTypeError<Message>
+  : unknown;
+
 export type ResolveColumnType<
   DB extends SchemaLike,
   Sources extends Source[],
@@ -866,7 +882,9 @@ export type ResolveColumnType<
       : [LiteralType<Expression>] extends [never]
         ? IsOperatorExpression<Expression> extends true
           ? unknown
-          : ResolveColumnName<DB, Sources, Expression, Strict>
+          : Expression extends `${infer CastOperand}::${string}`
+            ? CastExpressionType<DB, Sources, CastOperand, Strict>
+            : ResolveColumnName<DB, Sources, Expression, Strict>
         : LiteralType<Expression>
     : ScalarSubqueryType<DB, ScalarSubqueryInner<Expression>, Strict>;
 
