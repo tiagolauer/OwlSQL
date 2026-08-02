@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- A window function using a named window (`sum(salary) over w ... window w as (order by id)`) is keyed by the function instead of by `over w`. Only the inline `over (...)` form was recognized, so the entry fell to the bare-alias split and the window reference became the alias ([#301](https://github.com/tiagolauer/OwlSQL/issues/301)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
