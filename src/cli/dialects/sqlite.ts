@@ -70,10 +70,18 @@ function isRowidAlias(column: SqliteTableInfoRow, primaryKeyCount: number): bool
 // name nobody wrote (issue #236).
 const SQLITE_URL_PREFIXES = ['sqlite://', 'sqlite:', 'file://', 'file:'];
 
+// RFC 8089 puts an empty authority before an absolute path, so a Windows file
+// URL reads `file:///C:/data/app.db` and stripping `file://` leaves the
+// authority's slash glued to the drive letter. existsSync then tests
+// `/C:/data/app.db` and reports a path nobody wrote (issue #305). On POSIX the
+// same strip is already correct, and there is no drive letter to match.
+const AUTHORITY_SLASH_BEFORE_DRIVE = /^\/[a-zA-Z]:[/\\]/;
+
 export function normalizeSqlitePath(url: string): string {
   for (const prefix of SQLITE_URL_PREFIXES) {
     if (url.startsWith(prefix)) {
-      return url.slice(prefix.length);
+      const path = url.slice(prefix.length);
+      return AUTHORITY_SLASH_BEFORE_DRIVE.test(path) ? path.slice(1) : path;
     }
   }
   return url;

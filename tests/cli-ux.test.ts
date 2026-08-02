@@ -34,6 +34,25 @@ describe('sqlite URL forms', () => {
     expect(normalizeSqlitePath('./app.db')).toBe('./app.db');
   });
 
+  // Regression for #305: the RFC 8089 form carries an empty authority, so
+  // stripping `file://` left its slash glued to the drive letter and the
+  // missing-file error named `/C:/data/app.db`.
+  it('drops the authority slash in front of a Windows drive letter', () => {
+    expect(normalizeSqlitePath('file:///C:/data/app.db')).toBe('C:/data/app.db');
+    expect(normalizeSqlitePath('file:///c:\\data\\app.db')).toBe('c:\\data\\app.db');
+    expect(normalizeSqlitePath('sqlite:///C:/data/app.db')).toBe('C:/data/app.db');
+  });
+
+  it('keeps a POSIX absolute path absolute', () => {
+    expect(normalizeSqlitePath('file:///var/data/app.db')).toBe('/var/data/app.db');
+    expect(normalizeSqlitePath('sqlite:///var/data/app.db')).toBe('/var/data/app.db');
+  });
+
+  it('leaves the two nonstandard Windows spellings alone', () => {
+    expect(normalizeSqlitePath('file://C:/data/app.db')).toBe('C:/data/app.db');
+    expect(normalizeSqlitePath('file:C:/data/app.db')).toBe('C:/data/app.db');
+  });
+
   it.skipIf(!sqliteAvailable)('introspects through a file: URL', async () => {
     const { dir, file } = createDatabase();
     try {

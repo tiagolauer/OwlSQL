@@ -4,6 +4,10 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Fixed
+
+- `owlsql generate --url "file:///C:/data/app.db"` finds the database on Windows. The RFC 8089 form carries an empty authority, so stripping `file://` left that slash glued to the drive letter and the file was reported missing under `/C:/data/app.db`, a path nobody wrote ([#305](https://github.com/tiagolauer/OwlSQL/issues/305)).
+
 ## [0.2.0] - 2026-07-29
 
 ### Changed
