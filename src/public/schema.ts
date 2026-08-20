@@ -1,10 +1,11 @@
-import type { Schema } from '../compiler/legacy.js';
+import type { Schema } from '../compiler/schema/model.js';
 
 export type {
   Schema,
   SchemaLike,
-  FunctionReturnTypes,
-} from '../compiler/legacy.js';
+} from '../compiler/schema/model.js';
+
+export type { FunctionReturnTypes } from '../compiler/legacy.js';
 
 export type { QueryTypeError } from '../compiler/contracts/public-error.js';
 

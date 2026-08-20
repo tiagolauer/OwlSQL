@@ -25,7 +25,8 @@ type MalformedSelect<Sql extends string> = {
   code: 'MALFORMED_QUERY';
   message: 'malformed SELECT query';
   severity: 'fatal';
-  location: { kind: 'statement'; reference: Sql };
+  location: 'statement';
+  reference: Sql;
 };
 
 type ParseFatal<Sql extends string> = {
