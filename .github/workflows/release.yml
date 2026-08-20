@@ -1,47 +1,67 @@
 name: Release
 
-# Publishes @owlsql/core to npm without a token: the OIDC identity of this
+# Stages @owlsql/core on npm without a token: the OIDC identity of this
 # workflow is what the registry trusts, configured once on npmjs.com under the
 # package's "Trusted publisher" settings. That is also what makes a token
 # unnecessary here - npm is restricting 2FA-bypassing tokens for direct
-# publishing, and there is no secret in this repository to leak.
+# publishing, and there is no secret in this repository to leak. A maintainer
+# reviews and approves the staged package with 2FA before it becomes public.
 #
-# Run it from the Actions tab (or let a published GitHub Release trigger it)
-# once the version bump is on master. `npm publish` runs prepublishOnly, so
-# the type tests, the runtime tests and the build all have to pass first.
+# Run it from master with the version tag as input once the version bump is on
+# master. `npm stage publish` runs prepublishOnly, so the type tests, the runtime
+# tests and the build all have to pass first.
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Tag matching the package version, for example v1.0.0
+        required: true
+        type: string
 
 permissions:
   contents: read
-  # Required for trusted publishing: the job mints a short-lived OIDC token
-  # that npm verifies against the publisher configured for the package.
-  id-token: write
 
 jobs:
   v1-gate:
     uses: ./.github/workflows/ci.yml
+    with:
+      checkout_ref: refs/tags/${{ inputs.release_tag }}
 
   publish:
-    name: Publish to npm
+    name: Stage on npm
     needs: v1-gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for trusted publishing: the job mints a short-lived OIDC token
+      # that npm verifies against the publisher configured for the package.
+      id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           package-manager-cache: false
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing needs npm 11.5.1 or newer; Node 22 still ships an
-      # older npm, so the runner's npm is upgraded rather than the toolchain.
-      - run: npm install -g npm@latest
+      - name: Verify release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          expected_tag="v$(node -p "require('./packages/core/package.json').version")"
+          if [[ "${RELEASE_TAG}" != "${expected_tag}" ]]; then
+            echo "::error::Expected tag ${expected_tag}; got ${RELEASE_TAG}."
+            exit 1
+          fi
+
+      # Staged publishing needs npm 11.15.0 or newer.
+      - run: npm install -g npm@12.0.2
 
       - run: npm ci
 
-      - run: npm publish --loglevel verbose
+      - run: npm stage publish --loglevel verbose
         working-directory: packages/core

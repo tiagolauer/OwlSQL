@@ -6,6 +6,8 @@ import ts from 'typescript';
 const SOURCE_EXTENSIONS = ['.ts', '.cts', '.mts'];
 const SOURCE_DIRECTORIES = ['packages/core/src', 'packages/ts-plugin/src'];
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const CI_WORKFLOW = '.github/workflows/ci.yml';
+const RELEASE_WORKFLOW = '.github/workflows/release.yml';
 
 const LAYERS = [
   { name: 'facade', prefix: 'packages/core/src/index.ts' },
@@ -158,6 +160,26 @@ export function checkArchitecture(root) {
       if (target.startsWith('packages/core/src/') || target.startsWith('packages/ts-plugin/src/')) {
         violations.push(`${sourceFile} -> ${target} violates ${sourceLayer} isolation`);
       }
+    }
+  }
+
+  const ciWorkflowPath = join(root, CI_WORKFLOW);
+  if (existsSync(ciWorkflowPath)) {
+    const ciWorkflow = readFileSync(ciWorkflowPath, 'utf8');
+    const releaseWorkflow = readFileSync(join(root, RELEASE_WORKFLOW), 'utf8');
+    const checkoutSteps = ciWorkflow.match(/^\s*- uses: actions\/checkout@v7\s*$/gm) ?? [];
+    const configuredCheckouts = ciWorkflow.match(
+      /^\s*- uses: actions\/checkout@v7\s*\r?\n\s+with:\s*\r?\n\s+ref: \$\{\{ inputs\.checkout_ref \|\| github\.ref \}\}\s*$/gm,
+    ) ?? [];
+
+    if (!/^\s{6}checkout_ref:\s*$/m.test(ciWorkflow)) {
+      violations.push(`${CI_WORKFLOW} must declare the reusable checkout_ref input`);
+    }
+    if (configuredCheckouts.length !== checkoutSteps.length) {
+      violations.push(`${CI_WORKFLOW} must route checkout_ref through every checkout step`);
+    }
+    if (!/^\s+checkout_ref: refs\/tags\/\$\{\{ inputs\.release_tag \}\}\s*$/m.test(releaseWorkflow)) {
+      violations.push(`${RELEASE_WORKFLOW} must pass release_tag to reusable CI`);
     }
   }
 
