@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
-import { renderSchema } from '../src/cli/codegen.js';
-import { mapPostgresType } from '../src/cli/dialects/postgres.js';
+import { renderSchema } from '../src/tooling/schema-generator/codegen.js';
+import { mapPostgresType } from '../src/tooling/introspection/postgres.js';
 
 function parseErrorCount(source: string): number {
   const sourceFile = ts.createSourceFile('schema.ts', source, ts.ScriptTarget.Latest, true);

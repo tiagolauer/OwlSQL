@@ -23,7 +23,7 @@ interface DB {
 declare const db: TypedDb<DB>;
 `;
 
-function diagnosticsFor(query: string, fixture: string = FIXTURE): { message: string; text: string }[] {
+function structuredDiagnosticsFor(query: string, fixture: string = FIXTURE) {
   const source = `${fixture}\ndb.query(\`${query}\`);\n`;
   const { program, sourceFile, dir } = buildProgram(source, 'owlsql-ts-plugin-diagnostics-');
   try {
@@ -32,13 +32,19 @@ function diagnosticsFor(query: string, fixture: string = FIXTURE): { message: st
     expect(matches).toHaveLength(1);
     const [match] = matches;
     if (!match) return [];
-    return getQueryDiagnostics(ts, checker, match.dbType, match.literal, sourceFile).map((span) => ({
-      message: span.message,
-      text: sourceFile.text.slice(span.start, span.start + span.length),
-    }));
+    return getQueryDiagnostics(ts, checker, match.dbType, match.literal, sourceFile).map(
+      (span) => ({
+        ...span,
+        text: sourceFile.text.slice(span.start, span.start + span.length),
+      }),
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+function diagnosticsFor(query: string, fixture: string = FIXTURE): { message: string; text: string }[] {
+  return structuredDiagnosticsFor(query, fixture).map(({ message, text }) => ({ message, text }));
 }
 
 describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
@@ -93,6 +99,16 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
   it('reports an ambiguous unqualified column across a join', () => {
     expect(diagnosticsFor('select id from users u join posts p on p.user_id = u.id')).toEqual([
       { message: 'ambiguous column: id', text: 'id' },
+    ]);
+  });
+
+  it('classifies scanner diagnostics with stable codes', () => {
+    expect(structuredDiagnosticsFor('select z.id, id from users u join posts p on p.id = u.id')).toMatchObject([
+      { code: 'UNKNOWN_ALIAS', location: 'select', reference: 'z', text: 'z' },
+      { code: 'AMBIGUOUS_COLUMN', location: 'select', reference: 'id', text: 'id' },
+    ]);
+    expect(structuredDiagnosticsFor('select nope from users')).toMatchObject([
+      { code: 'UNKNOWN_COLUMN', location: 'select', reference: 'nope', text: 'nope' },
     ]);
   });
 

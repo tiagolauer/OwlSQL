@@ -44,4 +44,42 @@ describe('architecture dependencies', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('reports tooling imports from compiler implementation internals', () => {
+    const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
+    mkdirSync(join(root, 'src', 'tooling'), { recursive: true });
+    mkdirSync(join(root, 'src', 'compiler', 'next'), { recursive: true });
+    writeFileSync(join(root, 'src', 'compiler', 'next', 'index.ts'), 'export type Next = string;\n');
+    writeFileSync(
+      join(root, 'src', 'tooling', 'invalid.ts'),
+      "import type { Next } from '../compiler/next/index.js';\n",
+    );
+
+    try {
+      expect(checkArchitecture(root)).toEqual([
+        'src/tooling/invalid.ts -> src/compiler/next/index.ts violates tooling isolation',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports editor plugin imports outside the analysis bridge', () => {
+    const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
+    mkdirSync(join(root, 'src', 'compiler', 'next'), { recursive: true });
+    mkdirSync(join(root, 'ts-plugin', 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'compiler', 'next', 'index.ts'), 'export type Next = string;\n');
+    writeFileSync(
+      join(root, 'ts-plugin', 'src', 'invalid.cts'),
+      "import type { Next } from '../../src/compiler/next/index.js';\n",
+    );
+
+    try {
+      expect(checkArchitecture(root)).toEqual([
+        'ts-plugin/src/invalid.cts -> src/compiler/next/index.ts violates editor plugin contract',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

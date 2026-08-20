@@ -16,7 +16,7 @@ function renderTable(table: TableSchema): string {
   return `  ${renderKey(table.name)}: {\n${columns}\n  };`;
 }
 
-export function renderSchema(tables: TableSchema[]): string {
+export function renderSchema(tables: readonly TableSchema[]): string {
   const body = tables.map(renderTable).join('\n');
   return `export interface DB {\n${body}\n}\n`;
 }

@@ -1,26 +1,23 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import type { ConnectionInfo, Dialect, TableSchema } from './types.js';
+import type {
+  Dialect,
+  GenerateSchemaOptions,
+  GenerateSchemaResult,
+  Introspector,
+  TableSchema,
+} from './types.js';
 import { renderSchema } from './codegen.js';
-import { introspectPostgres } from './dialects/postgres.js';
-import { introspectMysql } from './dialects/mysql.js';
-import { introspectSqlite } from './dialects/sqlite.js';
-import { introspectMssql } from './dialects/mssql.js';
-import { redactCredentials } from './redact.js';
+import { introspectPostgres } from '../introspection/postgres.js';
+import { introspectMysql } from '../introspection/mysql.js';
+import { introspectSqlite } from '../introspection/sqlite.js';
+import { introspectMssql } from '../introspection/mssql.js';
+import { redactCredentials } from '../introspection/redact.js';
 
-export interface GenerateOptions {
-  url: string;
-  out: string;
-  dialect?: Dialect | undefined;
-  schema?: string | undefined;
-  tables?: string[] | undefined;
-  exclude?: string[] | undefined;
-  check?: boolean | undefined;
-}
-
-export type GenerateResult =
-  | { kind: 'written'; warnings?: string[] }
-  | { kind: 'upToDate'; warnings?: string[] }
-  | { kind: 'drift'; summary: string; warnings?: string[] };
+export type {
+  GenerateSchemaOptions,
+  GenerateSchemaResult,
+  Introspector,
+} from './types.js';
 
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
 
@@ -38,7 +35,7 @@ const MISTYPED_URL_CREDENTIALS_PATTERN = /^(?![a-z]:[/\\])[a-z][a-z0-9+.-]*:\/{1
 const ADO_CREDENTIALS_PATTERN =
   /(^|;)\s*(uid|user id|pwd|password|database|initial catalog|trusted_connection|integrated security|driver|dsn)\s*=/i;
 
-export { redactCredentials } from './redact.js';
+export { redactCredentials } from '../introspection/redact.js';
 
 function unrecognizedUrlError(url: string): Error {
   return new Error(
@@ -81,11 +78,11 @@ export function detectDialect(url: string): Dialect {
   return 'sqlite';
 }
 
-const INTROSPECTORS: Record<Dialect, (connection: ConnectionInfo) => Promise<TableSchema[]>> = {
-  postgres: introspectPostgres,
-  mysql: introspectMysql,
-  sqlite: introspectSqlite,
-  mssql: introspectMssql,
+const INTROSPECTORS: Record<Dialect, Introspector> = {
+  postgres: { introspect: introspectPostgres },
+  mysql: { introspect: introspectMysql },
+  sqlite: { introspect: introspectSqlite },
+  mssql: { introspect: introspectMssql },
 };
 
 // A name in --table/--exclude that matches nothing is a typo, and silently
@@ -100,7 +97,7 @@ function unmatchedNames(requested: string[] | undefined, tables: TableSchema[]):
   return requested.filter((name) => !available.has(name.toLowerCase()));
 }
 
-function filterTables(tables: TableSchema[], options: GenerateOptions): TableSchema[] {
+function filterTables(tables: TableSchema[], options: GenerateSchemaOptions): TableSchema[] {
   const include = options.tables?.map((name) => name.toLowerCase());
   const exclude = options.exclude?.map((name) => name.toLowerCase());
 
@@ -153,11 +150,18 @@ function summarizeDrift(existing: string | null, generated: string): string {
   return 'differs only in trailing whitespace or line endings.';
 }
 
-export async function runGenerate(options: GenerateOptions): Promise<GenerateResult> {
+export async function generateSchema(
+  options: GenerateSchemaOptions,
+  injectedIntrospector?: Introspector,
+): Promise<GenerateSchemaResult> {
   const dialect = options.dialect ?? detectDialect(options.url);
-  const connection: ConnectionInfo = { url: options.url, schema: options.schema };
-
-  const introspected = await INTROSPECTORS[dialect](connection);
+  const introspector = injectedIntrospector ?? INTROSPECTORS[dialect];
+  const introspected = await introspector.introspect({
+    url: options.url,
+    schema: options.schema,
+    tables: options.tables,
+    exclude: options.exclude,
+  });
 
   if (introspected.length === 0) {
     throw new Error('No tables found. Check the connection URL and --schema, if provided.');

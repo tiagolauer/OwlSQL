@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import type { Dialect } from './types.js';
-import { runGenerate } from './generate.js';
+import type { Dialect } from '../tooling/schema-generator/types.js';
+import { generateSchema } from '../tooling/schema-generator/generate.js';
 
 const DIALECTS: Dialect[] = ['postgres', 'mysql', 'sqlite', 'mssql'];
 
@@ -171,7 +171,7 @@ async function main(): Promise<void> {
 
   const out = flags.get('out') ?? './schema.ts';
 
-  const result = await runGenerate({
+  const result = await generateSchema({
     url,
     out,
     dialect: parseDialect(flags.get('dialect')),

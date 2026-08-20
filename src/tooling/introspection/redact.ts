@@ -16,8 +16,7 @@ const URL_CREDENTIALS_PATTERN = /(\/\/|(?<=[a-z][a-z0-9+.-]):\/)[^/?#]*@/i;
 const DSN_PASSWORD_PATTERN =
   /((?:^|;)\s*(?:pwd|password)\s*=)("[^"]*"|\{[^}]*\}|'[^']*'|[^;]*)/gi;
 
-// Lives here rather than in generate.ts so the dialect modules can call it
-// without importing the module that imports them (issue #278).
+// Lives with introspection so dialect modules do not depend on schema generation.
 export function redactCredentials(url: string): string {
   return url
     .replace(URL_CREDENTIALS_PATTERN, (_match, separator: string) => `${separator}***@`)

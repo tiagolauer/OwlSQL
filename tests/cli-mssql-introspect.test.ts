@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { introspectMssql } from '../src/cli/dialects/mssql.js';
+import { introspectMssql } from '../src/tooling/introspection/mssql.js';
 
 describe('introspectMssql', () => {
   it('resolves alias types via system_type_id, groups columns and keeps empty tables', async () => {

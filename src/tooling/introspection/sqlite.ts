@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import type { ConnectionInfo, TableSchema } from '../types.js';
-import { redactCredentials } from '../redact.js';
+import type { IntrospectionOptions, TableSchema } from '../schema-generator/types.js';
+import { redactCredentials } from './redact.js';
 
 export function mapSqliteType(declaredType: string): string {
   const type = declaredType.toUpperCase().trim();
@@ -102,7 +102,7 @@ function isMemoryDatabase(path: string): boolean {
   return path === ':memory:' || path.startsWith('file::memory:');
 }
 
-export async function introspectSqlite(connection: ConnectionInfo): Promise<TableSchema[]> {
+export async function introspectSqlite(connection: IntrospectionOptions): Promise<TableSchema[]> {
   let DatabaseSyncCtor: typeof import('node:sqlite').DatabaseSync;
   try {
     ({ DatabaseSync: DatabaseSyncCtor } = await import('node:sqlite'));

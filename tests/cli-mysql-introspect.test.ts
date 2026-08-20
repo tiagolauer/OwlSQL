@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { groupMysqlColumns, introspectMysql } from '../src/cli/dialects/mysql.js';
+import { groupMysqlColumns, introspectMysql } from '../src/tooling/introspection/mysql.js';
 
 const UPPERCASE_ROWS = [
   {

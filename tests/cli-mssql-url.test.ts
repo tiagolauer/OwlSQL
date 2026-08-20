@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mssqlUrlToConfig } from '../src/cli/dialects/mssql.js';
-import { detectDialect } from '../src/cli/generate.js';
+import { mssqlUrlToConfig } from '../src/tooling/introspection/mssql.js';
+import { detectDialect } from '../src/tooling/schema-generator/generate.js';
 
 describe('mssqlUrlToConfig', () => {
   it('translates a full mssql:// URL into a driver config', () => {
