@@ -59,7 +59,7 @@ const CASES = [
 // predicates and output inference moved the fixture from 231,605 to 236,778
 // instantiations (+2.23%); 240,000 keeps a reviewed 1.36% margin.
 // Reset for the v1 Next-only public surface. Removing Legacy and accidental
-// parser exports moved the fixture from 244,919 to 135,195 instantiations.
+// parser exports moved the fixture from 244,919 to 135,217 instantiations.
 // 150,000 keeps an 11% reviewed margin. The 100-projection stress case has a
 // separate 200,000 ceiling and every isolated case also has a 10% relative gate.
 const MAX_INSTANTIATIONS = 150_000;

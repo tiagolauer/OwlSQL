@@ -13,9 +13,11 @@ import type {
   FunctionReturnType,
   IsFunctionCall,
 } from '../semantics/functions.js';
+import type { SelectQueryIR } from '../../language/ir/query.js';
+import type { ParseSelectIR } from '../../language/select/parse-select.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { CompileFatal, CompileOk } from '../contracts/compilation.js';
-import type { CompileSelect } from './compile-select.js';
+import type { CompileSelectIR } from './compile-select.js';
 import type { ResolveColumn } from './resolve-column.js';
 
 export type ExpressionResult<
@@ -279,11 +281,14 @@ type ScalarSubqueryInner<Expression extends string> =
 type IsUnion<Value, Whole = Value> =
   Value extends Whole ? ([Whole] extends [Value] ? false : true) : never;
 
-type IsCountQuery<Query extends string> = Lowercase<
-  FirstWord<DropFirstWord<Query>>
-> extends `count(${string}`
-  ? true
-  : false;
+type IsCountQuery<IR extends SelectQueryIR> =
+  IR['projections'] extends readonly [infer Projection, ...unknown[]]
+    ? Projection extends { kind: 'expression'; fragment: infer Fragment extends string }
+      ? Lowercase<FirstWord<Trim<Fragment>>> extends `count(${string}`
+        ? true
+        : false
+      : false
+    : false;
 
 type InvalidScalarSubquery = Diagnostic<
   'INVALID_SCALAR_SUBQUERY',
@@ -297,19 +302,25 @@ type InferScalarSubquery<
   DB,
   CurrentScope,
   Query extends string,
-> = CompileSelect<DB, Query, CurrentScope> extends infer Compiled
-  ? Compiled extends CompileOk<infer Rows extends readonly unknown[], infer Diagnostics>
-    ? Rows[number] extends infer Row
-      ? IsUnion<keyof Row> extends true
-        ? ExpressionResult<unknown, [...Diagnostics, InvalidScalarSubquery]>
-        : ExpressionResult<
-            IsCountQuery<Query> extends true
-              ? Row[keyof Row]
-              : Row[keyof Row] | null,
-            Diagnostics
-          >
-      : ExpressionResult<unknown, Diagnostics>
-    : Compiled extends CompileFatal<unknown[], infer Diagnostics>
+> = ParseSelectIR<Query> extends infer Parsed
+  ? Parsed extends { kind: 'ok'; value: infer IR extends SelectQueryIR }
+    ? CompileSelectIR<DB, IR, CurrentScope> extends infer Compiled
+      ? Compiled extends CompileOk<infer Rows extends readonly unknown[], infer Diagnostics>
+        ? Rows[number] extends infer Row
+          ? IsUnion<keyof Row> extends true
+            ? ExpressionResult<unknown, [...Diagnostics, InvalidScalarSubquery]>
+            : ExpressionResult<
+                IsCountQuery<IR> extends true
+                  ? Row[keyof Row]
+                  : Row[keyof Row] | null,
+                Diagnostics
+              >
+          : ExpressionResult<unknown, Diagnostics>
+        : Compiled extends CompileFatal<unknown[], infer Diagnostics>
+          ? ExpressionResult<unknown, Diagnostics>
+          : never
+      : never
+    : Parsed extends CompileFatal<SelectQueryIR, infer Diagnostics>
       ? ExpressionResult<unknown, Diagnostics>
       : never
   : never;
