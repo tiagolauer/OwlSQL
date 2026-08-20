@@ -3,6 +3,14 @@ import type {
   EditorDiagnostic,
   QueryAnalysis,
 } from '../../src/compiler/analysis.js';
+import type {
+  DiagnosticLocation,
+  QueryDiagnosticCode,
+} from '../../src/compiler/contracts/diagnostic.js';
+import type {
+  DiagnosticLocation as PluginDiagnosticLocation,
+  QueryDiagnosticCode as PluginQueryDiagnosticCode,
+} from '../../ts-plugin/src/analysis-contract.cjs';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends
@@ -43,4 +51,14 @@ type StableAnalysis = Expect<
     : false
 >;
 
-export type EditorContractLock = [StableDiagnostic, StableContext, StableAnalysis];
+type PluginCodesAligned = Expect<Equal<QueryDiagnosticCode, PluginQueryDiagnosticCode>>;
+
+type PluginLocationsAligned = Expect<Equal<DiagnosticLocation, PluginDiagnosticLocation>>;
+
+export type EditorContractLock = [
+  StableDiagnostic,
+  StableContext,
+  StableAnalysis,
+  PluginCodesAligned,
+  PluginLocationsAligned,
+];

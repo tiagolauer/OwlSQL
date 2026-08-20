@@ -15,10 +15,7 @@ const {
 } = sqlContext;
 const { getColumnNames, getColumnType } = schemaModule;
 const { matchQueryLiteral, findAllQueryLiterals } = detectModule;
-const { getQueryDiagnostics } = diagnosticsModule;
-
-const OWLSQL_DIAGNOSTIC_SOURCE = 'owlsql';
-const OWLSQL_DIAGNOSTIC_CODE = 990001;
+const { getQueryDiagnostics, toEditorDiagnostic } = diagnosticsModule;
 
 function resolveTableScope(
   sources: ReturnType<typeof findSources>,
@@ -245,15 +242,7 @@ function init(modules: { typescript: typeof ts }) {
 
         for (const match of matches) {
           for (const span of getQueryDiagnostics(typescript, checker, match.dbType, match.literal, sourceFile)) {
-            extra.push({
-              file: sourceFile,
-              start: span.start,
-              length: span.length,
-              messageText: span.message,
-              category: typescript.DiagnosticCategory.Warning,
-              code: OWLSQL_DIAGNOSTIC_CODE,
-              source: OWLSQL_DIAGNOSTIC_SOURCE,
-            });
+            extra.push(toEditorDiagnostic(typescript, sourceFile, span));
           }
         }
 

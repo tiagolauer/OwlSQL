@@ -1,4 +1,9 @@
 import type * as ts from 'typescript';
+import type {
+  DiagnosticLocation,
+  PluginDiagnostic,
+  QueryDiagnosticCode,
+} from './analysis-contract.cjs';
 import sqlContext = require('./sql-context.cjs');
 import schemaModule = require('./schema.cjs');
 
@@ -52,10 +57,68 @@ interface ColumnEntry {
   start: number;
 }
 
-interface DiagnosticSpan {
-  start: number;
-  length: number;
-  message: string;
+type DiagnosticSpan = PluginDiagnostic;
+
+type ScannedDiagnosticCode =
+  | 'UNKNOWN_TABLE'
+  | 'UNKNOWN_COLUMN'
+  | 'UNKNOWN_ALIAS'
+  | 'AMBIGUOUS_COLUMN';
+
+const MESSAGE_PREFIX: Record<ScannedDiagnosticCode, string> = {
+  UNKNOWN_TABLE: 'unknown table',
+  UNKNOWN_COLUMN: 'unknown column',
+  UNKNOWN_ALIAS: 'unknown alias',
+  AMBIGUOUS_COLUMN: 'ambiguous column',
+};
+
+const TYPESCRIPT_DIAGNOSTIC_CODE: Record<QueryDiagnosticCode, number> = {
+  UNKNOWN_TABLE: 990001,
+  UNKNOWN_COLUMN: 990002,
+  UNKNOWN_ALIAS: 990003,
+  AMBIGUOUS_COLUMN: 990004,
+  PARAM_TYPE_CONFLICT: 990005,
+  PARAM_STYLE_MISMATCH: 990006,
+  UNSUPPORTED_STATEMENT: 990007,
+  MALFORMED_QUERY: 990008,
+  MULTIPLE_STATEMENTS: 990009,
+  INVALID_WRITE_TARGET: 990010,
+  INVALID_SCALAR_SUBQUERY: 990011,
+  UNSUPPORTED_DIALECT_FEATURE: 990012,
+  UNSUPPORTED_EXPRESSION: 990013,
+};
+
+function scannedDiagnostic(
+  code: ScannedDiagnosticCode,
+  location: DiagnosticLocation,
+  reference: string,
+  start: number,
+  length: number,
+): DiagnosticSpan {
+  return {
+    code,
+    message: `${MESSAGE_PREFIX[code]}: ${reference}`,
+    location,
+    reference,
+    start,
+    length,
+  };
+}
+
+function toEditorDiagnostic(
+  typescript: typeof ts,
+  sourceFile: ts.SourceFile,
+  diagnostic: PluginDiagnostic,
+): ts.Diagnostic {
+  return {
+    file: sourceFile,
+    start: diagnostic.start,
+    length: diagnostic.length,
+    messageText: diagnostic.message,
+    category: typescript.DiagnosticCategory.Warning,
+    code: TYPESCRIPT_DIAGNOSTIC_CODE[diagnostic.code],
+    source: 'owlsql',
+  };
 }
 
 function findTopLevelFromIndex(text: string): number | null {
@@ -178,14 +241,14 @@ function whereTokenDiagnostics(
     }
     const matchedSource = findSourceByAlias(sources, qualifier);
     if (!matchedSource) {
-      return [{ start: token.start, length: qualifier.length, message: `unknown alias: ${qualifier}` }];
+      return [scannedDiagnostic('UNKNOWN_ALIAS', 'where', qualifier, token.start, qualifier.length)];
     }
     if (!tableExists(typescript, checker, dbType, matchedSource.table)) {
       return [];
     }
     return columnExists(typescript, checker, dbType, literal, matchedSource.table, columnName)
       ? []
-      : [{ start: columnStart, length: columnName.length, message: `unknown column: ${columnName}` }];
+      : [scannedDiagnostic('UNKNOWN_COLUMN', 'where', columnName, columnStart, columnName.length)];
   }
 
   const knownTables = sources.filter((source) => tableExists(typescript, checker, dbType, source.table));
@@ -198,10 +261,10 @@ function whereTokenDiagnostics(
   );
 
   if (containingTables.length === 0) {
-    return [{ start: columnStart, length: columnName.length, message: `unknown column: ${columnName}` }];
+    return [scannedDiagnostic('UNKNOWN_COLUMN', 'where', columnName, columnStart, columnName.length)];
   }
   if (containingTables.length > 1) {
-    return [{ start: columnStart, length: columnName.length, message: `ambiguous column: ${columnName}` }];
+    return [scannedDiagnostic('AMBIGUOUS_COLUMN', 'where', columnName, columnStart, columnName.length)];
   }
   return [];
 }
@@ -363,11 +426,15 @@ function getQueryDiagnostics(
 
   for (const source of sources) {
     if (!tableExists(typescript, checker, dbType, source.table)) {
-      diagnostics.push({
-        start: literalStart + source.tableStart,
-        length: source.tableEnd - source.tableStart,
-        message: `unknown table: ${source.table}`,
-      });
+      diagnostics.push(
+        scannedDiagnostic(
+          'UNKNOWN_TABLE',
+          'from',
+          source.table,
+          literalStart + source.tableStart,
+          source.tableEnd - source.tableStart,
+        ),
+      );
     }
   }
 
@@ -398,14 +465,16 @@ function getQueryDiagnostics(
       }
       const matchedSource = findSourceByAlias(sources, qualifier);
       if (!matchedSource) {
-        diagnostics.push({ start: tokenStart, length: qualifier.length, message: `unknown alias: ${qualifier}` });
+        diagnostics.push(scannedDiagnostic('UNKNOWN_ALIAS', 'select', qualifier, tokenStart, qualifier.length));
         continue;
       }
       if (!tableExists(typescript, checker, dbType, matchedSource.table)) {
         continue;
       }
       if (!columnExists(typescript, checker, dbType, literal, matchedSource.table, columnName)) {
-        diagnostics.push({ start: columnStart, length: columnName.length, message: `unknown column: ${columnName}` });
+        diagnostics.push(
+          scannedDiagnostic('UNKNOWN_COLUMN', 'select', columnName, columnStart, columnName.length),
+        );
       }
       continue;
     }
@@ -420,9 +489,13 @@ function getQueryDiagnostics(
     );
 
     if (containingTables.length === 0) {
-      diagnostics.push({ start: columnStart, length: columnName.length, message: `unknown column: ${columnName}` });
+      diagnostics.push(
+        scannedDiagnostic('UNKNOWN_COLUMN', 'select', columnName, columnStart, columnName.length),
+      );
     } else if (containingTables.length > 1) {
-      diagnostics.push({ start: columnStart, length: columnName.length, message: `ambiguous column: ${columnName}` });
+      diagnostics.push(
+        scannedDiagnostic('AMBIGUOUS_COLUMN', 'select', columnName, columnStart, columnName.length),
+      );
     }
   }
 
@@ -442,4 +515,4 @@ function getQueryDiagnostics(
   return diagnostics;
 }
 
-export = { getQueryDiagnostics };
+export = { getQueryDiagnostics, toEditorDiagnostic };
