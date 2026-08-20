@@ -28,6 +28,13 @@ If the change alters what a query infers to, say so in the description and name 
 
 Every behavior change needs a test that would fail without the fix. If you're touching `src/parse.ts`, `src/where.ts`, or another type-level file, that usually means a `.test-d.ts` case with `@ts-expect-error` or an `Equal<>` assertion; runtime behavior (adapters, the CLI, the editor plugin) gets a `.test.ts` case instead. A PR without a regression test is a PR someone else will eventually re-break by accident.
 
+### Architecture changes
+
+Before changing compiler boundaries, Query IR, scope semantics, diagnostics policy,
+runtime/compiler isolation, dialect architecture, public packages, or a material
+type-performance tradeoff, read `docs/architecture/CONSTITUTION.md` and the accepted
+ADRs in `docs/adr/`. A change that supersedes one of those decisions needs a new ADR.
+
 ## Developing
 
 ### Environment
@@ -104,6 +111,11 @@ npm run test:perf
 That generates a fixture (100 tables, 32 queries covering joins, `GROUP BY`, `CASE`, CTEs, `UNION`, strict mode, and typed params), type-checks it with `tsc --extendedDiagnostics`, and fails if the instantiation count goes over the budget in `scripts/type-budget.mjs`. Instantiation count is used rather than wall-clock time because it's deterministic: the same input and the same TypeScript version give the same number on any machine, so it can be a hard threshold instead of a flaky one. That's also why this runs on the lockfile's TypeScript version only, while the type tests run against the whole supported matrix.
 
 If your change legitimately costs more, raise the budget in the same commit rather than leaving it to drift. A reviewer can then see how much more expensive the feature made every query in every user's project.
+
+The hard instantiation ceiling still decides pass/fail. The checked-in baseline also
+makes relative cost visible in review. A meaningful positive delta must be explained
+in the PR even when it stays under the ceiling; do not rewrite the baseline merely to
+hide a regression.
 
 ## Publishing
 
