@@ -123,16 +123,16 @@ hide a regression.
 
 Both packages ship compiled JavaScript and declarations from their own `dist/`, wired into `prepublishOnly`.
 
-The library is published by the [Release workflow](.github/workflows/release.yml) rather than from a laptop, using npm's trusted publishing: the workflow's OIDC identity is what the registry trusts, so there is no npm token in this repository to leak or rotate. npm is restricting tokens that bypass 2FA for direct publishing, which is the other half of the reason.
+The library is staged by the [Release workflow](.github/workflows/release.yml) rather than published from a laptop, using npm's trusted publishing: the workflow's OIDC identity is what the registry trusts, so there is no npm token in this repository to leak or rotate. A maintainer reviews the staged package and approves it with 2FA before it becomes public.
 
 ```bash
 npm version <patch|minor|major>
 git push --follow-tags origin master
 ```
 
-Then run **Actions → Release → Run workflow**, or publish a GitHub Release for the tag — either triggers it. The release calls the same reusable CI workflow used by pushes and pull requests before publishing, including the TypeScript and Node matrices, plugin, architecture, package, performance, and real-database integration gates. `prepublishOnly` repeats the core type, runtime, architecture, and build checks immediately before npm receives the package.
+Then run `gh workflow run Release --ref master -f release_tag=<tag>`. The workflow itself comes from `master`, checks out only `refs/tags/<tag>`, and rejects tags that do not match `v${package.version}`. It calls the same reusable CI workflow used by pushes and pull requests before staging, including the TypeScript and Node matrices, plugin, architecture, package, performance, and real-database integration gates. `prepublishOnly` repeats the core type, runtime, architecture, and build checks immediately before npm receives the package. After the workflow succeeds, review the package under npm's **Staged Packages** tab and approve it with 2FA. Publish the GitHub Release only after npm makes the package public.
 
-This needs the package's *Trusted publisher* to be configured once on npmjs.com (package → Settings → Trusted publisher → GitHub Actions, repository `tiagolauer/OwlSQL`, workflow `release.yml`).
+This needs the package's *Trusted publisher* to be configured once on npmjs.com (package → Settings → Trusted publisher → GitHub Actions, repository `tiagolauer/OwlSQL`, workflow `release.yml`) with `npm stage publish` allowed and direct `npm publish` disabled. Staged-package approval must require 2FA.
 
 Publishing by hand still works if you own the package and pass a real one-time password, which npm now requires for a direct publish:
 
