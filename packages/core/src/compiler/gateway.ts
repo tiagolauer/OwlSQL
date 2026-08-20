@@ -1,4 +1,4 @@
-import type { SchemaLike } from './schema/model.js';
+import type { SchemaLike } from '../schema/model.js';
 import type {
   NextParams,
   NextQuery,

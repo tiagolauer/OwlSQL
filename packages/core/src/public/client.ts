@@ -5,7 +5,7 @@ import type {
   InferStrictViaGateway,
   InferViaGateway,
 } from '../compiler/gateway.js';
-import type { SchemaLike } from '../compiler/schema/model.js';
+import type { SchemaLike } from '../schema/model.js';
 import { createRuntimeDb } from '../runtime/db.js';
 import type {
   DialectExecutor,

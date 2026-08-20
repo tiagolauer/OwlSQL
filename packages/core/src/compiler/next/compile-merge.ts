@@ -12,7 +12,7 @@ import type {
 } from '../../language/ir/write.js';
 import type { CompileFatal, CompileOk } from '../contracts/compilation.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
-import type { ResolveKey } from '../schema/model.js';
+import type { ResolveKey } from '../../schema/model.js';
 import type { AnalyzePredicates } from './compile-select.js';
 import type { ScanWriteValues } from './compile-insert.js';
 import type { InferOutput } from './infer-output.js';

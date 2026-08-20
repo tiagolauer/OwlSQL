@@ -11,7 +11,7 @@ import type {
   TableSourceIR,
 } from '../../language/ir/source.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
-import type { ResolveKey } from '../schema/model.js';
+import type { ResolveKey } from '../../schema/model.js';
 import type { InferExpression } from './infer-expression.js';
 import type { ResolveColumn } from './resolve-column.js';
 import type { ResolveBinding } from './resolve-source.js';

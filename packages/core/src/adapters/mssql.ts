@@ -1,6 +1,9 @@
 import type { ConnectionPool, Transaction, Request } from 'mssql';
-import type { DialectExecutor, QueryMeta, SchemaLike, TypedDb, TypedDbOptions } from '../index.js';
-import { createTypedDb } from '../index.js';
+import type { TypedDb, TypedDbOptions } from '../public/client.js';
+import { createTypedDb } from '../public/client.js';
+import type { DialectExecutor } from '../runtime/executor.js';
+import type { QueryMeta } from '../runtime/result.js';
+import type { SchemaLike } from '../schema/model.js';
 import { collectNamedParameters } from './named-params.js';
 import { rollbackAndRethrow } from './transaction.js';
 

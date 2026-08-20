@@ -1,7 +1,7 @@
 import type { WriteTargetIR } from '../../language/ir/write.js';
 import type { TableSourceIR } from '../../language/ir/source.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
-import type { ResolveKey } from '../schema/model.js';
+import type { ResolveKey } from '../../schema/model.js';
 import type { ResolveError, ResolveOk } from './resolve-source.js';
 
 type UnknownTable<Name extends string> = Diagnostic<

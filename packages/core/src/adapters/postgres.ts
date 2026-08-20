@@ -1,6 +1,8 @@
 import type postgres from 'postgres';
-import type { DialectExecutor, SchemaLike, TypedDb, TypedDbOptions } from '../index.js';
-import { createTypedDb } from '../index.js';
+import type { TypedDb, TypedDbOptions } from '../public/client.js';
+import { createTypedDb } from '../public/client.js';
+import type { DialectExecutor } from '../runtime/executor.js';
+import type { SchemaLike } from '../schema/model.js';
 
 type PostgresUnsafeParam = NonNullable<Parameters<postgres.Sql['unsafe']>[1]>[number];
 

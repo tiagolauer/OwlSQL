@@ -1,5 +1,6 @@
 import { CompiledQuery, type Kysely } from 'kysely';
-import type { Executor, QueryMeta } from '../index.js';
+import type { Executor } from '../runtime/executor.js';
+import type { QueryMeta } from '../runtime/result.js';
 
 export function createKyselyExecutor<DB>(db: Kysely<DB>): Executor {
   return async (sql, params) => {

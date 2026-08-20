@@ -4,7 +4,7 @@ import type {
   SourceIR,
   TableSourceIR,
 } from '../../language/ir/source.js';
-import type { ColumnValue, ResolveKey } from '../schema/model.js';
+import type { ColumnValue, ResolveKey } from '../../schema/model.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { Scope } from './scope.js';
 import type {

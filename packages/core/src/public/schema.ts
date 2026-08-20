@@ -1,9 +1,9 @@
-import type { Schema } from '../compiler/schema/model.js';
+import type { Schema } from '../schema/model.js';
 
 export type {
   Schema,
   SchemaLike,
-} from '../compiler/schema/model.js';
+} from '../schema/model.js';
 
 export type { QueryTypeError } from '../compiler/contracts/public-error.js';
 
