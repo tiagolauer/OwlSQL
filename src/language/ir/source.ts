@@ -28,4 +28,6 @@ export interface DerivedSourceIR<
   nullable: Nullable;
 }
 
-export type SourceIR = TableSourceIR | DerivedSourceIR;
+export type SourceIR =
+  | TableSourceIR<string, string, boolean, JoinKind, readonly string[]>
+  | DerivedSourceIR<string, unknown, boolean, JoinKind>;

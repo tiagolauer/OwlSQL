@@ -43,6 +43,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');
 const GENERATED_DIR = join(PERF_DIR, 'generated');
 const BASELINE_FILE = join(PERF_DIR, 'baseline.json');
+const NEXT_BASELINE_FILE = join(PERF_DIR, 'select-next-baseline.json');
 
 function tableName(index) {
   return `t_${String(index).padStart(3, '0')}`;
@@ -138,12 +139,12 @@ function readDiagnostic(output, label) {
   return match === null ? null : Number(match[1]);
 }
 
-function compile() {
+function compile(configFile = 'tsconfig.json') {
   const tsc = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
   try {
     const output = execFileSync(
       process.execPath,
-      [tsc, '--noEmit', '--extendedDiagnostics', '-p', join(PERF_DIR, 'tsconfig.json')],
+      [tsc, '--noEmit', '--extendedDiagnostics', '-p', join(PERF_DIR, configFile)],
       { encoding: 'utf8' },
     );
     const instantiations = readDiagnostic(output, 'Instantiations');
@@ -172,16 +173,16 @@ function readTypescriptVersion() {
   return packageJson.version;
 }
 
-function writeBaseline(instantiations) {
+function writeBaseline(file, instantiations) {
   writeFileSync(
-    BASELINE_FILE,
+    file,
     `${JSON.stringify({ typescript: readTypescriptVersion(), instantiations }, null, 2)}\n`,
     'utf8',
   );
 }
 
-function readBaseline() {
-  const baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+function readBaseline(file) {
+  const baseline = JSON.parse(readFileSync(file, 'utf8'));
   if (typeof baseline.instantiations !== 'number' || baseline.instantiations <= 0) {
     throw new Error('The type-instantiation baseline is invalid.');
   }
@@ -191,17 +192,25 @@ function readBaseline() {
 function main() {
   writeFixture();
   const { instantiations, types, checkTime } = compile();
+  const next = compile('tsconfig.next.json');
 
   if (process.argv.includes('--write-baseline')) {
-    writeBaseline(instantiations);
-    process.stdout.write(`Wrote baseline: ${instantiations} instantiations\n`);
+    writeBaseline(BASELINE_FILE, instantiations);
+    writeBaseline(NEXT_BASELINE_FILE, next.instantiations);
+    process.stdout.write(
+      `Wrote baselines: public=${instantiations}, next=${next.instantiations} instantiations\n`,
+    );
     return;
   }
 
-  const baseline = readBaseline();
+  const baseline = readBaseline(BASELINE_FILE);
+  const nextBaseline = readBaseline(NEXT_BASELINE_FILE);
   const delta = instantiations - baseline;
+  const nextDelta = next.instantiations - nextBaseline;
   const deltaPercent = (delta / baseline) * 100;
+  const nextDeltaPercent = (nextDelta / nextBaseline) * 100;
   const deltaSign = delta >= 0 ? '+' : '';
+  const nextDeltaSign = nextDelta >= 0 ? '+' : '';
   const budgetUsed = Math.round((instantiations / MAX_INSTANTIATIONS) * 100);
 
   process.stdout.write(
@@ -213,6 +222,9 @@ function main() {
       `Instantiations: ${instantiations} (${budgetUsed}% of the ${MAX_INSTANTIATIONS} budget)`,
       `Baseline:       ${baseline}`,
       `Delta:          ${deltaSign}${delta} (${deltaSign}${deltaPercent.toFixed(2)}%)`,
+      `Next:           ${next.instantiations}`,
+      `Next baseline:  ${nextBaseline}`,
+      `Next delta:     ${nextDeltaSign}${nextDelta} (${nextDeltaSign}${nextDeltaPercent.toFixed(2)}%)`,
       '',
     ].join('\n'),
   );

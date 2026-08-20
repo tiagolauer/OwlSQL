@@ -11,7 +11,33 @@ import type { SourceIR } from './source.js';
 export type ProjectionIR =
   | ColumnProjectionIR
   | ExpressionProjectionIR
-  | StarProjectionIR;
+  | StarProjectionIR<string | null>;
+
+export interface SelectClausesIR<
+  GroupBy extends string = '',
+  OrderBy extends string = '',
+  Limit extends string = '',
+  Offset extends string = '',
+  Window extends string = '',
+> {
+  groupBy: GroupBy;
+  orderBy: OrderBy;
+  limit: Limit;
+  offset: Offset;
+  window: Window;
+}
+
+export interface SetOperationIR<
+  Kind extends 'union' | 'union-all' | 'intersect' | 'except' =
+    | 'union'
+    | 'union-all'
+    | 'intersect'
+    | 'except',
+  Query = unknown,
+> {
+  kind: Kind;
+  query: Query;
+}
 
 export interface SelectQueryIR<
   Sources extends readonly SourceIR[] = readonly SourceIR[],
@@ -19,6 +45,14 @@ export interface SelectQueryIR<
   Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
   Parameters extends readonly ParameterIR[] = readonly ParameterIR[],
   Ctes extends readonly CteIR[] = readonly CteIR[],
+  Clauses extends SelectClausesIR<
+    string,
+    string,
+    string,
+    string,
+    string
+  > = SelectClausesIR<string, string, string, string, string>,
+  SetOperations extends readonly SetOperationIR[] = readonly SetOperationIR[],
 > {
   kind: 'select';
   sources: Sources;
@@ -26,4 +60,6 @@ export interface SelectQueryIR<
   predicates: Predicates;
   parameters: Parameters;
   ctes: Ctes;
+  clauses: Clauses;
+  setOperations: SetOperations;
 }

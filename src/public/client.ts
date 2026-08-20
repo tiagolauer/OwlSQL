@@ -1,10 +1,12 @@
 import type {
-  LegacyInferParams,
-  LegacyInferResult,
-  LegacyInferResultStrict,
   QueryTypeError,
   UsedPlaceholderStyles,
 } from '../compiler/legacy.js';
+import type {
+  InferParamsViaGateway,
+  InferStrictViaGateway,
+  InferViaGateway,
+} from '../compiler/gateway.js';
 import type { SchemaLike } from '../compiler/schema/model.js';
 import { createRuntimeDb } from '../runtime/db.js';
 import type {
@@ -55,12 +57,12 @@ export interface TypedDb<
   readonly __owlsqlTypedDb?: true;
   query<Q extends string>(
     sql: Q & ValidatePlaceholderStyle<Q, Style>,
-    ...params: LegacyInferParams<DB, Q>
+    ...params: InferParamsViaGateway<DB, Q>
   ): Promise<
     Result<
       Strict extends true
-        ? LegacyInferResultStrict<DB, Q>
-        : LegacyInferResult<DB, Q>,
+        ? InferStrictViaGateway<DB, Q>
+        : InferViaGateway<DB, Q>,
       QueryError
     >
   >;

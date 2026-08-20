@@ -1,5 +1,10 @@
-import type { SourceIR, TableSourceIR } from '../../language/ir/source.js';
-import type { ColumnValue, ResolveKey, TableRow } from '../schema/model.js';
+import type {
+  DerivedSourceIR,
+  JoinKind,
+  SourceIR,
+  TableSourceIR,
+} from '../../language/ir/source.js';
+import type { ColumnValue, ResolveKey } from '../schema/model.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { Scope } from './scope.js';
 import type {
@@ -37,18 +42,47 @@ type WithNullability<Value, Nullable extends boolean> =
 
 type ResolveTableColumn<
   DB,
-  Source extends TableSourceIR,
+  Source extends TableSourceIR<string, string, boolean, JoinKind, readonly string[]>,
   Column extends string,
 > = ResolveKey<DB, Source['name']> extends never
   ? ResolveError<UnknownTable<Source['name']>>
-  : ResolveKey<TableRow<DB, Source['name']>, Column> extends never
-    ? ResolveError<UnknownColumn<Column>>
-    : ResolveOk<
-        WithNullability<
-          ColumnValue<TableRow<DB, Source['name']>, Column>,
-          Source['nullable']
-        >
-      >;
+  : ResolveKey<DB, Source['name']> extends infer Table extends keyof DB
+    ? ResolveKey<DB[Table], Column> extends infer Key
+      ? [Key] extends [never]
+        ? ResolveError<UnknownColumn<Column>>
+        : Key extends keyof DB[Table]
+          ? ResolveOk<WithNullability<DB[Table][Key], Source['nullable']>>
+          : never
+      : never
+    : never;
+
+type ResolveDerivedColumn<
+  Source extends DerivedSourceIR<string, unknown, boolean, JoinKind>,
+  Column extends string,
+> = ResolveKey<Source['query'], Column> extends never
+  ? ResolveError<UnknownColumn<Column>>
+  : ResolveOk<
+      WithNullability<
+        ColumnValue<Source['query'], Column>,
+        Source['nullable']
+      >
+    >;
+
+type ResolveSourceColumn<
+  DB,
+  Source extends SourceIR,
+  Column extends string,
+> = Source extends TableSourceIR<
+  string,
+  string,
+  boolean,
+  JoinKind,
+  readonly string[]
+>
+  ? ResolveTableColumn<DB, Source, Column>
+  : Source extends DerivedSourceIR<string, unknown, boolean, JoinKind>
+    ? ResolveDerivedColumn<Source, Column>
+    : never;
 
 type ResolveQualified<
   DB,
@@ -56,10 +90,33 @@ type ResolveQualified<
   Qualifier extends string,
   Column extends string,
 > = ResolveBinding<CurrentScope, Qualifier> extends infer Binding
-  ? Binding extends ResolveOk<infer Source extends TableSourceIR>
-    ? ResolveTableColumn<DB, Source, Column>
+  ? Binding extends ResolveOk<infer Source extends SourceIR>
+    ? ResolveSourceColumn<DB, Source, Column>
     : Binding
   : never;
+
+type Includes<
+  Values extends readonly string[],
+  Name extends string,
+> = Values extends readonly [
+  infer Head extends string,
+  ...infer Tail extends string[],
+]
+  ? Lowercase<Head> extends Lowercase<Name>
+    ? true
+    : Includes<Tail, Name>
+  : false;
+
+type IsMerged<Source extends SourceIR, Column extends string> =
+  Source extends TableSourceIR<
+    string,
+    string,
+    boolean,
+    JoinKind,
+    infer Merged
+  >
+    ? Includes<Merged, Column>
+    : false;
 
 type LocalColumnMatches<
   DB,
@@ -70,24 +127,13 @@ type LocalColumnMatches<
   infer Head extends SourceIR,
   ...infer Tail extends SourceIR[],
 ]
-  ? Head extends TableSourceIR
-    ? ResolveKey<DB, Head['name']> extends never
-      ? LocalColumnMatches<DB, Tail, Column, Matches>
-      : ResolveKey<TableRow<DB, Head['name']>, Column> extends never
+  ? ResolveSourceColumn<DB, Head, Column> extends infer Resolution
+    ? Resolution extends ResolveOk<infer Value>
+      ? IsMerged<Head, Column> extends true
         ? LocalColumnMatches<DB, Tail, Column, Matches>
-        : LocalColumnMatches<
-            DB,
-            Tail,
-            Column,
-            [
-              ...Matches,
-              WithNullability<
-                ColumnValue<TableRow<DB, Head['name']>, Column>,
-                Head['nullable']
-              >,
-            ]
-          >
-    : LocalColumnMatches<DB, Tail, Column, Matches>
+        : LocalColumnMatches<DB, Tail, Column, [...Matches, Value]>
+      : LocalColumnMatches<DB, Tail, Column, Matches>
+    : never
   : Matches;
 
 type ResolveUnqualified<
@@ -98,8 +144,8 @@ type ResolveUnqualified<
   ? LocalColumnMatches<DB, Sources, Column> extends infer Matches extends unknown[]
     ? Matches extends [infer Value]
       ? ResolveOk<Value>
-      : Matches extends [unknown, unknown, ...unknown[]]
-        ? ResolveError<AmbiguousColumn<Column>>
+      : Matches extends [infer First, unknown, ...unknown[]]
+        ? ResolveError<AmbiguousColumn<Column>, First>
         : Parent extends Scope<readonly SourceIR[], unknown>
           ? ResolveUnqualified<DB, Parent, Column>
           : ResolveError<UnknownColumn<Column>>
