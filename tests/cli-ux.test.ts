@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectDialect, runGenerate } from '../src/cli/generate.js';
+import { detectDialect, generateSchema } from '../src/tooling/schema-generator/generate.js';
 import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
-import { normalizeSqlitePath } from '../src/cli/dialects/sqlite.js';
+import { normalizeSqlitePath } from '../src/tooling/introspection/sqlite.js';
 import { formatCliError } from '../src/cli/index.js';
 
 function createDatabase(): { dir: string; file: string } {
@@ -57,7 +57,7 @@ describe('sqlite URL forms', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
-      await runGenerate({ url: `file:${file}`, out });
+      await generateSchema({ url: `file:${file}`, out });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -67,7 +67,7 @@ describe('sqlite URL forms', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
-      await runGenerate({ url: `sqlite://${file}`, out });
+      await generateSchema({ url: `sqlite://${file}`, out });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -79,7 +79,7 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
-      await runGenerate({ url: file, out, tables: ['users'] });
+      await generateSchema({ url: file, out, tables: ['users'] });
       const { readFileSync } = await import('node:fs');
       const written = readFileSync(out, 'utf8');
       expect(written).toContain('users');
@@ -93,7 +93,7 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
-      await runGenerate({ url: file, out, exclude: ['posts'] });
+      await generateSchema({ url: file, out, exclude: ['posts'] });
       const { readFileSync } = await import('node:fs');
       const written = readFileSync(out, 'utf8');
       expect(written).toContain('users');
@@ -107,7 +107,7 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
-      await expect(runGenerate({ url: file, out, tables: ['nope'] })).rejects.toThrow(
+      await expect(generateSchema({ url: file, out, tables: ['nope'] })).rejects.toThrow(
         'Available tables: users, posts',
       );
     } finally {
@@ -122,7 +122,7 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
     try {
       const out = join(dir, 'schema.ts');
       await expect(
-        runGenerate({ url: file, out, tables: ['users', 'ordrs'] }),
+        generateSchema({ url: file, out, tables: ['users', 'ordrs'] }),
       ).rejects.toThrow('--table matched no such table: ordrs');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -133,7 +133,7 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
-      const result = await runGenerate({ url: file, out, exclude: ['posts', 'ordrs'] });
+      const result = await generateSchema({ url: file, out, exclude: ['posts', 'ordrs'] });
       expect(result).toEqual({
         kind: 'written',
         warnings: ['--exclude matched no such table: ordrs'],
@@ -147,7 +147,7 @@ describe.skipIf(!sqliteAvailable)('table filtering', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'schema.ts');
-      expect(await runGenerate({ url: file, out, exclude: ['posts'] })).toEqual({
+      expect(await generateSchema({ url: file, out, exclude: ['posts'] })).toEqual({
         kind: 'written',
       });
     } finally {
@@ -161,7 +161,7 @@ describe.skipIf(!sqliteAvailable)('write errors', () => {
     const { dir, file } = createDatabase();
     try {
       const out = join(dir, 'missing-dir', 'schema.ts');
-      await expect(runGenerate({ url: file, out })).rejects.toThrow('directory does not exist');
+      await expect(generateSchema({ url: file, out })).rejects.toThrow('directory does not exist');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

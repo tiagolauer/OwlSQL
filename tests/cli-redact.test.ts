@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { detectDialect, redactCredentials } from '../src/cli/generate.js';
-import { introspectSqlite } from '../src/cli/dialects/sqlite.js';
+import { detectDialect, redactCredentials } from '../src/tooling/schema-generator/generate.js';
+import { introspectSqlite } from '../src/tooling/introspection/sqlite.js';
 import { sqliteAvailable } from './sqlite-availability.js';
 
 describe('redactCredentials', () => {

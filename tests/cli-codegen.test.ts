@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderSchema } from '../src/cli/codegen';
-import type { TableSchema } from '../src/cli/types';
+import { renderSchema } from '../src/tooling/schema-generator/codegen';
+import type { TableSchema } from '../src/tooling/schema-generator/types';
 
 describe('renderSchema', () => {
   it('renders multiple tables with their columns', () => {

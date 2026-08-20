@@ -1,4 +1,4 @@
-import type { ConnectionInfo, TableSchema } from '../types.js';
+import type { IntrospectionOptions, TableSchema } from '../schema-generator/types.js';
 
 const POSTGRES_SCALAR_TYPES: Record<string, string> = {
   int2: 'number',
@@ -82,7 +82,7 @@ const POSTGRES_ARRAY_TYPE_OVERRIDES: Record<string, string> = {
 // JSON.stringify emits a TypeScript-valid double-quoted literal and escapes
 // backslashes, quotes and control characters - hand-rolled quoting only
 // escaped `'`, so a label ending in a backslash escaped the closing quote and
-// the generated schema.ts stopped parsing. renderKey in src/cli/codegen.ts
+// the generated schema.ts stopped parsing. renderKey in schema-generator/codegen.ts
 // already quotes identifiers this way.
 function renderEnumUnion(labels: string[]): string {
   return labels.map((label) => JSON.stringify(label)).join(' | ');
@@ -129,7 +129,7 @@ interface PgEnumRow {
   enumlabel: string;
 }
 
-export async function introspectPostgres(connection: ConnectionInfo): Promise<TableSchema[]> {
+export async function introspectPostgres(connection: IntrospectionOptions): Promise<TableSchema[]> {
   let PoolCtor: typeof import('pg').Pool;
   try {
     ({ Pool: PoolCtor } = await import('pg'));

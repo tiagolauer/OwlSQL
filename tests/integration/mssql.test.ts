@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ConnectionPool, type config as MssqlConfig } from 'mssql';
 import { createMssqlExecutor, createMssqlTransaction } from '../../src/adapters/mssql.js';
-import { mssqlUrlToConfig } from '../../src/cli/dialects/mssql.js';
+import { mssqlUrlToConfig } from '../../src/tooling/introspection/mssql.js';
 import { isOk } from '../../src/index.js';
 import { MSSQL_URL_ENV, metaOf, mssqlUrl, requireUrl, rowsOf } from './databases.js';
 

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mapPostgresType } from '../src/cli/dialects/postgres';
-import { mapMysqlType } from '../src/cli/dialects/mysql';
-import { mapSqliteType } from '../src/cli/dialects/sqlite';
-import { mapMssqlType } from '../src/cli/dialects/mssql';
+import { mapPostgresType } from '../src/tooling/introspection/postgres';
+import { mapMysqlType } from '../src/tooling/introspection/mysql';
+import { mapSqliteType } from '../src/tooling/introspection/sqlite';
+import { mapMssqlType } from '../src/tooling/introspection/mssql';
 
 describe('mapPostgresType', () => {
   it('maps small integers to number', () => {

@@ -1,4 +1,4 @@
-import type { ConnectionInfo, TableSchema } from '../types.js';
+import type { IntrospectionOptions, TableSchema } from '../schema-generator/types.js';
 
 const MYSQL_SCALAR_TYPES: Record<string, string> = {
   tinyint: 'number',
@@ -57,7 +57,7 @@ function readField(row: MysqlColumnRow, name: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-export async function introspectMysql(connection: ConnectionInfo): Promise<TableSchema[]> {
+export async function introspectMysql(connection: IntrospectionOptions): Promise<TableSchema[]> {
   let createConnection: typeof import('mysql2/promise').createConnection;
   try {
     ({ createConnection } = await import('mysql2/promise'));

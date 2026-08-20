@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { introspectPostgres } from '../src/cli/dialects/postgres.js';
+import { introspectPostgres } from '../src/tooling/introspection/postgres.js';
 
 const TABLE_ROWS = [{ table_name: 'users' }, { table_name: 'empty_t' }];
 

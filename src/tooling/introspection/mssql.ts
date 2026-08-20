@@ -1,4 +1,4 @@
-import type { ConnectionInfo, TableSchema } from '../types.js';
+import type { IntrospectionOptions, TableSchema } from '../schema-generator/types.js';
 
 const MSSQL_SCALAR_TYPES: Record<string, string> = {
   int: 'number',
@@ -126,7 +126,7 @@ export function mssqlUrlToConfig(url: string): MssqlConnectionConfig {
   return config;
 }
 
-export async function introspectMssql(connection: ConnectionInfo): Promise<TableSchema[]> {
+export async function introspectMssql(connection: IntrospectionOptions): Promise<TableSchema[]> {
   let connect: typeof import('mssql').connect;
   try {
     ({ connect } = await import('mssql'));

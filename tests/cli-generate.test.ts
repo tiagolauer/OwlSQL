@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runGenerate, detectDialect } from '../src/cli/generate';
+import { generateSchema, detectDialect } from '../src/tooling/schema-generator/generate';
 import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
 
 describe('detectDialect', () => {
@@ -88,7 +88,7 @@ describe('detectDialect', () => {
   });
 });
 
-describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite file)', () => {
+describe.skipIf(!sqliteAvailable)('generateSchema (end to end against a real sqlite file)', () => {
   it('introspects the database and writes the rendered schema to --out', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'owlsql-'));
     const dbFile = join(dir, 'app.db');
@@ -99,7 +99,7 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
       db.exec('create table users (id integer primary key, name text not null, bio text)');
       db.close();
 
-      await runGenerate({ url: dbFile, out: outFile, dialect: 'sqlite' });
+      await generateSchema({ url: dbFile, out: outFile, dialect: 'sqlite' });
 
       const written = readFileSync(outFile, 'utf8');
       expect(written).toBe(
@@ -125,7 +125,7 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
       db.close();
 
       await expect(
-        runGenerate({ url: dbFile, out: join(dir, 'schema.ts'), dialect: 'sqlite' }),
+        generateSchema({ url: dbFile, out: join(dir, 'schema.ts'), dialect: 'sqlite' }),
       ).rejects.toThrow('No tables found');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -138,7 +138,7 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
 
     try {
       await expect(
-        runGenerate({ url: missingFile, out: join(dir, 'schema.ts'), dialect: 'sqlite' }),
+        generateSchema({ url: missingFile, out: join(dir, 'schema.ts'), dialect: 'sqlite' }),
       ).rejects.toThrow('SQLite database file not found');
 
       expect(existsSync(missingFile)).toBe(false);
@@ -157,10 +157,10 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
       db.exec('create table users (id integer primary key, name text not null)');
       db.close();
 
-      await runGenerate({ url: dbFile, out: outFile, dialect: 'sqlite' });
+      await generateSchema({ url: dbFile, out: outFile, dialect: 'sqlite' });
       const written = readFileSync(outFile, 'utf8');
 
-      const result = await runGenerate({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
+      const result = await generateSchema({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
 
       expect(result).toEqual({ kind: 'upToDate' });
       expect(readFileSync(outFile, 'utf8')).toBe(written);
@@ -182,7 +182,7 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
 
       writeFileSync(outFile, staleContent, 'utf8');
 
-      const result = await runGenerate({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
+      const result = await generateSchema({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
 
       expect(result.kind).toBe('drift');
       if (result.kind === 'drift') {
@@ -204,7 +204,7 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
       db.exec('create table users (id integer primary key, name text not null)');
       db.close();
 
-      const result = await runGenerate({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
+      const result = await generateSchema({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
 
       expect(result).toEqual({ kind: 'drift', summary: 'the file does not exist yet.' });
       expect(existsSync(outFile)).toBe(false);
@@ -224,9 +224,9 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
       db.exec('create table posts (id integer primary key, title text not null)');
       db.close();
 
-      await runGenerate({ url: dbFile, out: outFile, dialect: 'sqlite', tables: ['users'] });
+      await generateSchema({ url: dbFile, out: outFile, dialect: 'sqlite', tables: ['users'] });
 
-      const matching = await runGenerate({
+      const matching = await generateSchema({
         url: dbFile,
         out: outFile,
         dialect: 'sqlite',
@@ -235,7 +235,7 @@ describe.skipIf(!sqliteAvailable)('runGenerate (end to end against a real sqlite
       });
       expect(matching).toEqual({ kind: 'upToDate' });
 
-      const withoutFilter = await runGenerate({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
+      const withoutFilter = await generateSchema({ url: dbFile, out: outFile, dialect: 'sqlite', check: true });
       expect(withoutFilter.kind).toBe('drift');
     } finally {
       rmSync(dir, { recursive: true, force: true });

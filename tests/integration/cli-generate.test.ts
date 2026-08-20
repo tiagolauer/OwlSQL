@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { createPool, type Pool as MysqlPool } from 'mysql2/promise';
 import { ConnectionPool, type config as MssqlConfig } from 'mssql';
-import { runGenerate } from '../../src/cli/generate.js';
-import { mssqlUrlToConfig } from '../../src/cli/dialects/mssql.js';
+import { generateSchema } from '../../src/tooling/schema-generator/generate.js';
+import { mssqlUrlToConfig } from '../../src/tooling/introspection/mssql.js';
 import {
   MSSQL_URL_ENV,
   MYSQL_URL_ENV,
@@ -54,7 +54,7 @@ describe.skipIf(pgUrl === undefined)('owlsql generate against a real PostgreSQL 
   });
 
   it('introspects columns, nullability, enums, and arrays into a schema file', async () => {
-    const result = await runGenerate({
+    const result = await generateSchema({
       url: requireUrl(pgUrl, PG_URL_ENV),
       out: output.file,
       tables: ['it_gen_pg'],
@@ -85,10 +85,10 @@ describe.skipIf(pgUrl === undefined)('owlsql generate against a real PostgreSQL 
       check: true,
     };
 
-    expect(await runGenerate(options)).toEqual({ kind: 'upToDate' });
+    expect(await generateSchema(options)).toEqual({ kind: 'upToDate' });
 
     await pool.query('alter table it_gen_pg add column extra text');
-    const drifted = await runGenerate(options);
+    const drifted = await generateSchema(options);
 
     expect(drifted.kind).toBe('drift');
   });
@@ -122,7 +122,7 @@ describe.skipIf(mysqlUrl === undefined)('owlsql generate against a real MySQL se
   });
 
   it('maps tinyint(1) and bit(1) to what mysql2 actually returns', async () => {
-    const result = await runGenerate({
+    const result = await generateSchema({
       url: requireUrl(mysqlUrl, MYSQL_URL_ENV),
       out: output.file,
       tables: ['it_gen_mysql'],
@@ -179,7 +179,7 @@ describe.skipIf(mssqlUrl === undefined)('owlsql generate against a real SQL Serv
   });
 
   it('introspects sys.tables into a schema file', async () => {
-    const result = await runGenerate({
+    const result = await generateSchema({
       url: requireUrl(mssqlUrl, MSSQL_URL_ENV),
       out: output.file,
       tables: ['it_gen_mssql'],

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { DatabaseSync } from 'node:sqlite';
-import { introspectSqlite } from '../src/cli/dialects/sqlite';
+import { introspectSqlite } from '../src/tooling/introspection/sqlite';
 import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
 
 function withTempDatabase(setup: (db: DatabaseSync) => void): string {
