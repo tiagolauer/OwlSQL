@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +42,7 @@ const MAX_INSTANTIATIONS = 225_000;
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');
 const GENERATED_DIR = join(PERF_DIR, 'generated');
+const BASELINE_FILE = join(PERF_DIR, 'baseline.json');
 
 function tableName(index) {
   return `t_${String(index).padStart(3, '0')}`;
@@ -140,28 +141,67 @@ function readDiagnostic(output, label) {
 function compile() {
   const tsc = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
   try {
-    return execFileSync(
+    const output = execFileSync(
       process.execPath,
       [tsc, '--noEmit', '--extendedDiagnostics', '-p', join(PERF_DIR, 'tsconfig.json')],
       { encoding: 'utf8' },
     );
+    const instantiations = readDiagnostic(output, 'Instantiations');
+    if (instantiations === null) {
+      throw new Error('Could not read the instantiation count from tsc --extendedDiagnostics.');
+    }
+
+    return {
+      instantiations,
+      types: readDiagnostic(output, 'Types'),
+      checkTime: readDiagnostic(output, 'Check time'),
+    };
   } catch (error) {
     process.stderr.write(`${error.stdout ?? ''}${error.stderr ?? ''}\n`);
     throw new Error('The type-budget fixture failed to compile.');
   }
 }
 
+function readTypescriptVersion() {
+  const packageJson = JSON.parse(
+    readFileSync(join(ROOT, 'node_modules', 'typescript', 'package.json'), 'utf8'),
+  );
+  if (typeof packageJson.version !== 'string') {
+    throw new Error('Could not read the installed TypeScript version.');
+  }
+  return packageJson.version;
+}
+
+function writeBaseline(instantiations) {
+  writeFileSync(
+    BASELINE_FILE,
+    `${JSON.stringify({ typescript: readTypescriptVersion(), instantiations }, null, 2)}\n`,
+    'utf8',
+  );
+}
+
+function readBaseline() {
+  const baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+  if (typeof baseline.instantiations !== 'number' || baseline.instantiations <= 0) {
+    throw new Error('The type-instantiation baseline is invalid.');
+  }
+  return baseline.instantiations;
+}
+
 function main() {
   writeFixture();
-  const output = compile();
+  const { instantiations, types, checkTime } = compile();
 
-  const instantiations = readDiagnostic(output, 'Instantiations');
-  if (instantiations === null) {
-    throw new Error('Could not read the instantiation count from tsc --extendedDiagnostics.');
+  if (process.argv.includes('--write-baseline')) {
+    writeBaseline(instantiations);
+    process.stdout.write(`Wrote baseline: ${instantiations} instantiations\n`);
+    return;
   }
 
-  const types = readDiagnostic(output, 'Types');
-  const checkTime = readDiagnostic(output, 'Check time');
+  const baseline = readBaseline();
+  const delta = instantiations - baseline;
+  const deltaPercent = (delta / baseline) * 100;
+  const deltaSign = delta >= 0 ? '+' : '';
   const budgetUsed = Math.round((instantiations / MAX_INSTANTIATIONS) * 100);
 
   process.stdout.write(
@@ -171,6 +211,8 @@ function main() {
       `Types:          ${types ?? 'n/a'}`,
       `Check time:     ${checkTime ?? 'n/a'}s`,
       `Instantiations: ${instantiations} (${budgetUsed}% of the ${MAX_INSTANTIATIONS} budget)`,
+      `Baseline:       ${baseline}`,
+      `Delta:          ${deltaSign}${delta} (${deltaSign}${deltaPercent.toFixed(2)}%)`,
       '',
     ].join('\n'),
   );

@@ -57,6 +57,7 @@
     "test:runtime": "vitest run",
     "test:integration": "vitest run tests/integration",
     "test:perf": "node scripts/type-budget.mjs",
+    "perf:baseline": "node scripts/type-budget.mjs --write-baseline",
     "test": "npm run test:types && npm run test:runtime",
     "prepublishOnly": "npm run test && npm run build"
   },
