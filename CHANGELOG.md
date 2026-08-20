@@ -4,6 +4,13 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Architecture
+
+- Removed runtime statement parsing from the `node:sqlite` adapter. Driver column metadata now selects the row path, older `node:sqlite` versions fall back to `all()` without write metadata, and SQLite counters provide write metadata without interpreting user SQL.
+- Moved the schema model out of Compiler into its own internal Schema boundary and changed architecture checks from partial forbidden-import rules to an allowlisted dependency graph that also recognizes TypeScript import expressions and CommonJS import-equals declarations.
+- Unified public output and parameter inference around one Language parse result. Parameter inference remains schema-aware in Compiler and consumes only fragments already delimited by shallow Query IR.
+- Made the release workflow depend on the complete reusable CI gate before publishing.
+
 ### Changed
 
 - **Breaking (pre-v1):** removed the accidental advanced exports `ParseSelect`, `ParseStatement`, `ParsedStatement`, `Source`, and `FunctionReturnTypes`. They exposed the retired parser and compiler internals and have no supported replacement. Use `Query`, `Row`, `StrictQuery`, `StrictRow`, and `Params` for the public type-inference contract.

@@ -81,7 +81,64 @@ describe('architecture dependencies', () => {
 
     try {
       expect(checkArchitecture(root)).toEqual([
-        'packages/ts-plugin/src/invalid.cts -> packages/core/src/compiler/next/index.ts violates editor plugin contract',
+        'packages/ts-plugin/src/invalid.cts -> packages/core/src/compiler/next/index.ts violates plugin isolation',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports dynamic imports across forbidden boundaries', () => {
+    const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
+    mkdirSync(join(root, 'packages', 'core', 'src', 'runtime'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'core', 'src', 'compiler'), { recursive: true });
+    writeFileSync(join(root, 'packages', 'core', 'src', 'compiler', 'gateway.ts'), 'export type Query = string;\n');
+    writeFileSync(
+      join(root, 'packages', 'core', 'src', 'runtime', 'invalid.ts'),
+      "void import('../compiler/gateway.js');\n",
+    );
+
+    try {
+      expect(checkArchitecture(root)).toEqual([
+        'packages/core/src/runtime/invalid.ts -> packages/core/src/compiler/gateway.ts violates runtime isolation',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports require calls across plugin boundaries', () => {
+    const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
+    mkdirSync(join(root, 'packages', 'core', 'src', 'compiler', 'next'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'ts-plugin', 'src'), { recursive: true });
+    writeFileSync(join(root, 'packages', 'core', 'src', 'compiler', 'next', 'index.ts'), 'export type Next = string;\n');
+    writeFileSync(
+      join(root, 'packages', 'ts-plugin', 'src', 'invalid.cts'),
+      "require('../../core/src/compiler/next/index.js');\n",
+    );
+
+    try {
+      expect(checkArchitecture(root)).toEqual([
+        'packages/ts-plugin/src/invalid.cts -> packages/core/src/compiler/next/index.ts violates plugin isolation',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports compiler dependencies on public modules', () => {
+    const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
+    mkdirSync(join(root, 'packages', 'core', 'src', 'compiler'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'core', 'src', 'public'), { recursive: true });
+    writeFileSync(join(root, 'packages', 'core', 'src', 'public', 'query.ts'), 'export type Query = string;\n');
+    writeFileSync(
+      join(root, 'packages', 'core', 'src', 'compiler', 'invalid.ts'),
+      "import type { Query } from '../public/query.js';\n",
+    );
+
+    try {
+      expect(checkArchitecture(root)).toEqual([
+        'packages/core/src/compiler/invalid.ts -> packages/core/src/public/query.ts violates compiler isolation',
       ]);
     } finally {
       rmSync(root, { recursive: true, force: true });

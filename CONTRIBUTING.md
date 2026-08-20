@@ -130,7 +130,7 @@ npm version <patch|minor|major>
 git push --follow-tags origin master
 ```
 
-Then run **Actions → Release → Run workflow**, or publish a GitHub Release for the tag — either triggers it. The workflow runs `npm publish --provenance`, and `prepublishOnly` puts the type tests, the runtime tests and the build in front of that, so a red build cannot reach the registry.
+Then run **Actions → Release → Run workflow**, or publish a GitHub Release for the tag — either triggers it. The release calls the same reusable CI workflow used by pushes and pull requests before publishing, including the TypeScript and Node matrices, plugin, architecture, package, performance, and real-database integration gates. `prepublishOnly` repeats the core type, runtime, architecture, and build checks immediately before npm receives the package.
 
 This needs the package's *Trusted publisher* to be configured once on npmjs.com (package → Settings → Trusted publisher → GitHub Actions, repository `tiagolauer/OwlSQL`, workflow `release.yml`).
 
