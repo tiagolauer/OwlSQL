@@ -1,11 +1,13 @@
-import type { Schema } from '../compiler/legacy.js';
+import type { Schema } from '../compiler/schema/model.js';
 
 export type {
   Schema,
   SchemaLike,
-  QueryTypeError,
-  FunctionReturnTypes,
-} from '../compiler/legacy.js';
+} from '../compiler/schema/model.js';
+
+export type { FunctionReturnTypes } from '../compiler/legacy.js';
+
+export type { QueryTypeError } from '../compiler/contracts/public-error.js';
 
 export function defineSchema<const DB extends Schema>(schema: DB): DB {
   return schema;

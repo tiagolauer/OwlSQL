@@ -6,6 +6,17 @@ const SOURCE_EXTENSIONS = ['.ts', '.cts', '.mts'];
 
 const RULES = [
   {
+    from: 'src/language/',
+    forbidden: [
+      'src/compiler/',
+      'src/runtime/',
+      'src/public/',
+      'src/parse.ts',
+      'src/params.ts',
+    ],
+    name: 'language isolation',
+  },
+  {
     from: 'src/runtime/',
     forbidden: [
       'src/compiler/',
@@ -25,6 +36,11 @@ const RULES = [
     forbidden: ['src/runtime/'],
     allow: ['src/compiler/legacy.ts'],
     name: 'compiler isolation',
+  },
+  {
+    from: 'src/compiler/next/',
+    forbidden: ['src/compiler/legacy.ts'],
+    name: 'next compiler isolation',
   },
 ];
 

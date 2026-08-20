@@ -3,9 +3,9 @@ import type {
   LegacyInferResult,
   LegacyInferResultStrict,
   QueryTypeError,
-  SchemaLike,
   UsedPlaceholderStyles,
 } from '../compiler/legacy.js';
+import type { SchemaLike } from '../compiler/schema/model.js';
 import { createRuntimeDb } from '../runtime/db.js';
 import type {
   DialectExecutor,

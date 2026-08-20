@@ -1,0 +1,31 @@
+export type JoinKind = 'root' | 'inner' | 'left' | 'right' | 'full' | 'cross';
+
+export interface TableSourceIR<
+  Name extends string = string,
+  Alias extends string = Name,
+  Nullable extends boolean = false,
+  Join extends JoinKind = 'root',
+  MergedColumns extends readonly string[] = [],
+> {
+  kind: 'table';
+  name: Name;
+  alias: Alias;
+  join: Join;
+  nullable: Nullable;
+  mergedColumns: MergedColumns;
+}
+
+export interface DerivedSourceIR<
+  Alias extends string = string,
+  Query = unknown,
+  Nullable extends boolean = false,
+  Join extends JoinKind = 'root',
+> {
+  kind: 'derived';
+  alias: Alias;
+  query: Query;
+  join: Join;
+  nullable: Nullable;
+}
+
+export type SourceIR = TableSourceIR | DerivedSourceIR;

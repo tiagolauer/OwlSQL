@@ -4,8 +4,8 @@ import type {
   LegacyInferResultStrict,
   LegacyInferRow,
   LegacyInferRowStrict,
-  SchemaLike,
 } from '../compiler/legacy.js';
+import type { SchemaLike } from '../compiler/schema/model.js';
 
 export type {
   LegacyInferParams as InferParams,
