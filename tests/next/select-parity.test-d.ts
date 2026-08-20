@@ -294,3 +294,33 @@ type _invalidScalar = Expect<Equal<
   LegacyInferResultStrict<DB, 'select (select id, user_id from posts) as invalid from users'>,
   NextStrictQuery<DB, 'select (select id, user_id from posts) as invalid from users'>
 >>;
+
+type _postgresDistinctOn = Expect<Equal<
+  LegacyInferResult<DB, 'select distinct on (active) id, name from users'>,
+  NextQuery<DB, 'select distinct on (active) id, name from users'>
+>>;
+
+type _postgresCastParam = Expect<Equal<
+  LegacyInferParams<DB, 'select id::text from users where id = $1'>,
+  NextInferParams<DB, 'select id::text from users where id = $1'>
+>>;
+
+type _mssqlTop = Expect<Equal<
+  LegacyInferResult<DB, 'select top 10 with ties id, name from users order by name'>,
+  NextQuery<DB, 'select top 10 with ties id, name from users order by name'>
+>>;
+
+type _mssqlBrackets = Expect<Equal<
+  LegacyInferResult<DB, 'select [id], [name] from [users]'>,
+  NextQuery<DB, 'select [id], [name] from [users]'>
+>>;
+
+type _mysqlQuotes = Expect<Equal<
+  LegacyInferResult<DB, 'select `id`, `name` from `users`'>,
+  NextQuery<DB, 'select `id`, `name` from `users`'>
+>>;
+
+type _questionPlaceholder = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where id = ? and active = ?'>,
+  NextInferParams<DB, 'select id from users where id = ? and active = ?'>
+>>;

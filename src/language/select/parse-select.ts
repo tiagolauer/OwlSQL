@@ -13,6 +13,7 @@ import type {
 } from '../ir/query.js';
 import type { PredicateIR } from '../ir/predicate.js';
 import type { SourceIR } from '../ir/source.js';
+import type { StripSelectModifiers } from '../dialect/common.js';
 import type { ParseNormalizedFromSources } from './parse-from.js';
 import type { ParseProjectionList } from './parse-projection.js';
 import type { ParseSelectTail } from './parse-predicate.js';
@@ -222,7 +223,7 @@ type ParseSetBody<Body extends string, Sql extends string> =
 type ParseNormalized<Normalized extends string, Sql extends string> =
   Normalized extends `${infer Select} ${infer Body}`
     ? IsKeyword<Select, 'select'> extends true
-      ? ParseSetBody<Body, Sql>
+      ? ParseSetBody<StripSelectModifiers<Body>, Sql>
       : ParseFatal<Sql>
     : ParseFatal<Sql>;
 
