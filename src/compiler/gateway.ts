@@ -11,6 +11,7 @@ import type {
 } from './legacy.js';
 import type { CompileInsert, InferInsertParams } from './next/compile-insert.js';
 import type { CompileSelect } from './next/compile-select.js';
+import type { CompileUpdate, InferUpdateParams } from './next/compile-update.js';
 import type { CompileWith, InferWithParams } from './next/compile-with.js';
 import type { InferNextParams } from './next/infer-params.js';
 
@@ -24,7 +25,9 @@ type NextCompilation<
     ? CompileSelect<DB, Q, null, ValidatePredicates>
     : GatewayKind<Q> extends 'with'
       ? CompileWith<DB, Q, null, ValidatePredicates>
-      : CompileInsert<DB, Q, null, ValidatePredicates>;
+      : GatewayKind<Q> extends 'insert'
+        ? CompileInsert<DB, Q, null, ValidatePredicates>
+        : CompileUpdate<DB, Q, null, ValidatePredicates>;
 
 type NextQuery<DB, Q extends string> =
   ApplyLoosePolicy<NextCompilation<DB, Q, false>>;
@@ -57,7 +60,9 @@ type UsesNext<Q extends string> = GatewayKind<Q> extends 'select'
       : false
     : GatewayKind<Q> extends 'insert'
       ? true
-      : false;
+      : GatewayKind<Q> extends 'update'
+        ? true
+        : false;
 
 export type InferViaGateway<DB extends SchemaLike, Q extends string> =
   UsesNext<Q> extends true
@@ -88,4 +93,6 @@ export type InferParamsViaGateway<DB extends SchemaLike, Q extends string> =
         : LegacyInferParams<DB, Q>
       : GatewayKind<Q> extends 'insert'
         ? InferInsertParams<DB, Q>
-        : LegacyInferParams<DB, Q>;
+        : GatewayKind<Q> extends 'update'
+          ? InferUpdateParams<DB, Q>
+          : LegacyInferParams<DB, Q>;
