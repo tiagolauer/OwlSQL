@@ -1,6 +1,6 @@
 import type { FirstWord, IsKeyword, Normalize } from '../../string.js';
 
-export type StatementKind =
+type StatementKindName =
   | 'select'
   | 'with'
   | 'insert'
@@ -18,4 +18,6 @@ type KindOf<Token extends string> =
   : IsKeyword<Token, 'merge'> extends true ? 'merge'
   : 'unknown';
 
-export type ClassifyStatement<Sql extends string> = KindOf<FirstWord<Normalize<Sql>>>;
+export type StatementKind<Sql extends string> = KindOf<FirstWord<Normalize<Sql>>>;
+
+export type ClassifyStatement<Sql extends string> = StatementKind<Sql>;
