@@ -8,6 +8,6 @@ export default defineConfig({
     extensions: ['.mts', '.cts', '.ts', '.mjs', '.cjs', '.js', '.json'],
   },
   test: {
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.mjs'],
   },
 });
