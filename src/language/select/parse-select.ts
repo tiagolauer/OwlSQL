@@ -37,7 +37,15 @@ type ParseFatal<Sql extends string> = {
 };
 
 type ParseBody<Body extends string, Sql extends string> =
-  SplitAtFrom<Body> extends {
+  [SplitAtFrom<Body>] extends [never]
+    ? Trim<Body> extends ''
+      ? ParseFatal<Sql>
+      : {
+          kind: 'ok';
+          value: SelectQueryIR<[], ParseProjectionList<Body>, [], [], []>;
+          diagnostics: [];
+        }
+    : SplitAtFrom<Body> extends {
     before: infer Projection extends string;
     after: infer Source extends string;
   }
@@ -61,7 +69,7 @@ type ParseBody<Body extends string, Sql extends string> =
               diagnostics: [];
             }
         : ParseFatal<Sql>
-    : ParseFatal<Sql>;
+      : ParseFatal<Sql>;
 
 type ParseNormalized<Normalized extends string, Sql extends string> =
   Normalized extends `${infer Select} ${infer Body}`

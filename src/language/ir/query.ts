@@ -11,7 +11,7 @@ import type { SourceIR } from './source.js';
 export type ProjectionIR =
   | ColumnProjectionIR
   | ExpressionProjectionIR
-  | StarProjectionIR;
+  | StarProjectionIR<string | null>;
 
 export interface SelectQueryIR<
   Sources extends readonly SourceIR[] = readonly SourceIR[],

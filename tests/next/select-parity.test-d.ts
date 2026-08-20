@@ -17,6 +17,8 @@ type DB = {
   users: {
     id: number;
     name: string;
+    active: boolean;
+    age: number;
   };
   posts: {
     id: number;
@@ -88,4 +90,84 @@ type _onAmbiguity = Expect<Equal<
 type _derived = Expect<Equal<
   LegacyInferResult<DB, 'select recent.id from (select id from users) recent'>,
   NextQuery<DB, 'select recent.id from (select id from users) recent'>
+>>;
+
+type _star = Expect<Equal<
+  LegacyInferResult<DB, 'select * from users'>,
+  NextQuery<DB, 'select * from users'>
+>>;
+
+type _qualifiedStar = Expect<Equal<
+  LegacyInferResult<DB, 'select u.* from users u'>,
+  NextQuery<DB, 'select u.* from users u'>
+>>;
+
+type _aggregates = Expect<Equal<
+  LegacyInferResult<DB, 'select count(*) as total, max(age) as oldest from users'>,
+  NextQuery<DB, 'select count(*) as total, max(age) as oldest from users'>
+>>;
+
+type _function = Expect<Equal<
+  LegacyInferResult<DB, 'select lower(name) as handle from users'>,
+  NextQuery<DB, 'select lower(name) as handle from users'>
+>>;
+
+type _case = Expect<Equal<
+  LegacyInferResult<DB, "select case when active then 'yes' else 'no' end as status from users">,
+  NextQuery<DB, "select case when active then 'yes' else 'no' end as status from users">
+>>;
+
+type _cast = Expect<Equal<
+  LegacyInferResult<DB, 'select id::text as id_text from users'>,
+  NextQuery<DB, 'select id::text as id_text from users'>
+>>;
+
+type _literal = Expect<Equal<
+  LegacyInferResult<DB, "select 1 as one, 'x' as tag, true as flag, null as nothing">,
+  NextQuery<DB, "select 1 as one, 'x' as tag, true as flag, null as nothing">
+>>;
+
+type _unsupportedExpression = Expect<Equal<
+  LegacyInferResult<DB, 'select id * 2 as doubled from users'>,
+  NextQuery<DB, 'select id * 2 as doubled from users'>
+>>;
+
+type _strictFunctionError = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select max(naem) as oldest from users'>,
+  NextStrictQuery<DB, 'select max(naem) as oldest from users'>
+>>;
+
+type _commonFunctions = Expect<Equal<
+  LegacyInferResult<DB, 'select concat(name, name) as full_name, now() as created from users'>,
+  NextQuery<DB, 'select concat(name, name) as full_name, now() as created from users'>
+>>;
+
+type _unaliasedFunction = Expect<Equal<
+  LegacyInferResult<DB, 'select count(*) from users'>,
+  NextQuery<DB, 'select count(*) from users'>
+>>;
+
+type _nestedCase = Expect<Equal<
+  LegacyInferResult<DB, "select case when active then case when age < 18 then 'minor' else 'adult' end else 'inactive' end as status from users">,
+  NextQuery<DB, "select case when active then case when age < 18 then 'minor' else 'adult' end else 'inactive' end as status from users">
+>>;
+
+type _parenthesizedColumn = Expect<Equal<
+  LegacyInferResult<DB, 'select (u.name) as handle from users u'>,
+  NextQuery<DB, 'select (u.name) as handle from users u'>
+>>;
+
+type _window = Expect<Equal<
+  LegacyInferResult<DB, 'select row_number() over (order by id) as rn from users'>,
+  NextQuery<DB, 'select row_number() over (order by id) as rn from users'>
+>>;
+
+type _strictCastError = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select naem::text as value from users'>,
+  NextStrictQuery<DB, 'select naem::text as value from users'>
+>>;
+
+type _leftJoinStar = Expect<Equal<
+  LegacyInferResult<DB, 'select * from users u left join posts p on u.id = p.user_id'>,
+  NextQuery<DB, 'select * from users u left join posts p on u.id = p.user_id'>
 >>;
