@@ -9,7 +9,7 @@ import type {
   StripQualifier,
   Trim,
   Unquote,
-} from '../../string.js';
+} from '../lexical/string.js';
 import type { PredicateIR } from '../ir/predicate.js';
 import type { SelectQueryIR } from '../ir/query.js';
 import type {

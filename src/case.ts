@@ -1,4 +1,4 @@
-import type { Trim, FirstWord, DropFirstWord, IsKeyword, Unquote } from './string.js';
+import type { Trim, FirstWord, DropFirstWord, IsKeyword, Unquote } from './language/lexical/string.js';
 import type { SchemaLike, Source, ResolveColumnType } from './parse.js';
 
 // A nested CASE is often written wrapped in parens (`(case ... end)`), which

@@ -4,7 +4,7 @@ import type {
   FirstWord,
   IsKeyword,
   Trim,
-} from '../../string.js';
+} from '../lexical/string.js';
 import type { PredicateIR } from '../ir/predicate.js';
 import type { SelectClausesIR } from '../ir/query.js';
 

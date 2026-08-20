@@ -5,7 +5,7 @@ import type {
   IsKeyword,
   ExtractParenGroup,
   SplitColumnList,
-} from './string.js';
+} from './language/lexical/string.js';
 import type { SchemaLike, Flatten, QueryTypeError, SelectColumnKeys, ShadowedBy } from './parse.js';
 import type { InferRowWith } from './parse.js';
 

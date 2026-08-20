@@ -12,7 +12,7 @@ import type {
   ApplyParenDelta,
   SplitColumnList,
   HasNonTrailingSemicolon,
-} from './string.js';
+} from './language/lexical/string.js';
 import type {
   IsFunctionCall,
   FunctionOutputName,
@@ -534,7 +534,7 @@ export type ParseStatement<S extends string> = ParseStatementNormalized<Normaliz
 
 export type ParseSelect<S extends string> = ParseSelectBody<Normalize<S>>;
 
-export type { SplitColumnList } from './string.js';
+export type { SplitColumnList } from './language/lexical/string.js';
 
 type OutputName<Expression extends string> = IsFunctionCall<Expression> extends true
   ? FunctionOutputName<Expression>

@@ -1,6 +1,8 @@
 export type NonSpaceWhitespace = '\t' | '\n' | '\r' | '\f' | '\v';
 
-export type Whitespace = ' ' | NonSpaceWhitespace;
+export type Whitespace =
+  | ' '
+  | NonSpaceWhitespace;
 
 export type TrimLeft<S extends string> = S extends `${Whitespace}${infer Rest}`
   ? TrimLeft<Rest>

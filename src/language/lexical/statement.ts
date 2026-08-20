@@ -1,4 +1,4 @@
-import type { FirstWord, IsKeyword, Normalize, Trim } from '../../string.js';
+import type { FirstWord, IsKeyword, Normalize, Trim } from './string.js';
 
 type StatementKindName =
   | 'select'

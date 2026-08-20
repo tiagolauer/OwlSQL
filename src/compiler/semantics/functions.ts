@@ -1,4 +1,4 @@
-import type { Trim } from '../../string.js';
+import type { Trim } from '../../language/lexical/string.js';
 
 export interface FunctionReturnTypes {
   count: number;

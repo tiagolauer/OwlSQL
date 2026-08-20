@@ -10,7 +10,7 @@ import type {
   TakeUntilTopLevelKeyword,
   Trim,
   Unquote,
-} from '../../string.js';
+} from '../lexical/string.js';
 import type { PredicateIR } from '../ir/predicate.js';
 import type { MergeQueryIR } from '../ir/query.js';
 import type { DerivedSourceIR, SourceIR } from '../ir/source.js';

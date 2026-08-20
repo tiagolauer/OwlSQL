@@ -6,7 +6,7 @@ import type {
   Normalize,
   SplitColumnList,
   Trim,
-} from '../../string.js';
+} from '../lexical/string.js';
 import type { AnyCteIR, CteIR } from '../ir/cte.js';
 import type { SelectQueryIR } from '../ir/query.js';
 import type { ParseSelectIR } from '../select/parse-select.js';

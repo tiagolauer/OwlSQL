@@ -12,7 +12,7 @@ import type {
   TakeUntilTopLevelKeyword,
   Trim,
   Unquote,
-} from '../../string.js';
+} from '../lexical/string.js';
 import type {
   InsertDefaultValuesIR,
   InsertQueryIR,

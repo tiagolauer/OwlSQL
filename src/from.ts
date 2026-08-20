@@ -8,7 +8,7 @@ import type {
   ExtractParenGroup,
   ApplyParenDelta,
   SplitColumnList,
-} from './string.js';
+} from './language/lexical/string.js';
 
 export interface Source {
   table: string;

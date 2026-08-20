@@ -1,5 +1,5 @@
 import type { PredicateIR } from '../../language/ir/predicate.js';
-import type { IsKeyword, Trim } from '../../string.js';
+import type { IsKeyword, Trim } from '../../language/lexical/string.js';
 import type {
   SelectQueryIR,
   SetOperationIR,

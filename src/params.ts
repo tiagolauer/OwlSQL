@@ -9,7 +9,7 @@ import type {
   HasNonTrailingSemicolon,
   MaskQuotedIdentifiers,
   StartsWithIdentifierChar,
-} from './string.js';
+} from './language/lexical/string.js';
 import type {
   Source,
   SchemaLike,

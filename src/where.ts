@@ -1,4 +1,4 @@
-import type { Trim, FirstWord, DropFirstWord, IsKeyword, ExtractParenGroup } from './string.js';
+import type { Trim, FirstWord, DropFirstWord, IsKeyword, ExtractParenGroup } from './language/lexical/string.js';
 import type { TakeUntilClauseBoundary } from './from.js';
 import type {
   SplitAtTopLevelKeyword,

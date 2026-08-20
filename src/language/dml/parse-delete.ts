@@ -7,7 +7,7 @@ import type {
   SplitAtTopLevelKeyword,
   TakeUntilTopLevelKeyword,
   Trim,
-} from '../../string.js';
+} from '../lexical/string.js';
 import type { PredicateIR } from '../ir/predicate.js';
 import type { DeleteQueryIR } from '../ir/query.js';
 import type { SourceIR } from '../ir/source.js';

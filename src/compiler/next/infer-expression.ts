@@ -8,7 +8,7 @@ import type {
   StripQualifier,
   Trim,
   Unquote,
-} from '../../string.js';
+} from '../../language/lexical/string.js';
 import type {
   FunctionReturnType,
   IsFunctionCall,

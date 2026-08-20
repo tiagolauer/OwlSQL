@@ -4,7 +4,7 @@ import type {
   FirstWord,
   IsKeyword,
   Trim,
-} from '../../string.js';
+} from '../lexical/string.js';
 
 export interface DialectCapabilities {
   top: boolean;

@@ -7,7 +7,7 @@ import type {
   StripQualifier,
   Trim,
   Unquote,
-} from '../../string.js';
+} from '../../language/lexical/string.js';
 import type { PredicateIR } from '../../language/ir/predicate.js';
 import type {
   ProjectionIR,
