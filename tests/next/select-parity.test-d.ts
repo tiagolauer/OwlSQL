@@ -18,6 +18,11 @@ type DB = {
     id: number;
     name: string;
   };
+  posts: {
+    id: number;
+    user_id: number;
+    title: string;
+  };
 };
 
 type _simple = Expect<Equal<
@@ -48,4 +53,39 @@ type _unknownLoose = Expect<Equal<
 type _unknownStrict = Expect<Equal<
   LegacyInferResultStrict<DB, 'select nope from users'>,
   NextStrictQuery<DB, 'select nope from users'>
+>>;
+
+type _innerJoin = Expect<Equal<
+  LegacyInferResult<DB, 'select u.id, p.title from users u join posts p on u.id = p.user_id'>,
+  NextQuery<DB, 'select u.id, p.title from users u join posts p on u.id = p.user_id'>
+>>;
+
+type _leftJoin = Expect<Equal<
+  LegacyInferResult<DB, 'select u.name, p.title from users u left join posts p on u.id = p.user_id'>,
+  NextQuery<DB, 'select u.name, p.title from users u left join posts p on u.id = p.user_id'>
+>>;
+
+type _rightJoin = Expect<Equal<
+  LegacyInferResult<DB, 'select u.name, p.title from users u right join posts p on u.id = p.user_id'>,
+  NextQuery<DB, 'select u.name, p.title from users u right join posts p on u.id = p.user_id'>
+>>;
+
+type _fullJoin = Expect<Equal<
+  LegacyInferResult<DB, 'select u.name, p.title from users u full join posts p on u.id = p.user_id'>,
+  NextQuery<DB, 'select u.name, p.title from users u full join posts p on u.id = p.user_id'>
+>>;
+
+type _using = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select id from users join posts using (id)'>,
+  NextStrictQuery<DB, 'select id from users join posts using (id)'>
+>>;
+
+type _onAmbiguity = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select id from users join posts on users.id = posts.id'>,
+  NextStrictQuery<DB, 'select id from users join posts on users.id = posts.id'>
+>>;
+
+type _derived = Expect<Equal<
+  LegacyInferResult<DB, 'select recent.id from (select id from users) recent'>,
+  NextQuery<DB, 'select recent.id from (select id from users) recent'>
 >>;

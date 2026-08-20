@@ -5,8 +5,9 @@ import type {
   Trim,
 } from '../../string.js';
 import type { SelectQueryIR } from '../ir/query.js';
-import type { TableSourceIR } from '../ir/source.js';
-import type { ParseRootSource } from './parse-from.js';
+import type { PredicateIR } from '../ir/predicate.js';
+import type { SourceIR } from '../ir/source.js';
+import type { ParseNormalizedFromSources } from './parse-from.js';
 import type { ParseProjectionList } from './parse-projection.js';
 
 type SplitAtFrom<
@@ -42,21 +43,24 @@ type ParseBody<Body extends string, Sql extends string> =
   }
     ? Projection extends ''
       ? ParseFatal<Sql>
-      : [ParseRootSource<Source>] extends [never]
-        ? ParseFatal<Sql>
-        : ParseRootSource<Source> extends infer RootSource extends TableSourceIR
-          ? {
+      : ParseNormalizedFromSources<Source> extends {
+          sources: infer Sources extends readonly SourceIR[];
+          predicates: infer Predicates extends readonly PredicateIR[];
+        }
+        ? Sources extends readonly []
+          ? ParseFatal<Sql>
+          : {
               kind: 'ok';
               value: SelectQueryIR<
-                [RootSource],
+                Sources,
                 ParseProjectionList<Projection>,
-                [],
+                Predicates,
                 [],
                 []
               >;
               diagnostics: [];
             }
-          : ParseFatal<Sql>
+        : ParseFatal<Sql>
     : ParseFatal<Sql>;
 
 type ParseNormalized<Normalized extends string, Sql extends string> =
