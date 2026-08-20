@@ -17,7 +17,7 @@ import type {
   IsFunctionCall,
   FunctionOutputName,
   FunctionReturnType,
-} from './functions.js';
+} from './compiler/semantics/functions.js';
 import type {
   Source,
   ParseFromClause,

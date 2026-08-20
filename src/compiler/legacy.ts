@@ -14,7 +14,6 @@ export type {
 
 export type {
   InferParams as LegacyInferParams,
-  UsedPlaceholderStyles,
 } from '../params.js';
 
-export type { FunctionReturnTypes } from '../functions.js';
+export type { FunctionReturnTypes } from './semantics/functions.js';

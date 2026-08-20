@@ -7,7 +7,6 @@ import type {
   ExtractParenGroup,
   Digit,
   HasNonTrailingSemicolon,
-  MaskQuotedIdentifiers,
   StartsWithIdentifierChar,
 } from './language/lexical/string.js';
 import type {
@@ -23,7 +22,7 @@ import type {
   QueryTypeError,
 } from './parse.js';
 import type { ParseWithClause } from './cte.js';
-import type { FunctionName } from './functions.js';
+import type { FunctionName } from './compiler/semantics/functions.js';
 
 // `@>` and `<@` compare an array or a jsonb value against another of the same
 // type, so the bound value carries the column's own type - the same thing `=`
@@ -627,59 +626,6 @@ type CteBodyParamScan<
         : never
       : CteBodyParamScan<DB, Tail, Indexed, Sequential, SequentialNames>
   : { indexed: Indexed; sequential: Sequential; sequentialNames: SequentialNames };
-
-type StripDoubledAt<S extends string> = S extends `${infer Before}@@${infer After}`
-  ? StripDoubledAt<`${Before}${After}`>
-  : S;
-
-// Whole-token, because `$actionType` is a name that merely starts with the
-// pseudo-column's letters. Stripping the substring turned it into `type`, the
-// dollar scan then found nothing, and the query reported no placeholder style
-// at all - so it passed the brand check for every dialect while Params still
-// demanded a value for it, which is the guaranteed runtime failure the brand
-// exists to prevent (issue #298). IsPlaceholder already excluded only the
-// exact token; this is the same rule on the other side.
-type StripDollarAction<S extends string> = S extends `${infer Before}$action${infer After}`
-  ? StartsWithIdentifierChar<After> extends true
-    ? `${Before}$action${StripDollarAction<After>}`
-    : `${Before}${StripDollarAction<After>}`
-  : S;
-
-// A prefix only counts when a name or an index follows it, the same rule
-// IsPlaceholder applies per token - otherwise `where tags @> $1` reported the
-// `at` style and was rejected against a dollar executor (issue #249).
-type HasPrefixedPlaceholder<
-  S extends string,
-  Prefix extends string,
-> = S extends `${string}${Prefix}${infer After}`
-  ? StartsWithIdentifierChar<After> extends true
-    ? true
-    : HasPrefixedPlaceholder<After, Prefix>
-  : false;
-
-// `?|` and `?&` are Postgres jsonb operators, not placeholders. A bare `?` is
-// a placeholder, since that is what it is in MySQL and SQLite.
-type HasQuestionPlaceholder<S extends string> = S extends `${string}?${infer After}`
-  ? After extends `|${string}` | `&${string}`
-    ? HasQuestionPlaceholder<After>
-    : true
-  : false;
-
-// Quoted identifiers survive Normalize by design (the parser needs the name),
-// so their bodies are masked here before the scan - a column legally named
-// "user@id" is not a parameter style.
-//
-// Lowercased so the `$action` strip is case-insensitive, matching how
-// IsMergeActionPseudoColumn resolves it. Case is irrelevant to the three
-// characters this scans for, so nothing else is affected.
-export type UsedPlaceholderStyles<Q extends string> = Lowercase<
-  MaskQuotedIdentifiers<Normalize<Q>>
-> extends infer Text extends string
-  ?
-      | (HasQuestionPlaceholder<Text> extends true ? 'question' : never)
-      | (HasPrefixedPlaceholder<StripDollarAction<Text>, '$'> extends true ? 'dollar' : never)
-      | (HasPrefixedPlaceholder<StripDoubledAt<Text>, '@'> extends true ? 'at' : never)
-  : never;
 
 type OuterAndCteParams<
   DB extends SchemaLike,

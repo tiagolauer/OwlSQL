@@ -1,7 +1,5 @@
-import type {
-  QueryTypeError,
-  UsedPlaceholderStyles,
-} from '../compiler/legacy.js';
+import type { QueryTypeError } from '../compiler/contracts/public-error.js';
+import type { UsedPlaceholderStyles } from '../language/lexical/placeholders.js';
 import type {
   InferParamsViaGateway,
   InferStrictViaGateway,

@@ -1,5 +1,5 @@
 import type { Params } from '../src/index.js';
-import type { UsedPlaceholderStyles } from '../src/params.js';
+import type { UsedPlaceholderStyles } from '../src/language/lexical/placeholders.js';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;

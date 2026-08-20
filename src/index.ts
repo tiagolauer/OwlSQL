@@ -53,6 +53,6 @@ export type {
   ParseStatement,
   ParsedStatement,
   Source,
-} from './compiler/legacy.js';
+} from './parse.js';
 
 export { defineSchema } from './public/schema.js';
