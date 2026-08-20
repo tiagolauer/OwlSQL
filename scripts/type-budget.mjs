@@ -41,7 +41,11 @@ const SHAPE_REPEATS = 4;
 // ordered scope sources moved the public fixture from 223,663 to 225,590
 // instantiations (+0.86%); 230,000 keeps a reviewed 2% margin without hiding
 // the measured baseline.
-const MAX_INSTANTIATIONS = 230_000;
+// Raised from 230,000 for the M5 INSERT cutover. Routing INSERT result and
+// parameter inference through structured Next IR moved the public fixture from
+// 225,590 to 231,605 instantiations (+2.67%); 235,000 keeps a reviewed 1.5%
+// margin while the remaining DML statements migrate independently.
+const MAX_INSTANTIATIONS = 235_000;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');
