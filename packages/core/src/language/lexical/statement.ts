@@ -22,10 +22,12 @@ type StripLeadingParens<Token extends string> = Token extends `(${infer Rest}`
   ? StripLeadingParens<Rest>
   : Token;
 
-export type StatementKind<Sql extends string> = KindOf<StripLeadingParens<FirstWord<Trim<Sql>>>> extends infer Direct extends StatementKindName
-  ? Direct extends 'unknown'
-    ? KindOf<StripLeadingParens<FirstWord<Normalize<Sql>>>>
-    : Direct
-  : never;
+export type StatementKind<Sql extends string> = Sql extends `select ${string}`
+  ? 'select'
+  : KindOf<StripLeadingParens<FirstWord<Trim<Sql>>>> extends infer Direct extends StatementKindName
+    ? Direct extends 'unknown'
+      ? KindOf<StripLeadingParens<FirstWord<Normalize<Sql>>>>
+      : Direct
+    : never;
 
 export type ClassifyStatement<Sql extends string> = StatementKind<Sql>;

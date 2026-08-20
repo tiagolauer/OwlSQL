@@ -18,7 +18,7 @@ import type {
   CompileOk,
 } from '../contracts/compilation.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
-import type { ResolveKey } from '../schema/model.js';
+import type { ResolveKey } from '../../schema/model.js';
 import type { InferProjections } from './infer-projection.js';
 import type { InferExpression } from './infer-expression.js';
 import type { ChildScope, Scope } from './scope.js';
@@ -363,7 +363,6 @@ type WithResolvedCteSources<
   infer Sources,
   infer Projections,
   infer Predicates,
-  infer Parameters,
   infer Ctes,
   infer Clauses,
   infer SetOperations
@@ -372,7 +371,6 @@ type WithResolvedCteSources<
       ResolveCteSources<Sources, ParentScope>,
       Projections,
       Predicates,
-      Parameters,
       Ctes,
       Clauses,
       SetOperations

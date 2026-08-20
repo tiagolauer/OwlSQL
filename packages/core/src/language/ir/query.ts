@@ -1,5 +1,4 @@
 import type { CteIR } from './cte.js';
-import type { ParameterIR } from './parameter.js';
 import type { PredicateIR } from './predicate.js';
 import type {
   ProjectionIR,
@@ -44,7 +43,6 @@ export interface SelectQueryIR<
   Sources extends readonly SourceIR[] = readonly SourceIR[],
   Projections extends readonly ProjectionIR[] = readonly ProjectionIR[],
   Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
-  Parameters extends readonly ParameterIR[] = readonly ParameterIR[],
   Ctes extends readonly CteIR[] = readonly CteIR[],
   Clauses extends SelectClausesIR<
     string,
@@ -59,7 +57,6 @@ export interface SelectQueryIR<
   sources: Sources;
   projections: Projections;
   predicates: Predicates;
-  parameters: Parameters;
   ctes: Ctes;
   clauses: Clauses;
   setOperations: SetOperations;

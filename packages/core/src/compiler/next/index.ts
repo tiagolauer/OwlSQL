@@ -1,17 +1,61 @@
 import type { StatementKind } from '../../language/lexical/statement.js';
 import type {
+  DeleteQueryIR,
+  InsertQueryIR,
+  MergeQueryIR,
+  SelectQueryIR,
+  UpdateQueryIR,
+} from '../../language/ir/query.js';
+import type { ParseDeleteIR } from '../../language/dml/parse-delete.js';
+import type { ParseInsertIR } from '../../language/dml/parse-insert.js';
+import type { ParseMergeIR } from '../../language/dml/parse-merge.js';
+import type { ParseUpdateIR } from '../../language/dml/parse-update.js';
+import type { ParseSelectIR } from '../../language/select/parse-select.js';
+import type { ParseWithIR, WithQueryIR } from '../../language/with/parse-with.js';
+import type {
   ApplyLoosePolicy,
   ApplyStrictPolicy,
+  CompileFatal,
   CompileOk,
 } from '../contracts/compilation.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
-import type { CompileSelect } from './compile-select.js';
-import type { CompileInsert, InferInsertParams } from './compile-insert.js';
-import type { CompileUpdate, InferUpdateParams } from './compile-update.js';
-import type { CompileDelete, InferDeleteParams } from './compile-delete.js';
-import type { CompileMerge, InferMergeParams } from './compile-merge.js';
-import type { CompileWith, InferWithParams } from './compile-with.js';
-import type { InferNextParams } from './infer-params.js';
+import type { QueryTypeError } from '../contracts/public-error.js';
+import type { CompileSelect, CompileSelectIR } from './compile-select.js';
+import type {
+  CompileInsert,
+  CompileInsertIR,
+  InferInsertParams,
+  InferInsertParamsFromIR,
+} from './compile-insert.js';
+import type {
+  CompileUpdate,
+  CompileUpdateIR,
+  InferUpdateParams,
+  InferUpdateParamsFromIR,
+} from './compile-update.js';
+import type {
+  CompileDelete,
+  CompileDeleteIR,
+  InferDeleteParams,
+  InferDeleteParamsFromIR,
+} from './compile-delete.js';
+import type {
+  CompileMerge,
+  CompileMergeIR,
+  InferMergeParams,
+  InferMergeParamsFromIR,
+} from './compile-merge.js';
+import type {
+  CompileWith,
+  CompileWithIR,
+  InferWithParams,
+  InferWithParamsFromIR,
+} from './compile-with.js';
+import type {
+  InferNextParams,
+  InferParamsFromIR,
+  ParamValues,
+} from './infer-params.js';
 
 type UnsupportedStatement<Sql extends string> = Diagnostic<
   'UNSUPPORTED_STATEMENT',
@@ -21,25 +65,100 @@ type UnsupportedStatement<Sql extends string> = Diagnostic<
   Sql
 >;
 
+type ParsedStatement<Sql extends string> = StatementKind<Sql> extends infer Kind
+  ? Kind extends 'select'
+    ? { statement: 'select'; parsed: ParseSelectIR<Sql> }
+    : Kind extends 'insert'
+      ? { statement: 'insert'; parsed: ParseInsertIR<Sql> }
+      : Kind extends 'update'
+        ? { statement: 'update'; parsed: ParseUpdateIR<Sql> }
+        : Kind extends 'delete'
+          ? { statement: 'delete'; parsed: ParseDeleteIR<Sql> }
+          : Kind extends 'merge'
+            ? { statement: 'merge'; parsed: ParseMergeIR<Sql> }
+            : Kind extends 'with'
+              ? { statement: 'with'; parsed: ParseWithIR<Sql> }
+              : { statement: 'unknown'; parsed: null }
+  : never;
+
+type FatalCompilation<Parsed> = Parsed extends {
+  kind: 'fatal';
+  diagnostics: infer Diagnostics extends readonly Diagnostic[];
+}
+  ? CompileFatal<unknown[], Diagnostics>
+  : never;
+
+type CompileParsed<
+  DB,
+  Parsed,
+  ValidatePredicates extends boolean,
+  Sql extends string,
+> = Parsed extends { statement: 'select'; parsed: infer Result }
+  ? Result extends { kind: 'ok'; value: infer IR extends SelectQueryIR }
+    ? CompileSelectIR<DB, IR, null, ValidatePredicates>
+    : FatalCompilation<Result>
+  : Parsed extends { statement: 'insert'; parsed: infer Result }
+    ? Result extends { kind: 'ok'; value: infer IR extends InsertQueryIR }
+      ? CompileInsertIR<DB, IR, null, ValidatePredicates>
+      : FatalCompilation<Result>
+    : Parsed extends { statement: 'update'; parsed: infer Result }
+      ? Result extends { kind: 'ok'; value: infer IR extends UpdateQueryIR }
+        ? CompileUpdateIR<DB, IR, null, ValidatePredicates>
+        : FatalCompilation<Result>
+      : Parsed extends { statement: 'delete'; parsed: infer Result }
+        ? Result extends { kind: 'ok'; value: infer IR extends DeleteQueryIR }
+          ? CompileDeleteIR<DB, IR, null, ValidatePredicates>
+          : FatalCompilation<Result>
+        : Parsed extends { statement: 'merge'; parsed: infer Result }
+          ? Result extends { kind: 'ok'; value: infer IR extends MergeQueryIR }
+            ? CompileMergeIR<DB, IR, null, ValidatePredicates>
+            : FatalCompilation<Result>
+          : Parsed extends { statement: 'with'; parsed: infer Result }
+            ? Result extends { kind: 'ok'; value: infer IR extends WithQueryIR }
+              ? CompileWithIR<DB, IR, null, ValidatePredicates>
+              : FatalCompilation<Result>
+            : CompileOk<never[], [UnsupportedStatement<Sql>]>;
+
+type FatalParams<Parsed, Fallback extends readonly unknown[] = unknown[]> =
+  Parsed extends {
+    kind: 'fatal';
+    diagnostics: readonly [infer Error extends { message: string }, ...unknown[]];
+  }
+    ? [QueryTypeError<Error['message']>]
+    : Fallback;
+
+type ParamsFromParsed<DB, Parsed> =
+  Parsed extends { statement: 'select'; parsed: infer Result }
+    ? Result extends { kind: 'ok'; value: infer IR extends SelectQueryIR }
+      ? ParamValues<InferParamsFromIR<DB, IR>>
+      : FatalParams<Result>
+    : Parsed extends { statement: 'insert'; parsed: infer Result }
+      ? Result extends { kind: 'ok'; value: infer IR extends InsertQueryIR }
+        ? InferInsertParamsFromIR<DB, IR>
+        : unknown[]
+      : Parsed extends { statement: 'update'; parsed: infer Result }
+        ? Result extends { kind: 'ok'; value: infer IR extends UpdateQueryIR }
+          ? InferUpdateParamsFromIR<DB, IR>
+          : unknown[]
+        : Parsed extends { statement: 'delete'; parsed: infer Result }
+          ? Result extends { kind: 'ok'; value: infer IR extends DeleteQueryIR }
+            ? InferDeleteParamsFromIR<DB, IR>
+            : unknown[]
+          : Parsed extends { statement: 'merge'; parsed: infer Result }
+            ? Result extends { kind: 'ok'; value: infer IR extends MergeQueryIR }
+              ? InferMergeParamsFromIR<DB, IR>
+              : unknown[]
+            : Parsed extends { statement: 'with'; parsed: infer Result }
+              ? Result extends { kind: 'ok'; value: infer IR extends WithQueryIR }
+                ? InferWithParamsFromIR<DB, IR>
+                : FatalParams<Result>
+              : unknown[];
+
 export type CompileNext<
   DB,
   Sql extends string,
   ValidatePredicates extends boolean = true,
-> = Sql extends `select ${string}`
-  ? CompileSelect<DB, Sql, null, ValidatePredicates>
-  : StatementKind<Sql> extends 'select'
-    ? CompileSelect<DB, Sql, null, ValidatePredicates>
-    : StatementKind<Sql> extends 'insert'
-      ? CompileInsert<DB, Sql, null, ValidatePredicates>
-    : StatementKind<Sql> extends 'update'
-      ? CompileUpdate<DB, Sql, null, ValidatePredicates>
-    : StatementKind<Sql> extends 'delete'
-      ? CompileDelete<DB, Sql, null, ValidatePredicates>
-    : StatementKind<Sql> extends 'merge'
-      ? CompileMerge<DB, Sql, null, ValidatePredicates>
-    : StatementKind<Sql> extends 'with'
-      ? CompileWith<DB, Sql, null, ValidatePredicates>
-      : CompileOk<never[], [UnsupportedStatement<Sql>]>;
+> = CompileParsed<DB, ParsedStatement<Sql>, ValidatePredicates, Sql>;
 
 export type NextQuery<DB, Sql extends string> =
   ApplyLoosePolicy<CompileNext<DB, Sql, false>>;
@@ -163,18 +282,4 @@ export type NextInferParams<DB, Sql extends string> = InferNextParams<DB, Sql>;
 
 export type NextWithInferParams<DB, Sql extends string> = InferWithParams<DB, Sql>;
 
-export type NextParams<DB, Sql extends string> = Sql extends `select ${string}`
-  ? InferNextParams<DB, Sql>
-  : StatementKind<Sql> extends 'select'
-    ? InferNextParams<DB, Sql>
-    : StatementKind<Sql> extends 'with'
-      ? InferWithParams<DB, Sql>
-      : StatementKind<Sql> extends 'insert'
-        ? InferInsertParams<DB, Sql>
-        : StatementKind<Sql> extends 'update'
-          ? InferUpdateParams<DB, Sql>
-          : StatementKind<Sql> extends 'delete'
-            ? InferDeleteParams<DB, Sql>
-            : StatementKind<Sql> extends 'merge'
-              ? InferMergeParams<DB, Sql>
-              : unknown[];
+export type NextParams<DB, Sql extends string> = ParamsFromParsed<DB, ParsedStatement<Sql>>;

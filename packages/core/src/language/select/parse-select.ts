@@ -161,7 +161,6 @@ type BuiltSelect<
     ParseProjectionList<Projection>,
     [...Predicates, ...TailPredicates],
     [],
-    [],
     Clauses,
     []
   >;
@@ -237,7 +236,6 @@ type AddSetOperation<
     infer Sources,
     infer Projections,
     infer Predicates,
-    infer Parameters,
     infer Ctes,
     infer Clauses,
     infer SetOperations
@@ -250,7 +248,6 @@ type AddSetOperation<
           Sources,
           Projections,
           Predicates,
-          Parameters,
           Ctes,
           Clauses,
           [...SetOperations, SetOperationIR<Kind, BranchIR>]

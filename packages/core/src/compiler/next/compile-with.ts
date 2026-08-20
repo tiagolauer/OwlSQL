@@ -187,6 +187,19 @@ type CompileCtes<
         : never
     : never;
 
+export type CompileWithIR<
+  DB,
+  IR extends WithQueryIR,
+  ParentScope = null,
+  ValidatePredicates extends boolean = true,
+> = CompileCtes<
+  DB,
+  IR['ctes'],
+  IR['query'],
+  ParentScope,
+  ValidatePredicates
+>;
+
 export type CompileWith<
   DB,
   Sql extends string,
@@ -197,13 +210,7 @@ export type CompileWith<
       kind: 'ok';
       value: infer IR extends WithQueryIR;
     }
-    ? CompileCtes<
-        DB,
-        IR['ctes'],
-        IR['query'],
-        ParentScope,
-        ValidatePredicates
-      >
+    ? CompileWithIR<DB, IR, ParentScope, ValidatePredicates>
     : Parsed extends CompileFatal<WithQueryIR, infer Diagnostics>
       ? CompileFatal<unknown[], Diagnostics>
       : never
@@ -279,22 +286,28 @@ type InferCteParams<
             ? InferMergeParamStateFromIR<DB, Query, State, Scope<Sources, ParentScope>>
             : State;
 
+export type InferWithParamsFromIR<
+  DB,
+  IR extends WithQueryIR,
+  ParentScope = null,
+> = IR['query'] extends { kind: 'insert'; source: InsertSelectIR }
+  ? unknown[]
+  : InferCteParams<
+      DB,
+      IR['ctes'],
+      IR['query'],
+      ParentScope
+    > extends infer State extends AnyParamState
+    ? ParamValues<State>
+    : unknown[];
+
 export type InferWithParams<DB, Sql extends string, ParentScope = null> =
   ParseWithIR<Sql> extends infer Parsed
     ? Parsed extends {
         kind: 'ok';
-      value: infer IR extends WithQueryIR;
-    }
-      ? IR['query'] extends { kind: 'insert'; source: InsertSelectIR }
-        ? unknown[]
-        : InferCteParams<
-            DB,
-            IR['ctes'],
-            IR['query'],
-            ParentScope
-          > extends infer State extends AnyParamState
-          ? ParamValues<State>
-          : unknown[]
+        value: infer IR extends WithQueryIR;
+      }
+      ? InferWithParamsFromIR<DB, IR, ParentScope>
       : Parsed extends {
           kind: 'fatal';
           diagnostics: readonly [

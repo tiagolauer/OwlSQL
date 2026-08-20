@@ -15,7 +15,6 @@ type Expected = SelectQueryIR<
   [TableSourceIR<'users', 'u', false>],
   [ColumnProjectionIR<'u', 'id', 'id'>],
   [],
-  [],
   []
 >;
 
@@ -36,7 +35,6 @@ type _simple = Expect<
         ],
         [],
         [],
-        [],
         SelectClausesIR,
         []
       >
@@ -51,7 +49,6 @@ type _qualified = Expect<
       SelectQueryIR<
         [TableSourceIR<'users', 'u'>],
         [ColumnProjectionIR<'u', 'id', 'user_id'>],
-        [],
         [],
         [],
         SelectClausesIR,
