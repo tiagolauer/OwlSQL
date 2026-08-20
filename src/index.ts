@@ -1,39 +1,41 @@
 import type {
-  Schema,
   SchemaLike,
-  InferResult,
-  InferRow,
-  InferResultStrict,
-  InferRowStrict,
   QueryTypeError,
-} from './parse.js';
-import type { InferParams, UsedPlaceholderStyles } from './params.js';
+} from './public/schema.js';
+import type {
+  InferParams,
+  InferResult,
+  InferResultStrict,
+} from './public/query.js';
+import type { UsedPlaceholderStyles } from './compiler/legacy.js';
 import { type Result, type QueryMeta, ok, err } from './result.js';
 
 export type {
-  Schema,
-  SchemaLike,
+  Query,
+  Row,
+  StrictQuery,
+  StrictRow,
+  Params,
   InferResult,
   InferRow,
   InferResultStrict,
   InferRowStrict,
+  InferParams,
+} from './public/query.js';
+export type {
+  Schema,
+  SchemaLike,
   QueryTypeError,
-} from './parse.js';
-export type { ParseSelect, ParseStatement, ParsedStatement, Source } from './parse.js';
-export type { FunctionReturnTypes } from './functions.js';
-export type { InferParams } from './params.js';
+  FunctionReturnTypes,
+} from './public/schema.js';
+export type {
+  ParseSelect,
+  ParseStatement,
+  ParsedStatement,
+  Source,
+} from './compiler/legacy.js';
 export type { Result, Ok, Err, QueryMeta } from './result.js';
 export { ResultStatus, ok, err, isOk, isErr } from './result.js';
-
-export type Query<DB extends SchemaLike, Q extends string> = InferResult<DB, Q>;
-
-export type Row<DB extends SchemaLike, Q extends string> = InferRow<DB, Q>;
-
-export type StrictQuery<DB extends SchemaLike, Q extends string> = InferResultStrict<DB, Q>;
-
-export type StrictRow<DB extends SchemaLike, Q extends string> = InferRowStrict<DB, Q>;
-
-export type Params<DB extends SchemaLike, Q extends string> = InferParams<DB, Q>;
 
 export enum QueryErrorKind {
   EmptyQuery = 'EMPTY_QUERY',
@@ -137,6 +139,4 @@ export function createTypedDb<
   };
 }
 
-export function defineSchema<const DB extends Schema>(schema: DB): DB {
-  return schema;
-}
+export { defineSchema } from './public/schema.js';
