@@ -2,16 +2,11 @@ import type { CteIR } from './cte.js';
 import type { ParameterIR } from './parameter.js';
 import type { PredicateIR } from './predicate.js';
 import type {
-  ColumnProjectionIR,
-  ExpressionProjectionIR,
-  StarProjectionIR,
+  ProjectionIR,
 } from './projection.js';
 import type { SourceIR } from './source.js';
 
-export type ProjectionIR =
-  | ColumnProjectionIR
-  | ExpressionProjectionIR
-  | StarProjectionIR<string | null>;
+export type { ProjectionIR } from './projection.js';
 
 export interface SelectClausesIR<
   GroupBy extends string = '',
