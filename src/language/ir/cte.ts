@@ -9,3 +9,10 @@ export interface CteIR<
   query: Query;
   recursive: Recursive;
 }
+
+export type AnyCteIR = CteIR<
+  string,
+  readonly string[] | null,
+  unknown,
+  boolean
+>;

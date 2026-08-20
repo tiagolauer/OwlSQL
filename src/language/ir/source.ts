@@ -28,6 +28,27 @@ export interface DerivedSourceIR<
   nullable: Nullable;
 }
 
+export interface CteSourceIR<
+  Name extends string = string,
+  Row = unknown,
+  Alias extends string = Name,
+  Nullable extends boolean = false,
+  Join extends JoinKind = 'root',
+  MergedColumns extends readonly string[] = [],
+> extends DerivedSourceIR<Alias, Row, Nullable, Join> {
+  name: Name;
+  mergedColumns: MergedColumns;
+}
+
+export type AnyCteSourceIR = CteSourceIR<
+  string,
+  unknown,
+  string,
+  boolean,
+  JoinKind,
+  readonly string[]
+>;
+
 export type SourceIR =
   | TableSourceIR<string, string, boolean, JoinKind, readonly string[]>
   | DerivedSourceIR<string, unknown, boolean, JoinKind>;
