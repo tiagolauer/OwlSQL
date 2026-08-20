@@ -1,4 +1,4 @@
-import type { SelectQueryIR } from '../../src/language/ir/query.js';
+import type { SelectClausesIR, SelectQueryIR } from '../../src/language/ir/query.js';
 import type { ColumnProjectionIR } from '../../src/language/ir/projection.js';
 import type { TableSourceIR } from '../../src/language/ir/source.js';
 import type { ClassifyStatement } from '../../src/language/lexical/statement.js';
@@ -36,6 +36,8 @@ type _simple = Expect<
         ],
         [],
         [],
+        [],
+        SelectClausesIR,
         []
       >
     >
@@ -51,6 +53,8 @@ type _qualified = Expect<
         [ColumnProjectionIR<'u', 'id', 'user_id'>],
         [],
         [],
+        [],
+        SelectClausesIR,
         []
       >
     >

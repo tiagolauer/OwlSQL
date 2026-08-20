@@ -1,9 +1,12 @@
 import type {
+  LegacyInferParams,
   LegacyInferResult,
   LegacyInferResultStrict,
 } from '../../src/compiler/legacy.js';
 import type {
   NextQuery,
+  NextInferParams,
+  NextRow,
   NextStrictQuery,
 } from '../../src/compiler/next/index.js';
 
@@ -170,4 +173,79 @@ type _strictCastError = Expect<Equal<
 type _leftJoinStar = Expect<Equal<
   LegacyInferResult<DB, 'select * from users u left join posts p on u.id = p.user_id'>,
   NextQuery<DB, 'select * from users u left join posts p on u.id = p.user_id'>
+>>;
+
+type _where = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select id from users where age > 18 and active = true'>,
+  NextStrictQuery<DB, 'select id from users where age > 18 and active = true'>
+>>;
+
+type _whereTypo = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select id from users where naem = $1'>,
+  NextStrictQuery<DB, 'select id from users where naem = $1'>
+>>;
+
+type _comparisonParams = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where id = $1 and name = $2'>,
+  NextInferParams<DB, 'select id from users where id = $1 and name = $2'>
+>>;
+
+type _predicateParams = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where name like $1 or name ilike $2 or id in ($3)'>,
+  NextInferParams<DB, 'select id from users where name like $1 or name ilike $2 or id in ($3)'>
+>>;
+
+type _betweenParams = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where age between $1 and $2'>,
+  NextInferParams<DB, 'select id from users where age between $1 and $2'>
+>>;
+
+type _arrayParam = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where id = any($1)'>,
+  NextInferParams<DB, 'select id from users where id = any($1)'>
+>>;
+
+type _namedParams = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where id = @id or name = :name'>,
+  NextInferParams<DB, 'select id from users where id = @id or name = :name'>
+>>;
+
+type _questionParams = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where id = ? and active = ?'>,
+  NextInferParams<DB, 'select id from users where id = ? and active = ?'>
+>>;
+
+type _conflictingParams = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users where id = $1 or name = $1'>,
+  NextInferParams<DB, 'select id from users where id = $1 or name = $1'>
+>>;
+
+type _limitOffsetParams = Expect<Equal<
+  LegacyInferParams<DB, 'select id from users limit $1 offset $2'>,
+  NextInferParams<DB, 'select id from users limit $1 offset $2'>
+>>;
+
+type _groupHaving = Expect<Equal<
+  LegacyInferResult<DB, 'select active, count(*) as total from users group by active having count(*) > 1 order by active'>,
+  NextQuery<DB, 'select active, count(*) as total from users group by active having count(*) > 1 order by active'>
+>>;
+
+type _havingParams = Expect<Equal<
+  LegacyInferParams<DB, 'select active from users group by active having count(*) > $1'>,
+  NextInferParams<DB, 'select active from users group by active having count(*) > $1'>
+>>;
+
+type _union = Expect<Equal<
+  LegacyInferResult<DB, 'select id from users union all select user_id as id from posts'>,
+  NextQuery<DB, 'select id from users union all select user_id as id from posts'>
+>>;
+
+type _literalSetOperations = Expect<Equal<
+  LegacyInferResult<DB, 'select 1 as value intersect select 1 except select 2'>,
+  NextQuery<DB, 'select 1 as value intersect select 1 except select 2'>
+>>;
+
+type _setRow = Expect<Equal<
+  NextRow<DB, 'select 1 as value union select 2'>,
+  { value: number }
 >>;
