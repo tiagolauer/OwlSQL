@@ -5,6 +5,8 @@ import type {
   SetOperationIR,
 } from '../../language/ir/query.js';
 import type {
+  AnyCteSourceIR,
+  CteSourceIR,
   DerivedSourceIR,
   JoinKind,
   SourceIR,
@@ -20,8 +22,9 @@ import type { ResolveKey } from '../schema/model.js';
 import type { InferProjections } from './infer-projection.js';
 import type { InferExpression } from './infer-expression.js';
 import type { ChildScope, Scope } from './scope.js';
+import type { ResolveBinding } from './resolve-source.js';
 
-type CompiledSources<
+export type CompiledSources<
   Sources extends readonly SourceIR[],
   Diagnostics extends readonly Diagnostic[],
 > = {
@@ -184,7 +187,7 @@ type CompileSetOperations<
   ...infer Tail extends SetOperationIR[],
 ]
   ? Head['query'] extends infer Query extends SelectQueryIR
-    ? CompileIR<DB, Query, ParentScope, ValidatePredicates> extends infer Compiled
+    ? CompileSelectIR<DB, Query, ParentScope, ValidatePredicates> extends infer Compiled
       ? Compiled extends CompileOk<readonly unknown[], infer BranchDiagnostics>
         ? CompileSetOperations<
             DB,
@@ -200,7 +203,7 @@ type CompileSetOperations<
     : CompileSetOperations<DB, Tail, ParentScope, ValidatePredicates, Diagnostics>
   : Diagnostics;
 
-type CompileSourceList<
+export type CompileSourceList<
   DB,
   Sources extends readonly SourceIR[],
   ParentScope,
@@ -217,7 +220,7 @@ type CompileSourceList<
       infer Nullable,
       infer Join extends JoinKind
     >
-    ? CompileIR<DB, Query, ChildScope<Result, ParentScope>, ValidatePredicates> extends infer Nested
+    ? CompileSelectIR<DB, Query, ChildScope<Result, ParentScope>, ValidatePredicates> extends infer Nested
       ? Nested extends CompileOk<infer Rows extends readonly unknown[], infer NestedDiagnostics>
         ? CompileSourceList<
             DB,
@@ -253,10 +256,19 @@ type CompileSourceList<
               : Diagnostics
             : Diagnostics
         >
-      : never
+      : Head extends AnyCteSourceIR
+        ? CompileSourceList<
+            DB,
+            Tail,
+            ParentScope,
+            ValidatePredicates,
+            [...Result, Head],
+            Diagnostics
+          >
+        : never
   : CompiledSources<Result, Diagnostics>;
 
-type CompileIR<
+type CompileSelectCore<
   DB,
   IR extends SelectQueryIR,
   ParentScope = null,
@@ -306,6 +318,88 @@ type CompileIR<
     : never
   ;
 
+type ResolveCteSources<
+  Sources extends readonly SourceIR[],
+  ParentScope,
+  Result extends readonly SourceIR[] = [],
+> = Sources extends readonly [
+  infer Head extends SourceIR,
+  ...infer Tail extends SourceIR[],
+]
+  ? Head extends TableSourceIR<
+      infer Name,
+      infer Alias,
+      infer Nullable,
+      infer Join extends JoinKind,
+      infer MergedColumns
+    >
+    ? ResolveBinding<ParentScope, Name> extends {
+        kind: 'ok';
+        value: infer Cte extends CteSourceIR;
+      }
+      ? ResolveCteSources<
+          Tail,
+          ParentScope,
+          [
+            ...Result,
+            CteSourceIR<
+              Cte['name'],
+              Cte['query'],
+              Alias,
+              Nullable,
+              Join,
+              MergedColumns
+            >,
+          ]
+        >
+      : ResolveCteSources<Tail, ParentScope, [...Result, Head]>
+    : ResolveCteSources<Tail, ParentScope, [...Result, Head]>
+  : Result;
+
+type WithResolvedCteSources<
+  IR extends SelectQueryIR,
+  ParentScope,
+> = IR extends SelectQueryIR<
+  infer Sources,
+  infer Projections,
+  infer Predicates,
+  infer Parameters,
+  infer Ctes,
+  infer Clauses,
+  infer SetOperations
+>
+  ? SelectQueryIR<
+      ResolveCteSources<Sources, ParentScope>,
+      Projections,
+      Predicates,
+      Parameters,
+      Ctes,
+      Clauses,
+      SetOperations
+    >
+  : never;
+
+export type ResolveSelectSources<
+  IR extends SelectQueryIR,
+  ParentScope,
+> = ParentScope extends null
+  ? IR['sources']
+  : WithResolvedCteSources<IR, ParentScope>['sources'];
+
+export type CompileSelectIR<
+  DB,
+  IR extends SelectQueryIR,
+  ParentScope = null,
+  ValidatePredicates extends boolean = true,
+> = ParentScope extends null
+  ? CompileSelectCore<DB, IR, ParentScope, ValidatePredicates>
+  : CompileSelectCore<
+      DB,
+      WithResolvedCteSources<IR, ParentScope>,
+      ParentScope,
+      ValidatePredicates
+    >;
+
 export type CompileSelect<
   DB,
   Sql extends string,
@@ -314,7 +408,9 @@ export type CompileSelect<
 > =
   ParseSelectIR<Sql> extends infer Parsed
     ? Parsed extends { kind: 'ok'; value: infer IR extends SelectQueryIR }
-      ? CompileIR<DB, IR, ParentScope, ValidatePredicates>
+      ? ParentScope extends null
+        ? CompileSelectCore<DB, IR, ParentScope, ValidatePredicates>
+        : CompileSelectIR<DB, IR, ParentScope, ValidatePredicates>
       : Parsed extends CompileFatal<SelectQueryIR, infer Diagnostics>
         ? CompileFatal<unknown[], Diagnostics>
         : never

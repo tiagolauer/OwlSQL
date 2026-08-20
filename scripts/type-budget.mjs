@@ -37,7 +37,11 @@ const SHAPE_REPEATS = 4;
 // (+1.5k, #299). Two changes paid part of it back: the comment/literal scan
 // now dispatches on the character it already read (-7.7k, #287) and the bare
 // alias split stops building a candidate it discards (-1k, #276).
-const MAX_INSTANTIATIONS = 225_000;
+// Raised from 225,000 for the M4 WITH/CTE cutover. Resolving CTE outputs as
+// ordered scope sources moved the public fixture from 223,663 to 225,590
+// instantiations (+0.86%); 230,000 keeps a reviewed 2% margin without hiding
+// the measured baseline.
+const MAX_INSTANTIATIONS = 230_000;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'perf');

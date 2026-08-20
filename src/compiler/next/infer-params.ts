@@ -173,7 +173,7 @@ type SetSlot<
     ? [MergeSlot<Head, Value, Label>, ...Tail]
     : [Value];
 
-interface ParamState<
+export interface ParamState<
   Indexed extends readonly unknown[] = [],
   Sequential extends readonly unknown[] = [],
   Names extends readonly string[] = [],
@@ -183,13 +183,13 @@ interface ParamState<
   names: Names;
 }
 
-type AnyParamState = ParamState<
+export type AnyParamState = ParamState<
   readonly unknown[],
   readonly unknown[],
   readonly string[]
 >;
 
-type EmptyParamState = ParamState<[], [], []>;
+export type EmptyParamState = ParamState<[], [], []>;
 
 type AddParam<
   Token extends string,
@@ -414,46 +414,52 @@ type InferSetParams<
     : InferSetParams<DB, Tail, State>
   : State;
 
-type InferParamsFromIR<
+export type InferParamsFromIR<
   DB,
   IR extends SelectQueryIR,
   State extends AnyParamState = EmptyParamState,
+  CurrentScope = RootScope<IR['sources']>,
 > = ScanProjections<
+  DB,
+  CurrentScope,
+  IR['projections'],
+  State
+> extends infer ProjectionState extends AnyParamState
+  ? ScanPredicates<
       DB,
-      RootScope<IR['sources']>,
-      IR['projections'],
-      State
-    > extends infer ProjectionState extends AnyParamState
-    ? ScanPredicates<
+      CurrentScope,
+      IR['predicates'],
+      ProjectionState
+    > extends infer PredicateState extends AnyParamState
+    ? ScanForcedNumber<
         DB,
-        RootScope<IR['sources']>,
-        IR['predicates'],
-        ProjectionState
-      > extends infer PredicateState extends AnyParamState
+        CurrentScope,
+        IR['clauses']['limit'],
+        'limit',
+        PredicateState
+      > extends infer LimitState extends AnyParamState
       ? ScanForcedNumber<
           DB,
-          RootScope<IR['sources']>,
-          IR['clauses']['limit'],
-          'limit',
-          PredicateState
-        > extends infer LimitState extends AnyParamState
-        ? ScanForcedNumber<
-            DB,
-            RootScope<IR['sources']>,
-            IR['clauses']['offset'],
-            'offset',
-            LimitState
-          > extends infer OffsetState extends AnyParamState
+          CurrentScope,
+          IR['clauses']['offset'],
+          'offset',
+          LimitState
+        > extends infer OffsetState extends AnyParamState
           ? InferSetParams<DB, IR['setOperations'], OffsetState>
           : never
         : never
       : never
     : never;
 
+export type ParamValues<State extends AnyParamState> = [
+  ...State['indexed'],
+  ...State['sequential'],
+];
+
 export type InferNextParams<DB, Sql extends string> =
   ParseSelectIR<Sql> extends { kind: 'ok'; value: infer IR extends SelectQueryIR }
     ? InferParamsFromIR<DB, IR> extends infer State extends AnyParamState
-      ? [...State['indexed'], ...State['sequential']]
+      ? ParamValues<State>
       : unknown[]
     : ParseSelectIR<Sql> extends {
         kind: 'fatal';

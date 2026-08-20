@@ -6,6 +6,7 @@ import type {
 } from '../contracts/compilation.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { CompileSelect } from './compile-select.js';
+import type { CompileWith, InferWithParams } from './compile-with.js';
 import type { InferNextParams } from './infer-params.js';
 
 type UnsupportedStatement<Sql extends string> = Diagnostic<
@@ -19,15 +20,25 @@ type UnsupportedStatement<Sql extends string> = Diagnostic<
 export type CompileNext<
   DB,
   Sql extends string,
-> = StatementKind<Sql> extends 'select'
+> = Sql extends `select ${string}`
+  ? CompileSelect<DB, Sql>
+  : StatementKind<Sql> extends 'select'
     ? CompileSelect<DB, Sql>
-    : CompileFatal<unknown[], [UnsupportedStatement<Sql>]>;
+    : StatementKind<Sql> extends 'with'
+      ? CompileWith<DB, Sql>
+      : CompileFatal<unknown[], [UnsupportedStatement<Sql>]>;
 
 export type NextQuery<DB, Sql extends string> =
   ApplyLoosePolicy<CompileSelect<DB, Sql, null, false>>;
 
 export type NextStrictQuery<DB, Sql extends string> =
   ApplyStrictPolicy<CompileSelect<DB, Sql>>;
+
+export type NextWithQuery<DB, Sql extends string> =
+  ApplyLoosePolicy<CompileWith<DB, Sql, null, false>>;
+
+export type NextWithStrictQuery<DB, Sql extends string> =
+  ApplyStrictPolicy<CompileWith<DB, Sql>>;
 
 export type NextRow<DB, Sql extends string> =
   NextQuery<DB, Sql> extends infer Result
@@ -44,3 +55,5 @@ export type NextStrictRow<DB, Sql extends string> =
   : never;
 
 export type NextInferParams<DB, Sql extends string> = InferNextParams<DB, Sql>;
+
+export type NextWithInferParams<DB, Sql extends string> = InferWithParams<DB, Sql>;
