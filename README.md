@@ -878,7 +878,6 @@ only once the query is finished.
 | `InferResult<DB, Q>` / `InferRow<DB, Q>` | type | Underlying aliases of `Query` / `Row` (plus `InferResultStrict` / `InferRowStrict`). |
 | `Params<DB, Q>` / `InferParams<DB, Q>` | type | Inferred parameter tuple for query `Q`. |
 | `QueryTypeError<Message>` | type | Branded compile-time error carrying `Message`. |
-| `FunctionReturnTypes` | interface | SQL-function → return-type registry. |
 | `Result<T, E>` | type | `Ok<T> \| Err<E>` discriminated union (`Ok` / `Err` are exported too). |
 | `ResultStatus` | enum | `Ok` / `Error`. |
 | `ok` / `err` | function | Construct a success / error result. |
@@ -887,7 +886,6 @@ only once the query is finished.
 | `QueryErrorKind` | enum | `EMPTY_QUERY` / `EXECUTOR_FAILED`. |
 | `Schema` / `SchemaLike` | type | Ideal schema shape (`table → column → type`) / the loosest accepted shape. |
 | `defineSchema(obj)` | function | Optional identity helper (see below). |
-| `ParseSelect` / `ParseStatement` / `ParsedStatement` / `Source` | type | Parser internals, exported for advanced tooling; not needed for normal use and more likely to change between minor versions. |
 
 **Driver adapters** (each on its own subpath, so no unused peer dependency is
 ever required):

@@ -72,7 +72,6 @@ The editor plugin is a separate package, [`@owlsql/ts-plugin`](ts-plugin/README.
 No compatibility guarantee, changeable in any release:
 
 - The message text inside `QueryTypeError<...>`. Match on the presence of the error, never on its wording.
-- The parser internals exported for advanced tooling: `ParseSelect`, `ParseStatement`, `ParsedStatement`, `Source`, `FunctionReturnTypes`.
 - CLI human-readable output — progress lines, error phrasing, help text. Exit codes *are* covered.
 - Compile-time cost. The [type-instantiation budget](CONTRIBUTING.md#the-type-instantiation-budget) exists to keep this honest, but a release may legitimately raise it.
 

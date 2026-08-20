@@ -14,6 +14,13 @@ const CONSUMER_PACKAGES = [
   'pg',
   'postgres',
 ];
+const REMOVED_EXPORTS = [
+  'FunctionReturnTypes',
+  'ParseSelect',
+  'ParseStatement',
+  'ParsedStatement',
+  'Source',
+];
 
 function runNpm(args, options) {
   const npmCli = process.env.npm_execpath;
@@ -51,6 +58,15 @@ function pack(destination) {
     throw new Error('npm pack did not return a tarball filename.');
   }
   return join(destination, result[0].filename);
+}
+
+function assertPublicDeclarations() {
+  const declarations = readFileSync(join(ROOT, 'dist', 'index.d.ts'), 'utf8');
+  for (const name of REMOVED_EXPORTS) {
+    if (new RegExp(`\\b${name}\\b`).test(declarations)) {
+      throw new Error(`Removed export is still public: ${name}.`);
+    }
+  }
 }
 
 function writeConsumer(consumer) {
@@ -117,6 +133,7 @@ function main() {
 
   try {
     const packageJson = readJson(join(ROOT, 'package.json'));
+    assertPublicDeclarations();
     const tarball = pack(temporary);
     mkdirSync(consumer);
     writeConsumer(consumer);

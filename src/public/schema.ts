@@ -5,8 +5,6 @@ export type {
   SchemaLike,
 } from '../compiler/schema/model.js';
 
-export type { FunctionReturnTypes } from '../compiler/semantics/functions.js';
-
 export type { QueryTypeError } from '../compiler/contracts/public-error.js';
 
 export function defineSchema<const DB extends Schema>(schema: DB): DB {

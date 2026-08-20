@@ -15,7 +15,6 @@ export type {
   Schema,
   SchemaLike,
   QueryTypeError,
-  FunctionReturnTypes,
 } from './public/schema.js';
 
 export type {
@@ -47,12 +46,5 @@ export {
   isOk,
   isErr,
 } from './public/result.js';
-
-export type {
-  ParseSelect,
-  ParseStatement,
-  ParsedStatement,
-  Source,
-} from './parse.js';
 
 export { defineSchema } from './public/schema.js';

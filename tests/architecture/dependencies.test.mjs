@@ -9,18 +9,19 @@ describe('architecture dependencies', () => {
     expect(checkArchitecture(process.cwd())).toEqual([]);
   });
 
-  it('reports runtime imports from legacy compiler files', () => {
+  it('reports runtime imports from compiler files', () => {
     const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
     mkdirSync(join(root, 'src', 'runtime'), { recursive: true });
-    writeFileSync(join(root, 'src', 'parse.ts'), 'export type Parsed = string;\n');
+    mkdirSync(join(root, 'src', 'compiler'), { recursive: true });
+    writeFileSync(join(root, 'src', 'compiler', 'gateway.ts'), 'export type Query = string;\n');
     writeFileSync(
       join(root, 'src', 'runtime', 'invalid.ts'),
-      "import type { Parsed } from '../parse.js';\n",
+      "import type { Query } from '../compiler/gateway.js';\n",
     );
 
     try {
       expect(checkArchitecture(root)).toEqual([
-        'src/runtime/invalid.ts -> src/parse.ts violates runtime isolation',
+        'src/runtime/invalid.ts -> src/compiler/gateway.ts violates runtime isolation',
       ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
