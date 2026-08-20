@@ -9,7 +9,11 @@ import type {
   LegacyInferRow,
   LegacyInferRowStrict,
 } from './legacy.js';
+import type { CompileInsert, InferInsertParams } from './next/compile-insert.js';
+import type { CompileDelete, InferDeleteParams } from './next/compile-delete.js';
+import type { CompileMerge, InferMergeParams } from './next/compile-merge.js';
 import type { CompileSelect } from './next/compile-select.js';
+import type { CompileUpdate, InferUpdateParams } from './next/compile-update.js';
 import type { CompileWith, InferWithParams } from './next/compile-with.js';
 import type { InferNextParams } from './next/infer-params.js';
 
@@ -21,7 +25,15 @@ type NextCompilation<
   ? CompileSelect<DB, Q, null, ValidatePredicates>
   : GatewayKind<Q> extends 'select'
     ? CompileSelect<DB, Q, null, ValidatePredicates>
-    : CompileWith<DB, Q, null, ValidatePredicates>;
+    : GatewayKind<Q> extends 'with'
+      ? CompileWith<DB, Q, null, ValidatePredicates>
+      : GatewayKind<Q> extends 'insert'
+        ? CompileInsert<DB, Q, null, ValidatePredicates>
+        : GatewayKind<Q> extends 'update'
+          ? CompileUpdate<DB, Q, null, ValidatePredicates>
+          : GatewayKind<Q> extends 'delete'
+            ? CompileDelete<DB, Q, null, ValidatePredicates>
+            : CompileMerge<DB, Q, null, ValidatePredicates>;
 
 type NextQuery<DB, Q extends string> =
   ApplyLoosePolicy<NextCompilation<DB, Q, false>>;
@@ -52,7 +64,15 @@ type UsesNext<Q extends string> = GatewayKind<Q> extends 'select'
     ? ParseWithIR<Q> extends { kind: 'ok' }
       ? true
       : false
-    : false;
+    : GatewayKind<Q> extends 'insert'
+      ? true
+      : GatewayKind<Q> extends 'update'
+        ? true
+        : GatewayKind<Q> extends 'delete'
+          ? true
+          : GatewayKind<Q> extends 'merge'
+            ? true
+            : false;
 
 export type InferViaGateway<DB extends SchemaLike, Q extends string> =
   UsesNext<Q> extends true
@@ -81,4 +101,12 @@ export type InferParamsViaGateway<DB extends SchemaLike, Q extends string> =
       ? UsesNext<Q> extends true
         ? InferWithParams<DB, Q>
         : LegacyInferParams<DB, Q>
-      : LegacyInferParams<DB, Q>;
+      : GatewayKind<Q> extends 'insert'
+        ? InferInsertParams<DB, Q>
+        : GatewayKind<Q> extends 'update'
+          ? InferUpdateParams<DB, Q>
+          : GatewayKind<Q> extends 'delete'
+            ? InferDeleteParams<DB, Q>
+            : GatewayKind<Q> extends 'merge'
+              ? InferMergeParams<DB, Q>
+              : LegacyInferParams<DB, Q>;

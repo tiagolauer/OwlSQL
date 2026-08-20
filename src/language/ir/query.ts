@@ -2,16 +2,17 @@ import type { CteIR } from './cte.js';
 import type { ParameterIR } from './parameter.js';
 import type { PredicateIR } from './predicate.js';
 import type {
-  ColumnProjectionIR,
-  ExpressionProjectionIR,
-  StarProjectionIR,
+  ProjectionIR,
 } from './projection.js';
 import type { SourceIR } from './source.js';
+import type {
+  AssignmentIR,
+  MergeActionIR,
+  OutputIR,
+  WriteTargetIR,
+} from './write.js';
 
-export type ProjectionIR =
-  | ColumnProjectionIR
-  | ExpressionProjectionIR
-  | StarProjectionIR<string | null>;
+export type { ProjectionIR } from './projection.js';
 
 export interface SelectClausesIR<
   GroupBy extends string = '',
@@ -62,4 +63,111 @@ export interface SelectQueryIR<
   ctes: Ctes;
   clauses: Clauses;
   setOperations: SetOperations;
+}
+
+export interface InsertValuesIR<
+  Rows extends readonly (readonly string[])[] = readonly (readonly string[])[],
+  Tail extends string = string,
+> {
+  mode: 'values';
+  rows: Rows;
+  tail: Tail;
+}
+
+export interface InsertSelectIR<
+  Query extends SelectQueryIR = SelectQueryIR,
+> {
+  mode: 'select';
+  query: Query;
+}
+
+export interface InsertDefaultValuesIR {
+  mode: 'default-values';
+}
+
+export type InsertSourceIR =
+  | InsertValuesIR
+  | InsertSelectIR
+  | InsertDefaultValuesIR;
+
+export interface InsertQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Columns extends readonly string[] = readonly string[],
+  Source extends InsertSourceIR = InsertSourceIR,
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+> {
+  kind: 'insert';
+  target: Target;
+  columns: Columns;
+  source: Source;
+  output: Output;
+}
+
+export interface UpdateQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Assignments extends readonly AssignmentIR[] = readonly AssignmentIR[],
+  Sources extends readonly SourceIR[] = readonly SourceIR[],
+  Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+> {
+  kind: 'update';
+  target: Target;
+  assignments: Assignments;
+  sources: Sources;
+  predicates: Predicates;
+  output: Output;
+}
+
+export interface DeleteQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Sources extends readonly SourceIR[] = readonly SourceIR[],
+  Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+> {
+  kind: 'delete';
+  target: Target;
+  sources: Sources;
+  predicates: Predicates;
+  output: Output;
+}
+
+export interface MergeQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Sources extends readonly SourceIR[] = readonly SourceIR[],
+  Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
+  Actions extends readonly MergeActionIR[] = readonly MergeActionIR[],
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+  SourceValues extends readonly string[] = readonly string[],
+> {
+  kind: 'merge';
+  target: Target;
+  sources: Sources;
+  predicates: Predicates;
+  actions: Actions;
+  output: Output;
+  sourceValues: SourceValues;
 }

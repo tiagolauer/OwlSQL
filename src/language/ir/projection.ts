@@ -24,3 +24,8 @@ export interface ExpressionProjectionIR<
   fragment: Fragment;
   outputName: OutputName;
 }
+
+export type ProjectionIR =
+  | ColumnProjectionIR
+  | ExpressionProjectionIR
+  | StarProjectionIR<string | null>;
