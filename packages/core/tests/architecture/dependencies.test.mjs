@@ -50,6 +50,25 @@ describe('architecture dependencies', () => {
     }
   });
 
+  it('reports adapter imports from compiler internals', () => {
+    const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
+    mkdirSync(join(root, 'packages', 'core', 'src', 'adapters'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'core', 'src', 'compiler'), { recursive: true });
+    writeFileSync(join(root, 'packages', 'core', 'src', 'compiler', 'gateway.ts'), 'export type Query = string;\n');
+    writeFileSync(
+      join(root, 'packages', 'core', 'src', 'adapters', 'invalid.ts'),
+      "import type { Query } from '../compiler/gateway.js';\n",
+    );
+
+    try {
+      expect(checkArchitecture(root)).toEqual([
+        'packages/core/src/adapters/invalid.ts -> packages/core/src/compiler/gateway.ts violates adapter isolation',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports editor plugin imports outside the analysis bridge', () => {
     const root = mkdtempSync(join(tmpdir(), 'owlsql-architecture-'));
     mkdirSync(join(root, 'packages', 'core', 'src', 'compiler', 'next'), { recursive: true });

@@ -14,6 +14,6 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "tests", "../../tests/integration", "vitest.config.ts"],
+  "include": ["src", "tests", "../../tests/compatibility", "../../tests/integration", "vitest.config.ts"],
   "exclude": ["../../tests/performance", "tests/cli-codegen-edge.test.ts"]
 }
