@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
-import { createKyselyExecutor } from '../../src/adapters/kysely.js';
+import { createKyselyExecutor } from '../../packages/core/src/adapters/kysely.js';
 import { PG_URL_ENV, metaOf, pgUrl, requireUrl, rowsOf } from './databases.js';
 
 interface KyselyDB {

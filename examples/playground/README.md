@@ -8,7 +8,7 @@ your browser — no local install, no database.
 What's here:
 
 - [`schema.ts`](schema.ts) — a small `DB` type (`users`/`posts`), same shape
-  as the [README tutorial](../../README.md#1-describe-your-schema).
+  as the [README tutorial](../../packages/core/README.md#1-describe-your-schema).
 - [`index.ts`](index.ts) — hover over the `^?` markers to see inferred
   types, uncomment the `StrictQuery` line to see a compile-time error for a
   typo'd column name, and edit the queries to see completions/errors update

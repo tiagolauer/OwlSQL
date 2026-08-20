@@ -1,7 +1,7 @@
 # ts-plugin recording demo
 
 A minimal project for recording a GIF/screenshot of
-[`@owlsql/ts-plugin`](../../README.md#editor-autocomplete) in
+[`@owlsql/ts-plugin`](../../packages/core/README.md#editor-autocomplete) in
 action. This one is meant to be **opened in a real VSCode window and typed
 into** — unlike [`examples/playground`](../playground), which is meant for
 StackBlitz.
@@ -13,7 +13,7 @@ StackBlitz.
    workspace:
    ```bash
    npm install && npm run build --workspace @owlsql/ts-plugin   # at the repo root
-   cd examples/ts-plugin-demo && npm install && npm install ../../ts-plugin --no-save
+   cd examples/ts-plugin-demo && npm install && npm install ../../packages/ts-plugin --no-save
    ```
    (`@owlsql/core` does come from npm. To test unpublished changes to it as
    well, run `npm run build` at the repo root too and add `../..` to that
@@ -40,7 +40,7 @@ StackBlitz.
   ```
 - Drop the result in `assets/autocomplete.gif` at the repo root and
   reference it from the README's
-  [Editor autocomplete](../../README.md#editor-autocomplete) section.
+  [Editor autocomplete](../../packages/core/README.md#editor-autocomplete) section.
 
 ## Why this isn't already a GIF in the repo
 

@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = join(REPO_ROOT, 'packages', 'core');
 const CONSUMER_PACKAGES = [
   '@types/mssql',
   '@types/pg',
@@ -13,6 +14,13 @@ const CONSUMER_PACKAGES = [
   'mysql2',
   'pg',
   'postgres',
+];
+const REMOVED_EXPORTS = [
+  'FunctionReturnTypes',
+  'ParseSelect',
+  'ParseStatement',
+  'ParsedStatement',
+  'Source',
 ];
 
 function runNpm(args, options) {
@@ -51,6 +59,15 @@ function pack(destination) {
     throw new Error('npm pack did not return a tarball filename.');
   }
   return join(destination, result[0].filename);
+}
+
+function assertPublicDeclarations() {
+  const declarations = readFileSync(join(ROOT, 'dist', 'index.d.ts'), 'utf8');
+  for (const name of REMOVED_EXPORTS) {
+    if (new RegExp(`\\b${name}\\b`).test(declarations)) {
+      throw new Error(`Removed export is still public: ${name}.`);
+    }
+  }
 }
 
 function writeConsumer(consumer) {
@@ -117,6 +134,7 @@ function main() {
 
   try {
     const packageJson = readJson(join(ROOT, 'package.json'));
+    assertPublicDeclarations();
     const tarball = pack(temporary);
     mkdirSync(consumer);
     writeConsumer(consumer);
@@ -135,7 +153,7 @@ function main() {
     execFileSync(
       process.execPath,
       [
-        join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'),
+        join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc'),
         '--pretty',
         'false',
         '-p',

@@ -1,0 +1,123 @@
+{
+  "name": "@owlsql/core",
+  "version": "0.2.0",
+  "description": "Parse SQL in TypeScript template literal types and infer the result shape from your schema — no codegen, no ORM.",
+  "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "owlsql": "dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./pg": {
+      "types": "./dist/adapters/pg.d.ts",
+      "import": "./dist/adapters/pg.js"
+    },
+    "./mysql2": {
+      "types": "./dist/adapters/mysql2.d.ts",
+      "import": "./dist/adapters/mysql2.js"
+    },
+    "./postgres": {
+      "types": "./dist/adapters/postgres.d.ts",
+      "import": "./dist/adapters/postgres.js"
+    },
+    "./node-sqlite": {
+      "types": "./dist/adapters/node-sqlite.d.ts",
+      "import": "./dist/adapters/node-sqlite.js"
+    },
+    "./mssql": {
+      "types": "./dist/adapters/mssql.d.ts",
+      "import": "./dist/adapters/mssql.js"
+    },
+    "./kysely": {
+      "types": "./dist/adapters/kysely.d.ts",
+      "import": "./dist/adapters/kysely.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test:types": "npm run test:types:core && tsc --noEmit -p tsconfig.compiler-api-tests.json",
+    "test:types:core": "tsc --noEmit -p tsconfig.json",
+    "test:runtime": "vitest run",
+    "test:integration": "vitest run --root ../.. --config packages/core/vitest.config.ts tests/integration",
+    "test:perf": "node ../../scripts/type-budget.mjs",
+    "perf:baseline": "node ../../scripts/type-budget.mjs --write-baseline",
+    "test:architecture": "node ../../scripts/check-architecture.mjs",
+    "test:package": "npm run build && node ../../scripts/package-smoke.mjs",
+    "test": "npm run test:types && npm run test:runtime && npm run test:architecture",
+    "prepublishOnly": "npm run test && npm run build"
+  },
+  "peerDependencies": {
+    "kysely": ">=0.27.0",
+    "mssql": ">=10.0.0",
+    "mysql2": ">=3.0.0",
+    "pg": ">=8.0.0",
+    "postgres": ">=3.0.0",
+    "typescript": ">=5.4.0 <8"
+  },
+  "peerDependenciesMeta": {
+    "kysely": {
+      "optional": true
+    },
+    "mssql": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    },
+    "postgres": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "owlsql",
+    "sql",
+    "typescript",
+    "template-literal-types",
+    "type-inference",
+    "type-safe",
+    "compile-time",
+    "no-codegen"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tiagolauer/OwlSQL.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/tiagolauer/OwlSQL#readme",
+  "bugs": {
+    "url": "https://github.com/tiagolauer/OwlSQL/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^26.1.1",
+    "@types/pg": "^8.20.0",
+    "kysely": "^0.29.4",
+    "mssql": "^12.7.0",
+    "mysql2": "^3.23.0",
+    "pg": "^8.22.0",
+    "postgres": "^3.4.9",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,373 @@
+import { describe, it, expect, vi } from 'vitest';
+import { createTypedDb, isOk } from '../src/index.js';
+import { createNodeSqliteExecutor } from '../src/adapters/node-sqlite.js';
+import { loadSqlite, sqliteAvailable } from './sqlite-availability.js';
+
+interface DB {
+  users: { id: number; name: string };
+}
+
+function seededDatabase(): import('node:sqlite').DatabaseSync {
+  const DatabaseSync = loadSqlite();
+  const db = new DatabaseSync(':memory:');
+  db.exec('create table users (id integer primary key, name text not null)');
+  db.prepare('insert into users (id, name) values (?, ?)').run(1, 'ada');
+  db.prepare('insert into users (id, name) values (?, ?)').run(2, 'grace');
+  return db;
+}
+
+describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
+  it('runs a real query against an in-memory node:sqlite database', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const result = await db.query('select id, name from users order by id');
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([
+        { id: 1, name: 'ada' },
+        { id: 2, name: 'grace' },
+      ]);
+      expect(result.meta).toBeUndefined();
+    }
+  });
+
+  it('binds positional parameters through to the prepared statement', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const result = await db.query('select id, name from users where id = ?', 2);
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([{ id: 2, name: 'grace' }]);
+    }
+  });
+
+  it('routes @name and $name placeholders through the named-parameters object', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const atResult = await db.query('select id, name from users where id = @id', 1);
+    expect(isOk(atResult)).toBe(true);
+    if (isOk(atResult)) {
+      expect(atResult.value).toEqual([{ id: 1, name: 'ada' }]);
+    }
+
+    const dollarResult = await db.query('select id, name from users where name = $name', 'grace');
+    expect(isOk(dollarResult)).toBe(true);
+    if (isOk(dollarResult)) {
+      expect(dollarResult.value).toEqual([{ id: 2, name: 'grace' }]);
+    }
+  });
+
+  // Regression for #238: the adapter has always bound `:name`, but the type
+  // layer typed the query as taking no parameters at all.
+  it('routes :name placeholders through the named-parameters object', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const result = await db.query('select id, name from users where id = :id', 1);
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([{ id: 1, name: 'ada' }]);
+    }
+  });
+
+  it('ignores named-parameter lookalikes inside string literals', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const result = await db.query("select id from users where name = 'no @param here' or id = ?", 1);
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([{ id: 1 }]);
+    }
+  });
+
+  // Regression for #248: SQLite has no backslash escape, so 'C:\' is a
+  // complete literal and the ? after it is a real placeholder. The scanner
+  // used to read that quote as escaped, run the literal to the end of the
+  // statement, and return a silently empty result set.
+  it('binds a placeholder that follows a literal ending in a backslash', async () => {
+    const DatabaseSync = loadSqlite();
+    const sqlite = new DatabaseSync(':memory:');
+    sqlite.exec('create table files (id integer primary key, path text)');
+    sqlite.prepare('insert into files (id, path) values (?, ?)').run(1, 'C:\\');
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    const rows = await executor("select id from files where path = 'C:\\' and id = ?", [1]);
+
+    expect(rows).toEqual([{ id: 1 }]);
+  });
+
+  it('coerces boolean and Date params to driver-supported values', async () => {
+    const DatabaseSync = loadSqlite();
+    const sqlite = new DatabaseSync(':memory:');
+    sqlite.exec('create table flags (id integer primary key, active integer, seen_at text)');
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    const stamp = new Date('2026-01-02T03:04:05.000Z');
+    await executor('insert into flags (id, active, seen_at) values (?, ?, ?)', [1, true, stamp]);
+
+    const rows = await executor('select active, seen_at from flags where id = ?', [1]);
+    expect(rows).toEqual([{ active: 1, seen_at: '2026-01-02T03:04:05.000Z' }]);
+  });
+
+  it('binds ? and a named parameter together without dropping the positional value', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const result = await db.query('select id, name from users where name = ? and id = @id', 'ada', 1);
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual([{ id: 1, name: 'ada' }]);
+    }
+  });
+
+  it('binds a repeated named parameter once, without misaligning the parameter after it', async () => {
+    const DatabaseSync = loadSqlite();
+    const sqlite = new DatabaseSync(':memory:');
+    sqlite.exec('create table events (id integer primary key, note text, note2 text)');
+    sqlite.prepare('insert into events (id, note, note2) values (1, ?, ?)').run('old', 'old');
+    sqlite.prepare('insert into events (id, note, note2) values (2, ?, ?)').run('untouched', 'untouched');
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    // note and note2 both bind to the same @note occurrence, deduped to one
+    // slot; @id is a distinct third occurrence. If the previously-buggy
+    // type demanded a slot per *occurrence* instead of per distinct name,
+    // a caller following it would pass an extra positional value here,
+    // shifting @id onto that extra value instead of the real id - and
+    // event 1 would never actually be matched/updated.
+    await executor('update events set note = @note, note2 = @note where id = @id', ['new', 1]);
+
+    const rows = await executor('select id, note, note2 from events order by id', []);
+    expect(rows).toEqual([
+      { id: 1, note: 'new', note2: 'new' },
+      { id: 2, note: 'untouched', note2: 'untouched' },
+    ]);
+  });
+
+  it('reports write metadata without leaking stale values through the typed client', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const insert = await db.query('insert into users (id, name) values ($1, $2)', 9, 'lin');
+    expect(isOk(insert)).toBe(true);
+    if (isOk(insert)) {
+      expect(insert.meta).toEqual({ rowCount: 1, lastInsertRowid: 9 });
+    }
+
+    const update = await db.query('update users set name = ? where id = ?', 'ada-lovelace', 1);
+    expect(isOk(update)).toBe(true);
+    if (isOk(update)) {
+      expect(update.meta).toEqual({ rowCount: 1 });
+    }
+
+    const deleted = await db.query('delete from users where id = ?', 2);
+    expect(isOk(deleted)).toBe(true);
+    if (isOk(deleted)) {
+      expect(deleted.meta).toEqual({ rowCount: 1 });
+    }
+
+    const deleteMiss = await db.query('delete from users where id = ?', 12345);
+    expect(isOk(deleteMiss)).toBe(true);
+    if (isOk(deleteMiss)) {
+      expect(deleteMiss.meta).toEqual({ rowCount: 0 });
+    }
+
+    const ddl = await db.query('create table t2 (a integer)');
+    expect(isOk(ddl)).toBe(true);
+    if (isOk(ddl)) {
+      expect(ddl.meta).toEqual({ rowCount: 0 });
+    }
+
+    const rows = await db.query('select name from users where id = ?', 9);
+    expect(isOk(rows)).toBe(true);
+    if (isOk(rows)) {
+      expect(rows.value).toEqual([{ name: 'lin' }]);
+    }
+  });
+
+  // Regression for #237: the leading keyword of a CTE-led write is `with`,
+  // which classified it as a read and dropped its row count.
+  it('reports metadata for a write led by a WITH clause', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const inserted = await db.query(
+      "with seed as (select 'hopper' as name) insert into users (name) select name from seed",
+    );
+    expect(isOk(inserted)).toBe(true);
+    if (isOk(inserted)) {
+      expect(inserted.meta?.rowCount).toBe(1);
+      expect(inserted.meta?.lastInsertRowid).toBe(3);
+    }
+
+    const updated = await db.query(
+      'with targets as (select id from users where id = 1) update users set name = ? where id in (select id from targets)',
+      'ada-lovelace',
+    );
+    expect(isOk(updated)).toBe(true);
+    if (isOk(updated)) {
+      expect(updated.meta).toEqual({ rowCount: 1 });
+    }
+
+    // A CTE-led read is still a read.
+    const read = await db.query('with seed as (select 1 as one) select one from seed');
+    expect(isOk(read)).toBe(true);
+    if (isOk(read)) {
+      expect(read.meta).toBeUndefined();
+    }
+  });
+
+  // Regression for #237: a row-returning write went down the `all()` path,
+  // which returned the rows bare and reported no metadata at all.
+  it('reports metadata for a write with RETURNING', async () => {
+    const sqlite = seededDatabase();
+    const db = createTypedDb<DB>(createNodeSqliteExecutor(sqlite));
+
+    const inserted = await db.query('insert into users (name) values (?) returning id', 'hopper');
+    expect(isOk(inserted)).toBe(true);
+    if (isOk(inserted)) {
+      expect(inserted.value).toEqual([{ id: 3 }]);
+      expect(inserted.meta).toEqual({ rowCount: 1, lastInsertRowid: 3 });
+    }
+
+    const deleted = await db.query('delete from users where id = ? returning name', 1);
+    expect(isOk(deleted)).toBe(true);
+    if (isOk(deleted)) {
+      expect(deleted.value).toEqual([{ name: 'ada' }]);
+      expect(deleted.meta).toEqual({ rowCount: 1 });
+    }
+  });
+});
+
+describe('createNodeSqliteExecutor column metadata fallback', () => {
+  it('executes through all without interpreting SQL when columns is unavailable', async () => {
+    const insertStatement = {
+      run: vi.fn().mockReturnValue({ changes: 1, lastInsertRowid: 7 }),
+      all: vi.fn().mockReturnValue([]),
+    };
+    const selectStatement = {
+      run: vi.fn(),
+      all: vi.fn().mockReturnValue([{ id: 7 }]),
+    };
+    const ddlStatement = {
+      run: vi.fn().mockReturnValue({ changes: 4, lastInsertRowid: 99 }),
+      all: vi.fn().mockReturnValue([]),
+    };
+    const returningStatement = {
+      run: vi.fn(),
+      all: vi.fn().mockReturnValue([{ id: 8 }]),
+    };
+    const statements: Record<string, unknown> = {
+      'insert into users (name) values (?)': insertStatement,
+      'select id from users': selectStatement,
+      'create table t2 (a integer)': ddlStatement,
+      'insert into users (name) values (?) returning id': returningStatement,
+    };
+    const sqlite = {
+      prepare: vi.fn((sql: string) => statements[sql]),
+    } as unknown as import('node:sqlite').DatabaseSync;
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(executor('insert into users (name) values (?)', ['ada'])).resolves.toEqual([]);
+    expect(insertStatement.all).toHaveBeenCalledWith('ada');
+    expect(insertStatement.run).not.toHaveBeenCalled();
+
+    await expect(executor('select id from users', [])).resolves.toEqual([{ id: 7 }]);
+    expect(selectStatement.all).toHaveBeenCalledWith();
+    expect(selectStatement.run).not.toHaveBeenCalled();
+
+    await expect(executor('create table t2 (a integer)', [])).resolves.toEqual([]);
+    expect(ddlStatement.all).toHaveBeenCalledWith();
+    expect(ddlStatement.run).not.toHaveBeenCalled();
+
+    await expect(
+      executor('insert into users (name) values (?) returning id', ['grace']),
+    ).resolves.toEqual([{ id: 8 }]);
+    expect(returningStatement.all).toHaveBeenCalledWith('grace');
+    expect(returningStatement.run).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row path when StatementSync.columns throws', async () => {
+    const statement = {
+      columns: vi.fn(() => {
+        throw new Error('columns unavailable');
+      }),
+      run: vi.fn(),
+      all: vi.fn().mockReturnValue([{ id: 1 }]),
+    };
+    const sqlite = {
+      prepare: vi.fn(() => statement),
+    } as unknown as import('node:sqlite').DatabaseSync;
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(executor('select id from users', [])).resolves.toEqual([{ id: 1 }]);
+    expect(statement.all).toHaveBeenCalledWith();
+    expect(statement.run).not.toHaveBeenCalled();
+  });
+});
+
+describe.skipIf(!sqliteAvailable)('numbered placeholders bind by index', () => {
+  it('gives $1 the first tuple slot even when $2 appears first', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select id, name from users where name = $2 and id = $1', [1, 'ada']),
+    ).resolves.toEqual([{ id: 1, name: 'ada' }]);
+  });
+
+  it('binds each numbered placeholder to its own slot, not its textual position', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select $2 as second, $1 as first', ['for-one', 'for-two']),
+    ).resolves.toEqual([{ second: 'for-two', first: 'for-one' }]);
+  });
+
+  it('places sequential placeholders after the numbered block', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select id, name from users where name = @who and id = $1', [1, 'ada']),
+    ).resolves.toEqual([{ id: 1, name: 'ada' }]);
+  });
+
+  it('reserves a slot for a gap in the numbering', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select $3 as third, $1 as first', ['for-one', 'unused', 'for-three']),
+    ).resolves.toEqual([{ third: 'for-three', first: 'for-one' }]);
+  });
+
+  it('repeats one value for a numbered placeholder used twice', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(
+      executor('select id, name from users where id = $1 or id = $1', [2]),
+    ).resolves.toEqual([{ id: 2, name: 'grace' }]);
+  });
+
+  // Regression for #304: node:sqlite's anonymous-args API cannot bind a
+  // numbered slot, so this used to surface as "column index out of range".
+  it('rejects a ?NNN placeholder by name instead of by driver error', async () => {
+    const sqlite = seededDatabase();
+    const executor = createNodeSqliteExecutor(sqlite);
+
+    await expect(executor('select id from users where id = ?1', [])).rejects.toThrow(
+      /Unsupported placeholder "\?1"/,
+    );
+  });
+});

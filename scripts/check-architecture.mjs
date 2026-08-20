@@ -1,66 +1,41 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const SOURCE_EXTENSIONS = ['.ts', '.cts', '.mts'];
-const SOURCE_DIRECTORIES = ['src', 'ts-plugin/src'];
+const SOURCE_DIRECTORIES = ['packages/core/src', 'packages/ts-plugin/src'];
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-const RULES = [
-  {
-    from: 'src/language/',
-    forbidden: [
-      'src/compiler/',
-      'src/runtime/',
-      'src/public/',
-      'src/parse.ts',
-      'src/params.ts',
-    ],
-    name: 'language isolation',
-  },
-  {
-    from: 'src/runtime/',
-    forbidden: [
-      'src/compiler/',
-      'src/language/',
-      'src/parse.ts',
-      'src/params.ts',
-      'src/from.ts',
-      'src/where.ts',
-      'src/cte.ts',
-      'src/case.ts',
-      'src/functions.ts',
-    ],
-    name: 'runtime isolation',
-  },
-  {
-    from: 'src/compiler/',
-    forbidden: ['src/runtime/'],
-    allow: ['src/compiler/legacy.ts'],
-    name: 'compiler isolation',
-  },
-  {
-    from: 'src/compiler/next/',
-    forbidden: ['src/compiler/legacy.ts'],
-    name: 'next compiler isolation',
-  },
-  {
-    from: 'src/tooling/',
-    forbidden: [
-      'src/compiler/next/',
-      'src/compiler/legacy.ts',
-      'src/language/',
-      'src/runtime/',
-      'src/public/',
-    ],
-    name: 'tooling isolation',
-  },
-  {
-    from: 'ts-plugin/src/',
-    forbidden: ['src/compiler/'],
-    allowTargets: ['src/compiler/analysis.ts'],
-    name: 'editor plugin contract',
-  },
+const LAYERS = [
+  { name: 'facade', prefix: 'packages/core/src/index.ts' },
+  { name: 'language', prefix: 'packages/core/src/language/' },
+  { name: 'schema', prefix: 'packages/core/src/schema/' },
+  { name: 'compiler', prefix: 'packages/core/src/compiler/' },
+  { name: 'runtime', prefix: 'packages/core/src/runtime/' },
+  { name: 'adapter', prefix: 'packages/core/src/adapters/' },
+  { name: 'public', prefix: 'packages/core/src/public/' },
+  { name: 'tooling', prefix: 'packages/core/src/tooling/' },
+  { name: 'cli', prefix: 'packages/core/src/cli/' },
+  { name: 'plugin', prefix: 'packages/ts-plugin/src/' },
 ];
+
+const ALLOWED_DEPENDENCIES = new Map([
+  ['facade', new Set(['public'])],
+  ['language', new Set(['language'])],
+  ['schema', new Set(['schema'])],
+  ['compiler', new Set(['compiler', 'language', 'schema'])],
+  ['runtime', new Set(['runtime'])],
+  ['adapter', new Set(['adapter', 'public', 'runtime', 'schema'])],
+  ['public', new Set(['public', 'compiler', 'language', 'runtime', 'schema'])],
+  ['tooling', new Set(['tooling', 'schema'])],
+  ['cli', new Set(['cli', 'tooling'])],
+  ['plugin', new Set(['plugin'])],
+]);
+
+const ALLOWED_TARGETS = new Map([
+  ['plugin', new Set(['packages/core/src/compiler/analysis.ts'])],
+]);
 
 function normalize(path) {
   return path.replaceAll('\\', '/');
@@ -83,10 +58,43 @@ function collectSourceFiles(root, directory = 'src') {
   });
 }
 
-function importSpecifiers(source) {
-  return [...source.matchAll(
-    /(?:import|export)\s+(?:type\s+)?(?:[^'";]+?\s+from\s+)?['"](\.[^'"]+)['"]/g,
-  )].map((match) => match[1]);
+function importSpecifiers(source, fileName) {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const specifiers = [];
+
+  function addLiteral(node) {
+    if (node !== undefined && ts.isStringLiteralLike(node) && node.text.startsWith('.')) {
+      specifiers.push(node.text);
+    }
+  }
+
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      addLiteral(node.moduleSpecifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      addLiteral(node.moduleReference.expression);
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      addLiteral(node.argument.literal);
+    } else if (ts.isCallExpression(node)) {
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      if (isDynamicImport || isRequire) {
+        addLiteral(node.arguments[0]);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return specifiers;
 }
 
 function sourceCandidates(absolute) {
@@ -116,6 +124,10 @@ function matchesPrefix(path, prefix) {
   return prefix.endsWith('/') ? path.startsWith(prefix) : path === prefix;
 }
 
+function layerOf(path) {
+  return LAYERS.find((layer) => matchesPrefix(path, layer.prefix))?.name;
+}
+
 export function checkArchitecture(root) {
   const violations = [];
 
@@ -125,18 +137,26 @@ export function checkArchitecture(root) {
 
   for (const sourceFile of sourceFiles) {
     const source = readFileSync(join(root, sourceFile), 'utf8');
-    for (const specifier of importSpecifiers(source)) {
+    const sourceLayer = layerOf(sourceFile);
+    if (sourceLayer === undefined) {
+      violations.push(`${sourceFile} is outside the declared architecture layers`);
+      continue;
+    }
+    for (const specifier of importSpecifiers(source, sourceFile)) {
       const target = resolveProjectImport(root, sourceFile, specifier);
-      for (const rule of RULES) {
-        if (!sourceFile.startsWith(rule.from) || rule.allow?.includes(sourceFile)) {
-          continue;
-        }
-        const targetAllowed = rule.allowTargets?.some((prefix) =>
-          matchesPrefix(target, prefix),
-        );
-        if (!targetAllowed && rule.forbidden.some((prefix) => matchesPrefix(target, prefix))) {
-          violations.push(`${sourceFile} -> ${target} violates ${rule.name}`);
-        }
+      const targetLayer = layerOf(target);
+      const exactTargetAllowed = ALLOWED_TARGETS.get(sourceLayer)?.has(target) ?? false;
+      if (exactTargetAllowed) {
+        continue;
+      }
+      if (
+        targetLayer !== undefined &&
+        ALLOWED_DEPENDENCIES.get(sourceLayer)?.has(targetLayer)
+      ) {
+        continue;
+      }
+      if (target.startsWith('packages/core/src/') || target.startsWith('packages/ts-plugin/src/')) {
+        violations.push(`${sourceFile} -> ${target} violates ${sourceLayer} isolation`);
       }
     }
   }
@@ -145,7 +165,7 @@ export function checkArchitecture(root) {
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = checkArchitecture(process.cwd());
+  const violations = checkArchitecture(REPO_ROOT);
   for (const violation of violations) {
     process.stderr.write(`${violation}\n`);
   }

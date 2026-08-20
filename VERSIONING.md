@@ -65,16 +65,15 @@ The supported ranges are the ones declared in `peerDependencies` and `engines`. 
 - Dropping a version from either supported range is a major.
 - A new TypeScript release breaking inference that used to work is a **bug**, fixed in a patch. New TypeScript versions ship their own breaking changes; absorbing them is this library's problem, not a reason to bump anything here.
 
-The editor plugin is a separate package, [`@owlsql/ts-plugin`](ts-plugin/README.md), with its own version and its own narrower TypeScript range. This policy does not cover it, and it is deliberately staying on `0.x`: it is built on the classic TypeScript compiler API, whose availability is decided upstream, so it is in no position to promise stability. Keeping the two apart is what lets this package support TypeScript 7 while the plugin cannot.
+The editor plugin is a separate package, [`@owlsql/ts-plugin`](packages/ts-plugin/README.md), with its own version and its own narrower TypeScript range. This policy does not cover it, and it is deliberately staying on `0.x`: it is built on the classic TypeScript compiler API, whose availability is decided upstream, so it is in no position to promise stability. Keeping the two apart is what lets this package support TypeScript 7 while the plugin cannot.
 
 ## Not covered
 
 No compatibility guarantee, changeable in any release:
 
 - The message text inside `QueryTypeError<...>`. Match on the presence of the error, never on its wording.
-- The parser internals exported for advanced tooling: `ParseSelect`, `ParseStatement`, `ParsedStatement`, `Source`, `FunctionReturnTypes`.
 - CLI human-readable output — progress lines, error phrasing, help text. Exit codes *are* covered.
-- Compile-time cost. The [type-instantiation budget](CONTRIBUTING.md#the-type-instantiation-budget) exists to keep this honest, but a release may legitimately raise it.
+- Compile-time cost. The [type-instantiation budget](CONTRIBUTING.md#the-type-instantiation-budget) exists to keep this honest, but a release may legitimately raise it. Any hard ceiling increase is measured and reviewed in the same change.
 
 ## Deprecation
 
