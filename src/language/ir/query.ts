@@ -5,7 +5,7 @@ import type {
   ProjectionIR,
 } from './projection.js';
 import type { SourceIR } from './source.js';
-import type { OutputIR, WriteTargetIR } from './write.js';
+import type { AssignmentIR, OutputIR, WriteTargetIR } from './write.js';
 
 export type { ProjectionIR } from './projection.js';
 
@@ -101,5 +101,26 @@ export interface InsertQueryIR<
   target: Target;
   columns: Columns;
   source: Source;
+  output: Output;
+}
+
+export interface UpdateQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Assignments extends readonly AssignmentIR[] = readonly AssignmentIR[],
+  Sources extends readonly SourceIR[] = readonly SourceIR[],
+  Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+> {
+  kind: 'update';
+  target: Target;
+  assignments: Assignments;
+  sources: Sources;
+  predicates: Predicates;
   output: Output;
 }

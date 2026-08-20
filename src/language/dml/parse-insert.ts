@@ -9,6 +9,7 @@ import type {
   SplitAtTopLevelKeyword,
   SplitColumnList,
   StripQualifier,
+  TakeUntilTopLevelKeyword,
   Trim,
   Unquote,
 } from '../../string.js';
@@ -31,7 +32,10 @@ type InsertBoundary =
   | 'output'
   | 'returning';
 
-type IsInsertBoundary<Token extends string> = Lowercase<Token> extends InsertBoundary
+type IsWriteBoundary<
+  Token extends string,
+  Boundary extends string,
+> = Lowercase<Token> extends Lowercase<Boundary>
   ? true
   : false;
 
@@ -43,7 +47,10 @@ type RestAfterTarget<Sql extends string> = FirstWord<Trim<Sql>> extends `${strin
     : ''
   : Trim<DropFirstWord<Trim<Sql>>>;
 
-type TargetParts<AfterInto extends string> = CleanTarget<
+export type ParseWriteTarget<
+  AfterInto extends string,
+  Boundary extends string,
+> = CleanTarget<
   FirstWord<Trim<AfterInto>>
 > extends infer Name extends string
   ? RestAfterTarget<AfterInto> extends infer Rest extends string
@@ -57,7 +64,7 @@ type TargetParts<AfterInto extends string> = CleanTarget<
                 rest: Trim<DropFirstWord<DropFirstWord<Rest>>>;
               }
             : never
-          : IsInsertBoundary<Head> extends true
+          : IsWriteBoundary<Head, Boundary> extends true
             ? { target: WriteTargetIR<Name>; rest: Rest }
             : {
                 target: WriteTargetIR<Name, CleanTarget<Head>>;
@@ -148,18 +155,32 @@ type OutputText<Sql extends string> = [
     ? { mode: 'returning'; text: After }
     : { mode: 'none'; text: '' };
 
-type ParseOutput<Sql extends string> = OutputText<Sql> extends {
+export type ParseWriteOutput<
+  Sql extends string,
+  StopKeyword extends string = never,
+> = OutputText<Sql> extends {
   mode: infer Mode extends 'none' | 'returning' | 'output';
   text: infer Text extends string;
 }
   ? Mode extends 'none'
     ? OutputIR<'none', []>
-    : OutputIR<
-        Mode,
-        ParseProjectionList<
-          JoinEntries<StripPseudoQualifiers<SplitColumnList<Text>>>
+    : [StopKeyword] extends [never]
+      ? OutputIR<
+          Mode,
+          ParseProjectionList<
+            JoinEntries<StripPseudoQualifiers<SplitColumnList<Text>>>
+          >
         >
-      >
+      : OutputIR<
+          Mode,
+          ParseProjectionList<
+            JoinEntries<
+              StripPseudoQualifiers<
+                SplitColumnList<TakeUntilTopLevelKeyword<Text, StopKeyword>>
+              >
+            >
+          >
+        >
   : never;
 
 type ParseSource<Rest extends string> = [
@@ -213,7 +234,7 @@ type ParseFatal<Sql extends string, Error = MalformedInsert<Sql>> = {
 };
 
 type BuildInsert<Sql extends string, AfterInto extends string> =
-  TargetParts<AfterInto> extends {
+  ParseWriteTarget<AfterInto, InsertBoundary> extends {
     target: infer Target extends WriteTargetIR;
     rest: infer Rest extends string;
   }
@@ -225,7 +246,7 @@ type BuildInsert<Sql extends string, AfterInto extends string> =
         ? Source extends InsertValuesIR | InsertSelectIR | InsertDefaultValuesIR
           ? {
               kind: 'ok';
-              value: InsertQueryIR<Target, Columns, Source, ParseOutput<Sql>>;
+              value: InsertQueryIR<Target, Columns, Source, ParseWriteOutput<Sql, 'values'>>;
               diagnostics: [];
             }
           : Source extends {

@@ -155,7 +155,7 @@ export type AnalyzePredicate<
   Predicate extends PredicateIR,
 > = AnalyzePredicateTokens<DB, CurrentScope, PredicateText<Predicate['fragment']>>;
 
-type AnalyzePredicates<
+export type AnalyzePredicates<
   DB,
   CurrentScope,
   Predicates extends readonly PredicateIR[],

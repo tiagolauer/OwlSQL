@@ -7,6 +7,7 @@ import type {
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { CompileSelect } from './compile-select.js';
 import type { CompileInsert, InferInsertParams } from './compile-insert.js';
+import type { CompileUpdate, InferUpdateParams } from './compile-update.js';
 import type { CompileWith, InferWithParams } from './compile-with.js';
 import type { InferNextParams } from './infer-params.js';
 
@@ -27,6 +28,8 @@ export type CompileNext<
     ? CompileSelect<DB, Sql>
     : StatementKind<Sql> extends 'insert'
       ? CompileInsert<DB, Sql>
+    : StatementKind<Sql> extends 'update'
+      ? CompileUpdate<DB, Sql>
     : StatementKind<Sql> extends 'with'
       ? CompileWith<DB, Sql>
       : CompileFatal<unknown[], [UnsupportedStatement<Sql>]>;
@@ -65,6 +68,29 @@ export type NextInsertStrictRow<DB, Sql extends string> =
 
 export type NextInsertInferParams<DB, Sql extends string> =
   InferInsertParams<DB, Sql>;
+
+export type NextUpdateQuery<DB, Sql extends string> =
+  ApplyLoosePolicy<CompileUpdate<DB, Sql, null, false>>;
+
+export type NextUpdateStrictQuery<DB, Sql extends string> =
+  ApplyStrictPolicy<CompileUpdate<DB, Sql>>;
+
+export type NextUpdateRow<DB, Sql extends string> =
+  NextUpdateQuery<DB, Sql> extends infer Result
+    ? Result extends readonly (infer Row)[]
+      ? Row
+      : Result
+    : never;
+
+export type NextUpdateStrictRow<DB, Sql extends string> =
+  NextUpdateStrictQuery<DB, Sql> extends infer Result
+    ? Result extends readonly (infer Row)[]
+      ? Row
+      : Result
+    : never;
+
+export type NextUpdateInferParams<DB, Sql extends string> =
+  InferUpdateParams<DB, Sql>;
 
 export type NextRow<DB, Sql extends string> =
   NextQuery<DB, Sql> extends infer Result

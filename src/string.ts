@@ -510,3 +510,30 @@ export type SplitAtTopLevelKeyword<
       ? { before: Trim<Accumulated>; after: '' }
       : never
     : never;
+
+export type TakeUntilTopLevelKeyword<
+  S extends string,
+  Keywords extends string,
+  Depth extends unknown[] = [],
+  Accumulated extends string = '',
+> = S extends `${infer Head} ${infer Tail}`
+  ? Depth extends []
+    ? Lowercase<Head> extends Lowercase<Keywords>
+      ? Trim<Accumulated>
+      : TakeUntilTopLevelKeyword<
+          Tail,
+          Keywords,
+          ApplyParenDelta<Depth, Head>,
+          Accumulated extends '' ? Head : `${Accumulated} ${Head}`
+        >
+    : TakeUntilTopLevelKeyword<
+        Tail,
+        Keywords,
+        ApplyParenDelta<Depth, Head>,
+        Accumulated extends '' ? Head : `${Accumulated} ${Head}`
+      >
+  : Depth extends []
+    ? Lowercase<S> extends Lowercase<Keywords>
+      ? Trim<Accumulated>
+      : Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>
+    : Trim<Accumulated extends '' ? S : `${Accumulated} ${S}`>;
