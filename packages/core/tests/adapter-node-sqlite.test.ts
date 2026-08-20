@@ -183,7 +183,7 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
     const ddl = await db.query('create table t2 (a integer)');
     expect(isOk(ddl)).toBe(true);
     if (isOk(ddl)) {
-      expect(ddl.meta).toEqual({});
+      expect(ddl.meta).toEqual({ rowCount: 0 });
     }
 
     const rows = await db.query('select name from users where id = ?', 9);
@@ -247,8 +247,8 @@ describe.skipIf(!sqliteAvailable)('createNodeSqliteExecutor', () => {
   });
 });
 
-describe('createNodeSqliteExecutor column detection fallback', () => {
-  it('classifies statements from SQL when StatementSync.columns is unavailable', async () => {
+describe('createNodeSqliteExecutor column metadata fallback', () => {
+  it('executes through all without interpreting SQL when columns is unavailable', async () => {
     const insertStatement = {
       run: vi.fn().mockReturnValue({ changes: 1, lastInsertRowid: 7 }),
       all: vi.fn().mockReturnValue([]),
@@ -276,27 +276,21 @@ describe('createNodeSqliteExecutor column detection fallback', () => {
     } as unknown as import('node:sqlite').DatabaseSync;
     const executor = createNodeSqliteExecutor(sqlite);
 
-    await expect(executor('insert into users (name) values (?)', ['ada'])).resolves.toEqual({
-      rows: [],
-      meta: { rowCount: 1, lastInsertRowid: 7 },
-    });
-    expect(insertStatement.run).toHaveBeenCalledWith('ada');
-    expect(insertStatement.all).not.toHaveBeenCalled();
+    await expect(executor('insert into users (name) values (?)', ['ada'])).resolves.toEqual([]);
+    expect(insertStatement.all).toHaveBeenCalledWith('ada');
+    expect(insertStatement.run).not.toHaveBeenCalled();
 
     await expect(executor('select id from users', [])).resolves.toEqual([{ id: 7 }]);
     expect(selectStatement.all).toHaveBeenCalledWith();
     expect(selectStatement.run).not.toHaveBeenCalled();
 
-    await expect(executor('create table t2 (a integer)', [])).resolves.toEqual({
-      rows: [],
-      meta: {},
-    });
-    expect(ddlStatement.run).toHaveBeenCalledWith();
-    expect(ddlStatement.all).not.toHaveBeenCalled();
+    await expect(executor('create table t2 (a integer)', [])).resolves.toEqual([]);
+    expect(ddlStatement.all).toHaveBeenCalledWith();
+    expect(ddlStatement.run).not.toHaveBeenCalled();
 
     await expect(
       executor('insert into users (name) values (?) returning id', ['grace']),
-    ).resolves.toEqual({ rows: [{ id: 8 }], meta: {} });
+    ).resolves.toEqual([{ id: 8 }]);
     expect(returningStatement.all).toHaveBeenCalledWith('grace');
     expect(returningStatement.run).not.toHaveBeenCalled();
   });
