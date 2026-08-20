@@ -35,19 +35,12 @@ const RULES = [
   {
     from: 'src/compiler/',
     forbidden: ['src/runtime/'],
-    allow: ['src/compiler/legacy.ts'],
     name: 'compiler isolation',
-  },
-  {
-    from: 'src/compiler/next/',
-    forbidden: ['src/compiler/legacy.ts'],
-    name: 'next compiler isolation',
   },
   {
     from: 'src/tooling/',
     forbidden: [
       'src/compiler/next/',
-      'src/compiler/legacy.ts',
       'src/language/',
       'src/runtime/',
       'src/public/',

@@ -171,3 +171,10 @@ export interface MergeQueryIR<
   output: Output;
   sourceValues: SourceValues;
 }
+
+export type AnyQueryIR =
+  | SelectQueryIR
+  | InsertQueryIR
+  | UpdateQueryIR
+  | DeleteQueryIR
+  | MergeQueryIR;

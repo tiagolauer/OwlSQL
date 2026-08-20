@@ -95,15 +95,17 @@ type AssignmentColumns<
   ? AssignmentColumns<Tail, [...Result, Head['target']]>
   : Result;
 
-type MergeScope<IR extends MergeQueryIR> = Scope<
-  [TargetSource<IR>, ...IR['sources']]
+type MergeScope<IR extends MergeQueryIR, ParentScope = null> = Scope<
+  [TargetSource<IR>, ...IR['sources']],
+  ParentScope
 >;
 
-type MergeOutputScope<IR extends MergeQueryIR> = Scope<
+type MergeOutputScope<IR extends MergeQueryIR, ParentScope = null> = Scope<
   [
     TargetSource<IR>,
     DerivedSourceIR<'$merge', { $action: MergeActionValue }>,
-  ]
+  ],
+  ParentScope
 >;
 
 export type CompileMergeIR<
@@ -111,7 +113,7 @@ export type CompileMergeIR<
   IR extends MergeQueryIR,
   ParentScope = null,
   Validate extends boolean = true,
-> = InferOutput<DB, MergeOutputScope<IR>, IR['output']> extends CompileOk<
+> = InferOutput<DB, MergeOutputScope<IR, ParentScope>, IR['output']> extends CompileOk<
   infer Rows,
   infer OutputDiagnostics
 >
@@ -121,7 +123,7 @@ export type CompileMergeIR<
         ...TargetDiagnostics<DB, IR['target'], Validate>,
         ...SourceDiagnostics<DB, IR['sources'], Validate>,
         ...(Validate extends true
-          ? AnalyzePredicates<DB, MergeScope<IR>, IR['predicates']>
+          ? AnalyzePredicates<DB, MergeScope<IR, ParentScope>, IR['predicates']>
           : []),
         ...OutputDiagnostics,
       ]
@@ -186,19 +188,24 @@ type ScanActions<
       : ScanActions<DB, IR, Tail, State>
   : State;
 
-export type InferMergeParamsFromIR<DB, IR extends MergeQueryIR> =
-  ScanFragments<IR['sourceValues'], EmptyParamState> extends infer SourceState extends AnyParamState
+export type InferMergeParamStateFromIR<
+  DB,
+  IR extends MergeQueryIR,
+  State extends AnyParamState = EmptyParamState,
+  ParentScope = null,
+> = ScanFragments<IR['sourceValues'], State> extends infer SourceState extends AnyParamState
     ? ScanPredicateParams<
         DB,
-        MergeScope<IR>,
+        MergeScope<IR, ParentScope>,
         IR['predicates'],
         SourceState
       > extends infer PredicateState extends AnyParamState
-      ? ScanActions<DB, IR, IR['actions'], PredicateState> extends infer FinalState extends AnyParamState
-        ? ParamValues<FinalState>
-        : unknown[]
-      : unknown[]
-    : unknown[];
+      ? ScanActions<DB, IR, IR['actions'], PredicateState>
+      : State
+    : State;
+
+export type InferMergeParamsFromIR<DB, IR extends MergeQueryIR> =
+  ParamValues<InferMergeParamStateFromIR<DB, IR>>;
 
 export type InferMergeParams<DB, Sql extends string> =
   ParseMergeIR<Sql> extends {

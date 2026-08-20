@@ -155,17 +155,22 @@ type ScanAssignments<
     : never
   : State;
 
-export type InferUpdateParamsFromIR<DB, IR extends UpdateQueryIR> =
-  ScanAssignments<DB, IR, IR['assignments']> extends infer AssignmentState extends AnyParamState
+export type InferUpdateParamStateFromIR<
+  DB,
+  IR extends UpdateQueryIR,
+  State extends AnyParamState = EmptyParamState,
+  ParentScope = null,
+> = ScanAssignments<DB, IR, IR['assignments'], State> extends infer AssignmentState extends AnyParamState
     ? ScanPredicateParams<
         DB,
-        Scope<[TargetSource<IR>, ...IR['sources']]>,
+        Scope<[TargetSource<IR>, ...IR['sources']], ParentScope>,
         IR['predicates'],
         AssignmentState
-      > extends infer FinalState extends AnyParamState
-      ? ParamValues<FinalState>
-      : unknown[]
-    : unknown[];
+      >
+    : State;
+
+export type InferUpdateParamsFromIR<DB, IR extends UpdateQueryIR> =
+  ParamValues<InferUpdateParamStateFromIR<DB, IR>>;
 
 export type InferUpdateParams<DB, Sql extends string> =
   ParseUpdateIR<Sql> extends {

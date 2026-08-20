@@ -4,8 +4,14 @@ import type {
   ColumnProjectionIR,
 } from '../../language/ir/projection.js';
 import type {
+  AnyQueryIR,
+  DeleteQueryIR,
+  InsertQueryIR,
+  InsertSelectIR,
+  MergeQueryIR,
   ProjectionIR,
   SelectQueryIR,
+  UpdateQueryIR,
 } from '../../language/ir/query.js';
 import type { CteSourceIR } from '../../language/ir/source.js';
 import type {
@@ -22,6 +28,22 @@ import type {
   CompileSelectIR,
   ResolveSelectSources,
 } from './compile-select.js';
+import type {
+  CompileDeleteIR,
+  InferDeleteParamStateFromIR,
+} from './compile-delete.js';
+import type {
+  CompileInsertIR,
+  InferInsertParamStateFromIR,
+} from './compile-insert.js';
+import type {
+  CompileMergeIR,
+  InferMergeParamStateFromIR,
+} from './compile-merge.js';
+import type {
+  CompileUpdateIR,
+  InferUpdateParamStateFromIR,
+} from './compile-update.js';
 import type {
   AnyParamState,
   EmptyParamState,
@@ -66,6 +88,23 @@ type RenameKeys<
 
 type Flatten<Value> = { [Key in keyof Value]: Value[Key] };
 
+type CompileMain<
+  DB,
+  Query extends AnyQueryIR,
+  ParentScope,
+  ValidatePredicates extends boolean,
+> = Query extends SelectQueryIR
+  ? CompileSelectIR<DB, Query, ParentScope, ValidatePredicates>
+  : Query extends InsertQueryIR
+    ? CompileInsertIR<DB, Query, ParentScope, ValidatePredicates>
+    : Query extends UpdateQueryIR
+      ? CompileUpdateIR<DB, Query, ParentScope, ValidatePredicates>
+      : Query extends DeleteQueryIR
+        ? CompileDeleteIR<DB, Query, ParentScope, ValidatePredicates>
+        : Query extends MergeQueryIR
+          ? CompileMergeIR<DB, Query, ParentScope, ValidatePredicates>
+          : never;
+
 export type CteOutput<
   Row,
   Query extends SelectQueryIR,
@@ -84,7 +123,7 @@ type CteBindingRow<
 type CompileCtes<
   DB,
   Ctes extends readonly AnyCteIR[],
-  Query extends SelectQueryIR,
+  Query extends AnyQueryIR,
   ParentScope,
   ValidatePredicates extends boolean,
   Sources extends readonly CteSourceIR[] = [],
@@ -132,7 +171,7 @@ type CompileCtes<
         ? CompileFatal<unknown[], [...Diagnostics, ...NestedDiagnostics]>
         : never
     : never
-  : CompileSelectIR<
+  : CompileMain<
       DB,
       Query,
       Scope<Sources, ParentScope>,
@@ -173,7 +212,7 @@ export type CompileWith<
 type InferCteParams<
   DB,
   Ctes extends readonly AnyCteIR[],
-  Query extends SelectQueryIR,
+  Query extends AnyQueryIR,
   ParentScope,
   Sources extends readonly CteSourceIR[] = [],
   State extends AnyParamState = EmptyParamState,
@@ -220,30 +259,42 @@ type InferCteParams<
         >
       : never
     : State
-  : InferParamsFromIR<
-      DB,
-      Query,
-      State,
-      Scope<
-        ResolveSelectSources<Query, Scope<Sources, ParentScope>>,
-        Scope<Sources, ParentScope>
+  : Query extends SelectQueryIR
+    ? InferParamsFromIR<
+        DB,
+        Query,
+        State,
+        Scope<
+          ResolveSelectSources<Query, Scope<Sources, ParentScope>>,
+          Scope<Sources, ParentScope>
+        >
       >
-    >;
+    : Query extends InsertQueryIR
+      ? InferInsertParamStateFromIR<DB, Query, State, Scope<Sources, ParentScope>>
+      : Query extends UpdateQueryIR
+        ? InferUpdateParamStateFromIR<DB, Query, State, Scope<Sources, ParentScope>>
+        : Query extends DeleteQueryIR
+          ? InferDeleteParamStateFromIR<DB, Query, State, Scope<Sources, ParentScope>>
+          : Query extends MergeQueryIR
+            ? InferMergeParamStateFromIR<DB, Query, State, Scope<Sources, ParentScope>>
+            : State;
 
 export type InferWithParams<DB, Sql extends string, ParentScope = null> =
   ParseWithIR<Sql> extends infer Parsed
     ? Parsed extends {
         kind: 'ok';
-        value: infer IR extends WithQueryIR;
-      }
-      ? InferCteParams<
-          DB,
-          IR['ctes'],
-          IR['query'],
-          ParentScope
-        > extends infer State extends AnyParamState
-        ? ParamValues<State>
-        : unknown[]
+      value: infer IR extends WithQueryIR;
+    }
+      ? IR['query'] extends { kind: 'insert'; source: InsertSelectIR }
+        ? unknown[]
+        : InferCteParams<
+            DB,
+            IR['ctes'],
+            IR['query'],
+            ParentScope
+          > extends infer State extends AnyParamState
+          ? ParamValues<State>
+          : unknown[]
       : Parsed extends {
           kind: 'fatal';
           diagnostics: readonly [

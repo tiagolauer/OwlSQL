@@ -183,6 +183,22 @@ export type InferInsertParamsFromIR<
       ? unknown[]
       : [];
 
+export type InferInsertParamStateFromIR<
+  DB,
+  IR extends InsertQueryIR,
+  State extends AnyParamState = EmptyParamState,
+  ParentScope = null,
+> = IR['source'] extends InsertValuesIR<infer Rows, infer Tail>
+  ? ScanRows<DB, IR['target'], IR['columns'], Rows, State> extends infer ValuesState extends AnyParamState
+    ? ScanParamFragment<
+        DB,
+        Scope<[TargetSource<IR['target']>], ParentScope>,
+        Tail,
+        ValuesState
+      >
+    : State
+  : State;
+
 export type InferInsertParams<DB, Sql extends string> =
   ParseInsertIR<Sql> extends {
     kind: 'ok';

@@ -2,7 +2,7 @@ import type { StatementKind } from '../../language/lexical/statement.js';
 import type {
   ApplyLoosePolicy,
   ApplyStrictPolicy,
-  CompileFatal,
+  CompileOk,
 } from '../contracts/compilation.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { CompileSelect } from './compile-select.js';
@@ -15,8 +15,8 @@ import type { InferNextParams } from './infer-params.js';
 
 type UnsupportedStatement<Sql extends string> = Diagnostic<
   'UNSUPPORTED_STATEMENT',
-  'unsupported statement',
-  'fatal',
+  'unsupported or unrecognized statement',
+  'error',
   'statement',
   Sql
 >;
@@ -24,27 +24,28 @@ type UnsupportedStatement<Sql extends string> = Diagnostic<
 export type CompileNext<
   DB,
   Sql extends string,
+  ValidatePredicates extends boolean = true,
 > = Sql extends `select ${string}`
-  ? CompileSelect<DB, Sql>
+  ? CompileSelect<DB, Sql, null, ValidatePredicates>
   : StatementKind<Sql> extends 'select'
-    ? CompileSelect<DB, Sql>
+    ? CompileSelect<DB, Sql, null, ValidatePredicates>
     : StatementKind<Sql> extends 'insert'
-      ? CompileInsert<DB, Sql>
+      ? CompileInsert<DB, Sql, null, ValidatePredicates>
     : StatementKind<Sql> extends 'update'
-      ? CompileUpdate<DB, Sql>
+      ? CompileUpdate<DB, Sql, null, ValidatePredicates>
     : StatementKind<Sql> extends 'delete'
-      ? CompileDelete<DB, Sql>
+      ? CompileDelete<DB, Sql, null, ValidatePredicates>
     : StatementKind<Sql> extends 'merge'
-      ? CompileMerge<DB, Sql>
+      ? CompileMerge<DB, Sql, null, ValidatePredicates>
     : StatementKind<Sql> extends 'with'
-      ? CompileWith<DB, Sql>
-      : CompileFatal<unknown[], [UnsupportedStatement<Sql>]>;
+      ? CompileWith<DB, Sql, null, ValidatePredicates>
+      : CompileOk<never[], [UnsupportedStatement<Sql>]>;
 
 export type NextQuery<DB, Sql extends string> =
-  ApplyLoosePolicy<CompileSelect<DB, Sql, null, false>>;
+  ApplyLoosePolicy<CompileNext<DB, Sql, false>>;
 
 export type NextStrictQuery<DB, Sql extends string> =
-  ApplyStrictPolicy<CompileSelect<DB, Sql>>;
+  ApplyStrictPolicy<CompileNext<DB, Sql>>;
 
 export type NextWithQuery<DB, Sql extends string> =
   ApplyLoosePolicy<CompileWith<DB, Sql, null, false>>;
@@ -161,3 +162,19 @@ export type NextStrictRow<DB, Sql extends string> =
 export type NextInferParams<DB, Sql extends string> = InferNextParams<DB, Sql>;
 
 export type NextWithInferParams<DB, Sql extends string> = InferWithParams<DB, Sql>;
+
+export type NextParams<DB, Sql extends string> = Sql extends `select ${string}`
+  ? InferNextParams<DB, Sql>
+  : StatementKind<Sql> extends 'select'
+    ? InferNextParams<DB, Sql>
+    : StatementKind<Sql> extends 'with'
+      ? InferWithParams<DB, Sql>
+      : StatementKind<Sql> extends 'insert'
+        ? InferInsertParams<DB, Sql>
+        : StatementKind<Sql> extends 'update'
+          ? InferUpdateParams<DB, Sql>
+          : StatementKind<Sql> extends 'delete'
+            ? InferDeleteParams<DB, Sql>
+            : StatementKind<Sql> extends 'merge'
+              ? InferMergeParams<DB, Sql>
+              : unknown[];

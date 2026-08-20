@@ -18,9 +18,13 @@ type KindOf<Token extends string> =
   : IsKeyword<Token, 'merge'> extends true ? 'merge'
   : 'unknown';
 
-export type StatementKind<Sql extends string> = KindOf<FirstWord<Trim<Sql>>> extends infer Direct extends StatementKindName
+type StripLeadingParens<Token extends string> = Token extends `(${infer Rest}`
+  ? StripLeadingParens<Rest>
+  : Token;
+
+export type StatementKind<Sql extends string> = KindOf<StripLeadingParens<FirstWord<Trim<Sql>>>> extends infer Direct extends StatementKindName
   ? Direct extends 'unknown'
-    ? KindOf<FirstWord<Normalize<Sql>>>
+    ? KindOf<StripLeadingParens<FirstWord<Normalize<Sql>>>>
     : Direct
   : never;
 

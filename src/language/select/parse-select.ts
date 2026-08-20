@@ -260,38 +260,28 @@ type AddSetOperation<
     : Branch
   : Parsed;
 
-type HasSetOperation<Sql extends string> = Lowercase<Sql> extends
-  | `${string} union ${string}`
-  | `${string} intersect ${string}`
-  | `${string} except ${string}`
-  ? true
-  : false;
-
-type ParseSetBody<Body extends string, Sql extends string> =
-  HasSetOperation<Body> extends false
-    ? ParseBody<Body, Sql>
-    : SplitAtSet<Body> extends infer Set
-      ? [Set] extends [never]
-        ? ParseBody<Body, Sql>
-        : Set extends {
-            primary: infer Primary extends string;
-            kind: infer Kind extends SetOperationIR['kind'];
-            branch: infer Branch extends string;
-          }
-          ? AddSetOperation<
-              ParseBody<Primary, Sql>,
-              Kind,
-              ParseNormalized<Branch, Branch>
-            >
-          : ParseFatal<Sql>
-      : never;
-
 type ParseNormalized<Normalized extends string, Sql extends string> =
-  Normalized extends `${infer Select} ${infer Body}`
-    ? IsKeyword<Select, 'select'> extends true
-      ? ParseSetBody<StripSelectModifiers<Body>, Sql>
-      : ParseFatal<Sql>
-    : ParseFatal<Sql>;
+  SplitAtSet<Normalized> extends infer Set
+    ? [Set] extends [never]
+      ? Trim<Normalized> extends `(${infer Inner})`
+        ? ParseNormalized<Trim<Inner>, Sql>
+        : Normalized extends `${infer Select} ${infer Body}`
+          ? IsKeyword<Select, 'select'> extends true
+            ? ParseBody<StripSelectModifiers<Body>, Sql>
+            : ParseFatal<Sql>
+          : ParseFatal<Sql>
+      : Set extends {
+          primary: infer Primary extends string;
+          kind: infer Kind extends SetOperationIR['kind'];
+          branch: infer Branch extends string;
+        }
+        ? AddSetOperation<
+            ParseNormalized<Primary, Sql>,
+            Kind,
+            ParseNormalized<Branch, Branch>
+          >
+        : ParseFatal<Sql>
+    : never;
 
 export type ParseSelectIR<Sql extends string> = HasNonTrailingSemicolon<Sql> extends true
   ? ParseMultipleStatements<Sql>

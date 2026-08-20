@@ -7,13 +7,18 @@ import type {
   SplitColumnList,
   Trim,
 } from '../lexical/string.js';
+import type { StatementKind } from '../lexical/statement.js';
 import type { AnyCteIR, CteIR } from '../ir/cte.js';
-import type { SelectQueryIR } from '../ir/query.js';
+import type { AnyQueryIR, SelectQueryIR } from '../ir/query.js';
+import type { ParseDeleteIR } from '../dml/parse-delete.js';
+import type { ParseInsertIR } from '../dml/parse-insert.js';
+import type { ParseMergeIR } from '../dml/parse-merge.js';
+import type { ParseUpdateIR } from '../dml/parse-update.js';
 import type { ParseSelectIR } from '../select/parse-select.js';
 
 export interface WithQueryIR<
   Ctes extends readonly AnyCteIR[] = readonly AnyCteIR[],
-  Query extends SelectQueryIR = SelectQueryIR,
+  Query extends AnyQueryIR = AnyQueryIR,
 > {
   kind: 'with';
   ctes: Ctes;
@@ -27,6 +32,18 @@ type MalformedWith<Sql extends string> = {
   location: 'statement';
   reference: Sql;
 };
+
+type ParseMain<Sql extends string> = StatementKind<Sql> extends 'select'
+  ? ParseSelectIR<Sql>
+  : StatementKind<Sql> extends 'insert'
+    ? ParseInsertIR<Sql>
+    : StatementKind<Sql> extends 'update'
+      ? ParseUpdateIR<Sql>
+      : StatementKind<Sql> extends 'delete'
+        ? ParseDeleteIR<Sql>
+        : StatementKind<Sql> extends 'merge'
+          ? ParseMergeIR<Sql>
+          : ParseFatal<Sql>;
 
 type ParseFatal<Sql extends string> = {
   kind: 'fatal';
@@ -113,10 +130,10 @@ type ParseCteList<
     }
     ? Rest extends `,${infer Tail}`
       ? ParseCteList<Trim<Tail>, Recursive, Whole, [...Ctes, Cte]>
-      : ParseSelectIR<Rest> extends infer Main
+      : ParseMain<Rest> extends infer Main
         ? Main extends {
             kind: 'ok';
-            value: infer Query extends SelectQueryIR;
+            value: infer Query extends AnyQueryIR;
           }
           ? {
               kind: 'ok';

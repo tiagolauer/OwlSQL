@@ -94,15 +94,21 @@ export type CompileDelete<
       : never
   : never;
 
-export type InferDeleteParamsFromIR<DB, IR extends DeleteQueryIR> =
+export type InferDeleteParamStateFromIR<
+  DB,
+  IR extends DeleteQueryIR,
+  State extends AnyParamState = EmptyParamState,
+  ParentScope = null,
+> =
   ScanPredicateParams<
     DB,
-    Scope<[TargetSource<IR>, ...IR['sources']]>,
+    Scope<[TargetSource<IR>, ...IR['sources']], ParentScope>,
     IR['predicates'],
-    EmptyParamState
-  > extends infer State extends AnyParamState
-    ? ParamValues<State>
-    : unknown[];
+    State
+  >;
+
+export type InferDeleteParamsFromIR<DB, IR extends DeleteQueryIR> =
+  ParamValues<InferDeleteParamStateFromIR<DB, IR>>;
 
 export type InferDeleteParams<DB, Sql extends string> =
   ParseDeleteIR<Sql> extends {
