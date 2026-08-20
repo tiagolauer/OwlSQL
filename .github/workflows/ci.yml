@@ -96,6 +96,18 @@ jobs:
       - run: npm ci
       - run: npm run test:architecture
 
+  package-contract:
+    name: Packed package contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:package
+
   integration:
     name: Integration tests (real databases)
     runs-on: ubuntu-latest
