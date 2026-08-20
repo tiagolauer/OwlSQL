@@ -124,3 +124,22 @@ export interface UpdateQueryIR<
   predicates: Predicates;
   output: Output;
 }
+
+export interface DeleteQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Sources extends readonly SourceIR[] = readonly SourceIR[],
+  Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+> {
+  kind: 'delete';
+  target: Target;
+  sources: Sources;
+  predicates: Predicates;
+  output: Output;
+}

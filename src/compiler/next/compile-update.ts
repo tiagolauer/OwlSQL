@@ -1,5 +1,4 @@
 import type { AssignmentIR } from '../../language/ir/write.js';
-import type { PredicateIR } from '../../language/ir/predicate.js';
 import type { UpdateQueryIR } from '../../language/ir/query.js';
 import type { SourceIR, TableSourceIR } from '../../language/ir/source.js';
 import type { ParseUpdateIR } from '../../language/dml/parse-update.js';
@@ -15,7 +14,7 @@ import type {
   AnyParamState,
   EmptyParamState,
   ParamValues,
-  ScanParamFragment,
+  ScanPredicateParams,
   ScanTypedFragment,
 } from './infer-params.js';
 import type { ResolveWriteColumn } from './resolve-write-target.js';
@@ -156,28 +155,9 @@ type ScanAssignments<
     : never
   : State;
 
-type ScanPredicates<
-  DB,
-  CurrentScope,
-  Predicates extends readonly PredicateIR[],
-  State extends AnyParamState,
-> = Predicates extends readonly [
-  infer Head extends PredicateIR,
-  ...infer Tail extends PredicateIR[],
-]
-  ? ScanParamFragment<
-      DB,
-      CurrentScope,
-      Head['fragment'],
-      State
-    > extends infer Next extends AnyParamState
-    ? ScanPredicates<DB, CurrentScope, Tail, Next>
-    : never
-  : State;
-
 export type InferUpdateParamsFromIR<DB, IR extends UpdateQueryIR> =
   ScanAssignments<DB, IR, IR['assignments']> extends infer AssignmentState extends AnyParamState
-    ? ScanPredicates<
+    ? ScanPredicateParams<
         DB,
         Scope<[TargetSource<IR>, ...IR['sources']]>,
         IR['predicates'],

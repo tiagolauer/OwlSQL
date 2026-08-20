@@ -8,6 +8,7 @@ import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { CompileSelect } from './compile-select.js';
 import type { CompileInsert, InferInsertParams } from './compile-insert.js';
 import type { CompileUpdate, InferUpdateParams } from './compile-update.js';
+import type { CompileDelete, InferDeleteParams } from './compile-delete.js';
 import type { CompileWith, InferWithParams } from './compile-with.js';
 import type { InferNextParams } from './infer-params.js';
 
@@ -30,6 +31,8 @@ export type CompileNext<
       ? CompileInsert<DB, Sql>
     : StatementKind<Sql> extends 'update'
       ? CompileUpdate<DB, Sql>
+    : StatementKind<Sql> extends 'delete'
+      ? CompileDelete<DB, Sql>
     : StatementKind<Sql> extends 'with'
       ? CompileWith<DB, Sql>
       : CompileFatal<unknown[], [UnsupportedStatement<Sql>]>;
@@ -91,6 +94,29 @@ export type NextUpdateStrictRow<DB, Sql extends string> =
 
 export type NextUpdateInferParams<DB, Sql extends string> =
   InferUpdateParams<DB, Sql>;
+
+export type NextDeleteQuery<DB, Sql extends string> =
+  ApplyLoosePolicy<CompileDelete<DB, Sql, null, false>>;
+
+export type NextDeleteStrictQuery<DB, Sql extends string> =
+  ApplyStrictPolicy<CompileDelete<DB, Sql>>;
+
+export type NextDeleteRow<DB, Sql extends string> =
+  NextDeleteQuery<DB, Sql> extends infer Result
+    ? Result extends readonly (infer Row)[]
+      ? Row
+      : Result
+    : never;
+
+export type NextDeleteStrictRow<DB, Sql extends string> =
+  NextDeleteStrictQuery<DB, Sql> extends infer Result
+    ? Result extends readonly (infer Row)[]
+      ? Row
+      : Result
+    : never;
+
+export type NextDeleteInferParams<DB, Sql extends string> =
+  InferDeleteParams<DB, Sql>;
 
 export type NextRow<DB, Sql extends string> =
   NextQuery<DB, Sql> extends infer Result

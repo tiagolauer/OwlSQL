@@ -386,7 +386,7 @@ export type ScanTypedFragment<
   ? AddParam<Trim<Fragment>, Value, State>
   : ScanTypedParts<TypedCallArguments<Trim<Fragment>>, Value, State>;
 
-type ScanPredicates<
+export type ScanPredicateParams<
   DB,
   CurrentScope,
   Predicates extends readonly PredicateIR[],
@@ -401,7 +401,7 @@ type ScanPredicates<
       Head['fragment'],
       State
     > extends infer Next extends AnyParamState
-    ? ScanPredicates<DB, CurrentScope, Tail, Next>
+    ? ScanPredicateParams<DB, CurrentScope, Tail, Next>
     : never
   : State;
 
@@ -462,7 +462,7 @@ export type InferParamsFromIR<
   IR['projections'],
   State
 > extends infer ProjectionState extends AnyParamState
-  ? ScanPredicates<
+    ? ScanPredicateParams<
       DB,
       CurrentScope,
       IR['predicates'],
