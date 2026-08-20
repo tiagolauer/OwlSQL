@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_EXTENSIONS = ['.ts', '.cts', '.mts'];
+const SOURCE_DIRECTORIES = ['src', 'ts-plugin/src'];
 
 const RULES = [
   {
@@ -41,6 +42,23 @@ const RULES = [
     from: 'src/compiler/next/',
     forbidden: ['src/compiler/legacy.ts'],
     name: 'next compiler isolation',
+  },
+  {
+    from: 'src/tooling/',
+    forbidden: [
+      'src/compiler/next/',
+      'src/compiler/legacy.ts',
+      'src/language/',
+      'src/runtime/',
+      'src/public/',
+    ],
+    name: 'tooling isolation',
+  },
+  {
+    from: 'ts-plugin/src/',
+    forbidden: ['src/compiler/'],
+    allowTargets: ['src/compiler/analysis.ts'],
+    name: 'editor plugin contract',
   },
 ];
 
@@ -101,7 +119,11 @@ function matchesPrefix(path, prefix) {
 export function checkArchitecture(root) {
   const violations = [];
 
-  for (const sourceFile of collectSourceFiles(root)) {
+  const sourceFiles = SOURCE_DIRECTORIES.flatMap((directory) =>
+    collectSourceFiles(root, directory),
+  );
+
+  for (const sourceFile of sourceFiles) {
     const source = readFileSync(join(root, sourceFile), 'utf8');
     for (const specifier of importSpecifiers(source)) {
       const target = resolveProjectImport(root, sourceFile, specifier);
@@ -109,7 +131,10 @@ export function checkArchitecture(root) {
         if (!sourceFile.startsWith(rule.from) || rule.allow?.includes(sourceFile)) {
           continue;
         }
-        if (rule.forbidden.some((prefix) => matchesPrefix(target, prefix))) {
+        const targetAllowed = rule.allowTargets?.some((prefix) =>
+          matchesPrefix(target, prefix),
+        );
+        if (!targetAllowed && rule.forbidden.some((prefix) => matchesPrefix(target, prefix))) {
           violations.push(`${sourceFile} -> ${target} violates ${rule.name}`);
         }
       }
