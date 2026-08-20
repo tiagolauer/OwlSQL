@@ -73,7 +73,7 @@ No compatibility guarantee, changeable in any release:
 
 - The message text inside `QueryTypeError<...>`. Match on the presence of the error, never on its wording.
 - CLI human-readable output — progress lines, error phrasing, help text. Exit codes *are* covered.
-- Compile-time cost. The [type-instantiation budget](CONTRIBUTING.md#the-type-instantiation-budget) exists to keep this honest, but a release may legitimately raise it.
+- Compile-time cost. The [type-instantiation budget](CONTRIBUTING.md#the-type-instantiation-budget) exists to keep this honest, but a release may legitimately raise it. Any hard ceiling increase is measured and reviewed in the same change.
 
 ## Deprecation
 

@@ -6,6 +6,16 @@ import { fileURLToPath } from 'node:url';
 const TABLE_COUNT = 100;
 const FILLER_COLUMNS = 6;
 const SHAPE_REPEATS = 4;
+const CASES = [
+  'simple-select',
+  'ten-source-join',
+  'nested-cte-chain',
+  'correlated-subquery',
+  'hundred-projections',
+  'hundred-placeholders',
+  'strict-diagnostic',
+  'dml-output',
+];
 
 // Raised from 185,000 for #247: a quoted identifier may hold a space, and
 // finding out whether one does costs a full-string scan per query - roughly
@@ -48,16 +58,20 @@ const SHAPE_REPEATS = 4;
 // Raised from 235,000 for the M5 UPDATE cutover. Structured assignments,
 // predicates and output inference moved the fixture from 231,605 to 236,778
 // instantiations (+2.23%); 240,000 keeps a reviewed 1.36% margin.
-// Raised from 240,000 for the M5 MERGE cutover. Structured sources, actions,
-// `$action` output and parameter fragments moved the fixture from 239,943 to
-// 244,919 instantiations (+2.07%); 250,000 keeps a reviewed 2.07% margin.
-const MAX_INSTANTIATIONS = 250_000;
+// Reset for the v1 Next-only public surface. Removing Legacy and accidental
+// parser exports moved the fixture from 244,919 to 135,195 instantiations.
+// 150,000 keeps an 11% reviewed margin. The 100-projection stress case has a
+// separate 200,000 ceiling and every isolated case also has a 10% relative gate.
+const MAX_INSTANTIATIONS = 150_000;
+const MAX_CASE_INSTANTIATIONS = 200_000;
+const MAX_CASE_REGRESSION_PERCENT = 10;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PERF_DIR = join(ROOT, 'tests', 'performance');
 const GENERATED_DIR = join(PERF_DIR, 'generated');
 const BASELINE_FILE = join(PERF_DIR, 'baseline.json');
 const NEXT_BASELINE_FILE = join(PERF_DIR, 'select-next-baseline.json');
+const CASE_BASELINE_FILE = join(PERF_DIR, 'case-baseline.json');
 
 function tableName(index) {
   return `t_${String(index).padStart(3, '0')}`;
@@ -153,12 +167,12 @@ function readDiagnostic(output, label) {
   return match === null ? null : Number(match[1]);
 }
 
-function compile(configFile = 'tsconfig.json') {
+function compile(configFile = join(PERF_DIR, 'tsconfig.json')) {
   const tsc = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
   try {
     const output = execFileSync(
       process.execPath,
-      [tsc, '--noEmit', '--extendedDiagnostics', '-p', join(PERF_DIR, configFile)],
+      [tsc, '--noEmit', '--extendedDiagnostics', '-p', configFile],
       { encoding: 'utf8' },
     );
     const instantiations = readDiagnostic(output, 'Instantiations');
@@ -175,6 +189,22 @@ function compile(configFile = 'tsconfig.json') {
     process.stderr.write(`${error.stdout ?? ''}${error.stderr ?? ''}\n`);
     throw new Error('The type-budget fixture failed to compile.');
   }
+}
+
+function compileCases() {
+  return CASES.map((name) => {
+    const config = join(GENERATED_DIR, `${name}.json`);
+    writeFileSync(
+      config,
+      `${JSON.stringify({
+        extends: '../tsconfig.json',
+        files: ['schema.ts', `../cases/${name}.test-d.ts`],
+        include: [],
+      }, null, 2)}\n`,
+      'utf8',
+    );
+    return { name, ...compile(config) };
+  });
 }
 
 function readTypescriptVersion() {
@@ -203,14 +233,36 @@ function readBaseline(file) {
   return baseline.instantiations;
 }
 
+function writeCaseBaseline(cases) {
+  writeFileSync(
+    CASE_BASELINE_FILE,
+    `${JSON.stringify(Object.fromEntries(
+      cases.map(({ name, instantiations }) => [name, instantiations]),
+    ), null, 2)}\n`,
+    'utf8',
+  );
+}
+
+function readCaseBaseline() {
+  const baseline = JSON.parse(readFileSync(CASE_BASELINE_FILE, 'utf8'));
+  for (const name of CASES) {
+    if (typeof baseline[name] !== 'number' || baseline[name] <= 0) {
+      throw new Error(`The type-instantiation baseline is invalid for ${name}.`);
+    }
+  }
+  return baseline;
+}
+
 function main() {
   writeFixture();
   const { instantiations, types, checkTime } = compile();
-  const next = compile('tsconfig.next.json');
+  const next = compile(join(PERF_DIR, 'tsconfig.next.json'));
+  const cases = compileCases();
 
   if (process.argv.includes('--write-baseline')) {
     writeBaseline(BASELINE_FILE, instantiations);
     writeBaseline(NEXT_BASELINE_FILE, next.instantiations);
+    writeCaseBaseline(cases);
     process.stdout.write(
       `Wrote baselines: public=${instantiations}, next=${next.instantiations} instantiations\n`,
     );
@@ -219,6 +271,7 @@ function main() {
 
   const baseline = readBaseline(BASELINE_FILE);
   const nextBaseline = readBaseline(NEXT_BASELINE_FILE);
+  const caseBaseline = readCaseBaseline();
   const delta = instantiations - baseline;
   const nextDelta = next.instantiations - nextBaseline;
   const deltaPercent = (delta / baseline) * 100;
@@ -239,6 +292,12 @@ function main() {
       `Next:           ${next.instantiations}`,
       `Next baseline:  ${nextBaseline}`,
       `Next delta:     ${nextDeltaSign}${nextDelta} (${nextDeltaSign}${nextDeltaPercent.toFixed(2)}%)`,
+      ...cases.map(({ name, instantiations }) => {
+        const baseline = caseBaseline[name];
+        const percent = ((instantiations - baseline) / baseline) * 100;
+        const sign = percent >= 0 ? '+' : '';
+        return `Case ${name.padEnd(22)} ${instantiations} (${sign}${percent.toFixed(2)}%)`;
+      }),
       '',
     ].join('\n'),
   );
@@ -252,6 +311,17 @@ function main() {
         'in the same commit, so the new baseline is reviewed instead of drifting silently.',
         '',
       ].join('\n'),
+    );
+    process.exitCode = 1;
+  }
+
+  const expensiveCase = cases.find(({ name, instantiations }) => {
+    const relativeLimit = caseBaseline[name] * (1 + MAX_CASE_REGRESSION_PERCENT / 100);
+    return instantiations > MAX_CASE_INSTANTIATIONS || instantiations > relativeLimit;
+  });
+  if (expensiveCase !== undefined) {
+    process.stderr.write(
+      `Performance case ${expensiveCase.name} exceeded ${MAX_CASE_INSTANTIATIONS} instantiations.\n`,
     );
     process.exitCode = 1;
   }

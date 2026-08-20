@@ -7,6 +7,7 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 ### Changed
 
 - **Breaking (pre-v1):** removed the accidental advanced exports `ParseSelect`, `ParseStatement`, `ParsedStatement`, `Source`, and `FunctionReturnTypes`. They exposed the retired parser and compiler internals and have no supported replacement. Use `Query`, `Row`, `StrictQuery`, `StrictRow`, and `Params` for the public type-inference contract.
+- The reviewed v1 type-instantiation baseline is 135,195, down from 244,919 after the Legacy compiler and accidental parser exports were removed. The public hard ceiling is reduced from 250,000 to 150,000; eight isolated stress cases add a 10% relative gate and a 200,000 absolute ceiling.
 
 ### Fixed
 

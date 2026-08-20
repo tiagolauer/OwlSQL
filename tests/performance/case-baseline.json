@@ -1,0 +1,10 @@
+{
+  "simple-select": 64137,
+  "ten-source-join": 73018,
+  "nested-cte-chain": 110600,
+  "correlated-subquery": 71226,
+  "hundred-projections": 187360,
+  "hundred-placeholders": 101864,
+  "strict-diagnostic": 63083,
+  "dml-output": 76682
+}

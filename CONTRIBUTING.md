@@ -57,6 +57,8 @@ npm test --workspace @owlsql/ts-plugin   # the editor plugin, independently
 
 Nothing in the root `npm test` runs plugin code, and that's deliberate: a release of the library should not be gated on a plugin whose supported TypeScript range is narrower and whose future is upstream's to decide.
 
+`npm run test:perf` compiles the public fixture and each case under `tests/performance/cases` independently. Baseline or ceiling changes must include the measured result and rationale in the same commit.
+
 One wrinkle worth knowing before you touch the tsconfigs: the TypeScript 7 CI job runs `test:types:core` rather than `test:types`, because `tests/cli-codegen-edge.test.ts` uses the compiler API (it parses generated schema output to prove it's syntactically valid) and so cannot run there. That one file lives in `tsconfig.compiler-api-tests.json` so it can be left out of the TypeScript 7 run without being quietly dropped from every other one.
 
 ### Fixing a bug
