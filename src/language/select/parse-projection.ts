@@ -179,7 +179,7 @@ type UnwrapParens<Expression extends string> = Expression extends `(${infer Inne
       : Trim<Inner>
   : Expression;
 
-type ParseEntry<Entry extends string> =
+type ParseComplexEntry<Entry extends string> =
   IsCaseToken<FirstWord<Trim<Entry>>> extends true
     ? SplitCase<Entry>
     : [SplitWindow<Entry>] extends [never]
@@ -210,12 +210,14 @@ type ParseEntry<Entry extends string> =
             : IsKeyword<FirstWord<After>, 'as'> extends true
               ? [UnwrapParens<Expression>, Unquote<Trim<DropFirstWord<After>>>]
               : IsOperatorExpression<After> extends true
-                ? FindTopLevelAs<Entry> extends {
-                    expression: infer FullExpression extends string;
-                    alias: infer Alias extends string;
-                  }
-                  ? [FullExpression, Unquote<Trim<Alias>>]
-                  : [Trim<Entry>, Trim<Entry>]
+                ? [FindTopLevelAs<Entry>] extends [never]
+                  ? [Trim<Entry>, Trim<Entry>]
+                  : FindTopLevelAs<Entry> extends {
+                      expression: infer FullExpression extends string;
+                      alias: infer Alias extends string;
+                    }
+                    ? [FullExpression, Unquote<Trim<Alias>>]
+                    : [Trim<Entry>, Trim<Entry>]
                 : [UnwrapParens<Expression>, Unquote<Trim<After>>]
           : [Trim<Entry>, OutputName<Trim<Entry>>]
       : SplitWindow<Entry> extends [
@@ -228,6 +230,12 @@ type ParseEntry<Entry extends string> =
             ? [Expression, Unquote<Trim<DropFirstWord<After>>>]
             : [Expression, Unquote<Trim<After>>]
         : [Trim<Entry>, OutputName<Trim<Entry>>];
+
+type ParseEntry<Entry extends string> = Trim<Entry> extends infer Value extends string
+  ? Value extends `${string} ${string}` | `(${string}`
+    ? ParseComplexEntry<Value>
+    : [Value, OutputName<Value>]
+  : never;
 
 type IsColumn<Expression extends string> =
   Expression extends `${string} ${string}`

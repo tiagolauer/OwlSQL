@@ -4,7 +4,7 @@ import type {
   SourceIR,
   TableSourceIR,
 } from '../../language/ir/source.js';
-import type { ColumnValue, ResolveKey, TableRow } from '../schema/model.js';
+import type { ColumnValue, ResolveKey } from '../schema/model.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { Scope } from './scope.js';
 import type {
@@ -46,14 +46,15 @@ type ResolveTableColumn<
   Column extends string,
 > = ResolveKey<DB, Source['name']> extends never
   ? ResolveError<UnknownTable<Source['name']>>
-  : ResolveKey<TableRow<DB, Source['name']>, Column> extends never
-    ? ResolveError<UnknownColumn<Column>>
-    : ResolveOk<
-        WithNullability<
-          ColumnValue<TableRow<DB, Source['name']>, Column>,
-          Source['nullable']
-        >
-      >;
+  : ResolveKey<DB, Source['name']> extends infer Table extends keyof DB
+    ? ResolveKey<DB[Table], Column> extends infer Key
+      ? [Key] extends [never]
+        ? ResolveError<UnknownColumn<Column>>
+        : Key extends keyof DB[Table]
+          ? ResolveOk<WithNullability<DB[Table][Key], Source['nullable']>>
+          : never
+      : never
+    : never;
 
 type ResolveDerivedColumn<
   Source extends DerivedSourceIR<string, unknown, boolean, JoinKind>,
@@ -143,8 +144,8 @@ type ResolveUnqualified<
   ? LocalColumnMatches<DB, Sources, Column> extends infer Matches extends unknown[]
     ? Matches extends [infer Value]
       ? ResolveOk<Value>
-      : Matches extends [unknown, unknown, ...unknown[]]
-        ? ResolveError<AmbiguousColumn<Column>>
+      : Matches extends [infer First, unknown, ...unknown[]]
+        ? ResolveError<AmbiguousColumn<Column>, First>
         : Parent extends Scope<readonly SourceIR[], unknown>
           ? ResolveUnqualified<DB, Parent, Column>
           : ResolveError<UnknownColumn<Column>>

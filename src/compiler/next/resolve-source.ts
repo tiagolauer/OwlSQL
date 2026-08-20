@@ -4,9 +4,10 @@ import type { Scope } from './scope.js';
 
 export type ResolveOk<Value> = { kind: 'ok'; value: Value };
 
-export type ResolveError<Error extends Diagnostic> = {
+export type ResolveError<Error extends Diagnostic, Value = unknown> = {
   kind: 'error';
   diagnostic: Error;
+  value: Value;
 };
 
 type Matches<Source extends SourceIR, Name extends string> =

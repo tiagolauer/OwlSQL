@@ -65,4 +65,9 @@ type StripDistinct<Sql extends string> = IsKeyword<FirstWord<Trim<Sql>>, 'distin
     ? Trim<DropFirstWord<Trim<Sql>>>
     : Sql;
 
-export type StripSelectModifiers<Sql extends string> = StripTop<StripDistinct<Sql>>;
+export type StripSelectModifiers<Sql extends string> = Lowercase<FirstWord<Trim<Sql>>> extends
+  | 'top'
+  | 'distinct'
+  | 'all'
+  ? StripTop<StripDistinct<Sql>>
+  : Sql;

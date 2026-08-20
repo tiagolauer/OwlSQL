@@ -2,9 +2,12 @@ import type {
   ApplyParenDelta,
   DropFirstWord,
   FirstWord,
+  HasNonTrailingSemicolon,
   IsKeyword,
   Normalize,
+  StripQualifier,
   Trim,
+  Unquote,
 } from '../../string.js';
 import type {
   SelectClausesIR,
@@ -12,7 +15,7 @@ import type {
   SetOperationIR,
 } from '../ir/query.js';
 import type { PredicateIR } from '../ir/predicate.js';
-import type { SourceIR } from '../ir/source.js';
+import type { SourceIR, TableSourceIR } from '../ir/source.js';
 import type { StripSelectModifiers } from '../dialect/common.js';
 import type { ParseNormalizedFromSources } from './parse-from.js';
 import type { ParseProjectionList } from './parse-projection.js';
@@ -29,6 +32,16 @@ type SplitAtFrom<
       : SplitAtFrom<Rest, ApplyParenDelta<Depth, Token>, `${Before} ${Token}`>
     : SplitAtFrom<Rest, ApplyParenDelta<Depth, Token>, `${Before} ${Token}`>
   : never;
+
+type SelectFromSplit<Sql extends string> =
+  Lowercase<Sql> extends
+    | `${string}(select ${string}`
+    | `${string}extract(${string} from ${string}`
+    | `${string}trim(${string} from ${string}`
+    ? SplitAtFrom<Sql>
+    : Sql extends `${infer Before} from ${infer After}`
+      ? { before: Trim<Before>; after: Trim<After> }
+      : SplitAtFrom<Sql>;
 
 type IsSelectClause<Token extends string> = Lowercase<Token> extends
   | 'where'
@@ -115,62 +128,104 @@ type ParseFatal<Sql extends string> = {
   diagnostics: [MalformedSelect<Sql>];
 };
 
-type BuildSelect<
+type MultipleStatements<Sql extends string> = {
+  code: 'MULTIPLE_STATEMENTS';
+  message: 'multiple statements are not supported: found a semicolon before the end of the query';
+  severity: 'fatal';
+  location: 'statement';
+  reference: Sql;
+};
+
+type ParseMultipleStatements<Sql extends string> = {
+  kind: 'fatal';
+  readonly __value?: SelectQueryIR;
+  diagnostics: [MultipleStatements<Sql>];
+};
+
+type BuiltSelect<
   Sources extends readonly SourceIR[],
   Projection extends string,
   Predicates extends readonly PredicateIR[],
-  Tail extends string,
-> = ParseSelectTail<Tail> extends {
-  predicates: infer TailPredicates extends readonly PredicateIR[];
-  clauses: infer Clauses extends SelectClausesIR<
+  TailPredicates extends readonly PredicateIR[],
+  Clauses extends SelectClausesIR<
     string,
     string,
     string,
     string,
     string
+  >,
+> = {
+  kind: 'ok';
+  value: SelectQueryIR<
+    Sources,
+    ParseProjectionList<Projection>,
+    [...Predicates, ...TailPredicates],
+    [],
+    [],
+    Clauses,
+    []
   >;
-}
-  ? {
-      kind: 'ok';
-      value: SelectQueryIR<
-        Sources,
-        ParseProjectionList<Projection>,
-        [...Predicates, ...TailPredicates],
-        [],
-        [],
-        Clauses,
-        []
+  diagnostics: [];
+};
+
+type BuildSelect<
+  Sources extends readonly SourceIR[],
+  Projection extends string,
+  Predicates extends readonly PredicateIR[],
+  Tail extends string,
+> = Tail extends ''
+  ? BuiltSelect<Sources, Projection, Predicates, [], SelectClausesIR>
+  : ParseSelectTail<Tail> extends {
+      predicates: infer TailPredicates extends readonly PredicateIR[];
+      clauses: infer Clauses extends SelectClausesIR<
+        string,
+        string,
+        string,
+        string,
+        string
       >;
-      diagnostics: [];
     }
-  : never;
+    ? BuiltSelect<Sources, Projection, Predicates, TailPredicates, Clauses>
+    : never;
+
+type BuildFrom<
+  Projection extends string,
+  Source extends string,
+  Sql extends string,
+> = Source extends `${string} ${string}` | `${string},${string}` | `${string}(${string}`
+  ? ParseNormalizedFromSources<Source> extends {
+      sources: infer Sources extends readonly SourceIR[];
+      predicates: infer Predicates extends readonly PredicateIR[];
+      rest: infer Tail extends string;
+    }
+    ? Sources extends readonly []
+      ? ParseFatal<Sql>
+      : BuildSelect<Sources, Projection, Predicates, Tail>
+    : ParseFatal<Sql>
+  : Unquote<StripQualifier<Source>> extends infer Name extends string
+    ? BuildSelect<[TableSourceIR<Name>], Projection, [], ''>
+    : never;
 
 type ParseBody<Body extends string, Sql extends string> =
-  [SplitAtFrom<Body>] extends [never]
-    ? SplitProjectionTail<Body> extends {
-        projection: infer Projection extends string;
-        rest: infer Tail extends string;
-      }
-      ? Projection extends ''
-        ? ParseFatal<Sql>
-        : BuildSelect<[], Projection, [], Tail>
-      : ParseFatal<Sql>
-    : SplitAtFrom<Body> extends {
-        before: infer Projection extends string;
-        after: infer Source extends string;
-      }
-      ? Projection extends ''
-      ? ParseFatal<Sql>
-        : ParseNormalizedFromSources<Source> extends {
-            sources: infer Sources extends readonly SourceIR[];
-            predicates: infer Predicates extends readonly PredicateIR[];
-            rest: infer Tail extends string;
-          }
-          ? Sources extends readonly []
-            ? ParseFatal<Sql>
-            : BuildSelect<Sources, Projection, Predicates, Tail>
-          : ParseFatal<Sql>
-      : ParseFatal<Sql>;
+  SelectFromSplit<Body> extends infer From
+    ? [From] extends [never]
+      ? SplitProjectionTail<Body> extends {
+          projection: infer Projection extends string;
+          rest: infer Tail extends string;
+        }
+        ? Projection extends ''
+          ? ParseFatal<Sql>
+          : BuildSelect<[], Projection, [], Tail>
+        : ParseFatal<Sql>
+      : From extends {
+          before: infer Projection extends string;
+          after: infer Source extends string;
+        }
+        ? Projection extends ''
+          ? ParseFatal<Sql>
+          : BuildFrom<Projection, Source, Sql>
+        : ParseFatal<Sql>
+    : never;
 
 type AddSetOperation<
   Parsed,
@@ -205,20 +260,31 @@ type AddSetOperation<
     : Branch
   : Parsed;
 
+type HasSetOperation<Sql extends string> = Lowercase<Sql> extends
+  | `${string} union ${string}`
+  | `${string} intersect ${string}`
+  | `${string} except ${string}`
+  ? true
+  : false;
+
 type ParseSetBody<Body extends string, Sql extends string> =
-  [SplitAtSet<Body>] extends [never]
+  HasSetOperation<Body> extends false
     ? ParseBody<Body, Sql>
-    : SplitAtSet<Body> extends {
-        primary: infer Primary extends string;
-        kind: infer Kind extends SetOperationIR['kind'];
-        branch: infer Branch extends string;
-      }
-      ? AddSetOperation<
-          ParseBody<Primary, Sql>,
-          Kind,
-          ParseNormalized<Branch, Branch>
-        >
-      : ParseFatal<Sql>;
+    : SplitAtSet<Body> extends infer Set
+      ? [Set] extends [never]
+        ? ParseBody<Body, Sql>
+        : Set extends {
+            primary: infer Primary extends string;
+            kind: infer Kind extends SetOperationIR['kind'];
+            branch: infer Branch extends string;
+          }
+          ? AddSetOperation<
+              ParseBody<Primary, Sql>,
+              Kind,
+              ParseNormalized<Branch, Branch>
+            >
+          : ParseFatal<Sql>
+      : never;
 
 type ParseNormalized<Normalized extends string, Sql extends string> =
   Normalized extends `${infer Select} ${infer Body}`
@@ -227,4 +293,6 @@ type ParseNormalized<Normalized extends string, Sql extends string> =
       : ParseFatal<Sql>
     : ParseFatal<Sql>;
 
-export type ParseSelectIR<Sql extends string> = ParseNormalized<Normalize<Sql>, Sql>;
+export type ParseSelectIR<Sql extends string> = HasNonTrailingSemicolon<Sql> extends true
+  ? ParseMultipleStatements<Sql>
+  : ParseNormalized<Normalize<Sql>, Sql>;

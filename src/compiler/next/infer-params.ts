@@ -257,11 +257,17 @@ type FunctionName<Token extends string> =
   Token extends `${infer Name}(${string}` ? Lowercase<Name> : '';
 
 type ContextValue<DB, CurrentScope, Expression extends string> =
-  Expression extends `${string}(${string}`
-    ? InferExpression<DB, CurrentScope, Expression> extends { value: infer Value }
-      ? Value
-      : unknown
-    : ColumnType<DB, CurrentScope, Expression>;
+  Expression extends `'${string}'`
+    ? string
+    : Expression extends `${number}`
+      ? number
+      : Lowercase<Expression> extends 'true' | 'false'
+        ? boolean
+        : Expression extends `${string}(${string}`
+          ? InferExpression<DB, CurrentScope, Expression> extends { value: infer Value }
+            ? Value
+            : unknown
+          : ColumnType<DB, CurrentScope, Expression>;
 
 type ParamValue<
   DB,
@@ -449,4 +455,9 @@ export type InferNextParams<DB, Sql extends string> =
     ? InferParamsFromIR<DB, IR> extends infer State extends AnyParamState
       ? [...State['indexed'], ...State['sequential']]
       : unknown[]
-    : unknown[];
+    : ParseSelectIR<Sql> extends {
+        kind: 'fatal';
+        diagnostics: readonly [infer Error extends { message: string }, ...unknown[]];
+      }
+      ? [QueryTypeError<Error['message']>]
+      : unknown[];

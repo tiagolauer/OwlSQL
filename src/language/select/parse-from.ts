@@ -64,6 +64,45 @@ type SplitFromBoundary<
       : { clause: Trim<Before extends '' ? Sql : `${Before} ${Sql}`>; rest: '' }
     : { clause: Trim<Before extends '' ? Sql : `${Before} ${Sql}`>; rest: '' };
 
+type HasBoundary<Sql extends string> = Lowercase<Sql> extends
+  | `${string} where ${string}`
+  | `${string} group ${string}`
+  | `${string} having ${string}`
+  | `${string} order ${string}`
+  | `${string} limit ${string}`
+  | `${string} offset ${string}`
+  | `${string} fetch ${string}`
+  | `${string} window ${string}`
+  | `${string} union ${string}`
+  | `${string} except ${string}`
+  | `${string} intersect ${string}`
+  | `${string} for ${string}`
+  | `${string} returning ${string}`
+  | `${string} output ${string}`
+  ? true
+  : false;
+
+type FastBoundary<Sql extends string> =
+  Sql extends `${infer Clause} where ${infer Rest}`
+    ? { clause: Trim<Clause>; rest: `where ${Rest}` }
+    : Sql extends `${infer Clause} group ${infer Rest}`
+      ? { clause: Trim<Clause>; rest: `group ${Rest}` }
+      : Sql extends `${infer Clause} having ${infer Rest}`
+        ? { clause: Trim<Clause>; rest: `having ${Rest}` }
+        : Sql extends `${infer Clause} order ${infer Rest}`
+          ? { clause: Trim<Clause>; rest: `order ${Rest}` }
+          : Sql extends `${infer Clause} limit ${infer Rest}`
+            ? { clause: Trim<Clause>; rest: `limit ${Rest}` }
+            : Sql extends `${infer Clause} offset ${infer Rest}`
+              ? { clause: Trim<Clause>; rest: `offset ${Rest}` }
+              : SplitFromBoundary<Sql>;
+
+type FromBoundary<Sql extends string> = HasBoundary<Sql> extends false
+  ? { clause: Trim<Sql>; rest: '' }
+  : Lowercase<Sql> extends `${string}(select ${string}`
+    ? SplitFromBoundary<Sql>
+    : FastBoundary<Sql>;
+
 type JoinAfterOuter<
   Tail extends string,
   Kind extends JoinKind,
@@ -150,14 +189,18 @@ type StripLateral<Segment extends string> = Trim<Segment> extends `${infer Head}
     : Trim<Segment>
   : Trim<Segment>;
 
-type UsingColumns<Segment extends string> = Segment extends `${infer Head} ${infer Tail}`
+type ScanUsingColumns<Segment extends string> = Segment extends `${infer Head} ${infer Tail}`
   ? IsKeyword<Head, 'using'> extends true
     ? Trim<Tail> extends `(${infer AfterOpen}`
       ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string }
         ? SplitColumnList<Inner>
         : []
       : []
-    : UsingColumns<Tail>
+    : ScanUsingColumns<Tail>
+  : [];
+
+type UsingColumns<Segment extends string> = Lowercase<Segment> extends `${string} using ${string}`
+  ? ScanUsingColumns<Segment>
   : [];
 
 type IsNullable<Kind extends JoinKind> = Kind extends 'left' | 'full'
@@ -203,10 +246,17 @@ type SegmentSource<
   ? DerivedSource<Segment, Kind>
   : TableSource<Segment, Kind>;
 
+type SourceParts<Segment extends string> = Segment extends
+  | `${string},${string}`
+  | `${string}(${string}`
+  | `${string})${string}`
+  ? SplitColumnList<Segment>
+  : [Trim<Segment>];
+
 type SegmentSources<
   Segment extends string,
   Kind extends JoinKind,
-  Parts extends readonly string[] = SplitColumnList<Segment>,
+  Parts extends readonly string[] = SourceParts<Segment>,
 > = Parts extends readonly [
   infer Head extends string,
   ...infer Tail extends string[],
@@ -258,13 +308,22 @@ type NullablePrevious<
   Sources extends readonly SourceIR[],
 > = Kind extends 'right' | 'full' ? MarkNullable<Sources> : Sources;
 
+type HasJoin<Sql extends string> = Lowercase<Sql> extends `${string} join ${string}`
+  ? true
+  : false;
+
 type CollectJoined<
   Sql extends string,
   CurrentKind extends JoinKind,
   Sources extends readonly SourceIR[],
   Predicates extends readonly PredicateIR[],
-> = SplitAtJoin<Sql> extends infer Split
-  ? [Split] extends [never]
+> = HasJoin<Sql> extends false
+  ? {
+      sources: [...Sources, ...SegmentSources<Sql, CurrentKind>];
+      predicates: [...Predicates, ...SegmentPredicates<Sql>];
+    }
+  : SplitAtJoin<Sql> extends infer Split
+    ? [Split] extends [never]
     ? {
         sources: [...Sources, ...SegmentSources<Sql, CurrentKind>];
         predicates: [...Predicates, ...SegmentPredicates<Sql>];
@@ -284,27 +343,29 @@ type CollectJoined<
           [...Predicates, ...SegmentPredicates<Before>]
         >
       : never
-  : never;
+    : never;
 
-type ParseClause<Clause extends string> = SplitAtJoin<Clause> extends infer Split
-  ? [Split] extends [never]
-    ? { sources: SegmentSources<Clause, 'root'>; predicates: [] }
-    : Split extends {
+type ParseClause<Clause extends string> = HasJoin<Clause> extends false
+  ? { sources: SegmentSources<Clause, 'root'>; predicates: [] }
+  : SplitAtJoin<Clause> extends infer Split
+    ? [Split] extends [never]
+      ? { sources: SegmentSources<Clause, 'root'>; predicates: [] }
+      : Split extends {
           before: infer Before extends string;
           kind: infer Kind extends JoinKind;
           after: infer After extends string;
         }
-      ? CollectJoined<
-          After,
-          Kind,
-          NullablePrevious<Kind, SegmentSources<Before, 'root'>>,
-          []
-        >
-      : never
-  : never;
+        ? CollectJoined<
+            After,
+            Kind,
+            NullablePrevious<Kind, SegmentSources<Before, 'root'>>,
+            []
+          >
+        : never
+    : never;
 
 type ParseNormalized<Sql extends string> =
-  SplitFromBoundary<Sql> extends {
+  FromBoundary<Sql> extends {
     clause: infer Clause extends string;
     rest: infer Rest extends string;
   }

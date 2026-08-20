@@ -267,11 +267,58 @@ type EscapeQuotedSpaces<S extends string> = HasQuoteChar<S> extends false
       '"'
     >;
 
-export type Normalize<S extends string> = Trim<
+type HasNonSpaceWhitespace<S extends string> = S extends `${string}\t${string}`
+  ? true
+  : S extends `${string}\n${string}`
+    ? true
+    : S extends `${string}\r${string}`
+      ? true
+      : S extends `${string}\f${string}`
+        ? true
+        : S extends `${string}\v${string}`
+          ? true
+          : false;
+
+type HasSensitiveQuotedBody<S extends string> =
+  S extends `${infer Before}'${infer Body}'${infer After}`
+    ? Body extends
+        | `${string} ${string}`
+        | `${string},${string}`
+        | `${string}(${string}`
+        | `${string})${string}`
+        | `${string};${string}`
+        | `${string}$${string}`
+        | `${string}@${string}`
+        | `${string}?${string}`
+        | `${string}:${string}`
+      ? true
+      : HasSensitiveQuotedBody<`${Before}${After}`>
+    : false;
+
+type NeedsFullNormalize<S extends string> = HasNonSpaceWhitespace<S> extends true
+  ? true
+  : S extends
+      | `${string}  ${string}`
+      | `${string}--${string}`
+      | `${string}/*${string}`
+      | `${string};${string}`
+      | `${string}"${string}`
+      | `${string}\`${string}`
+      | `${string}[${string}`
+      | `${string}\\${string}`
+      | `${string}$${string}$${string}`
+    ? true
+    : HasSensitiveQuotedBody<S>;
+
+type FullNormalize<S extends string> = Trim<
   CollapseSpaces<
     EscapeQuotedSpaces<WhitespaceToSpace<RemoveTrailingSemicolons<StripCommentsAndMaskLiterals<S>>>>
   >
 >;
+
+export type Normalize<S extends string> = NeedsFullNormalize<S> extends true
+  ? FullNormalize<S>
+  : Trim<S>;
 
 type UnescapeSpaces<S extends string> = S extends `${infer Before}${QuotedSpace}${infer After}`
   ? UnescapeSpaces<`${Before} ${After}`>
@@ -311,10 +358,12 @@ export type MaskQuotedIdentifiers<S extends string, Accumulated extends string =
 // never mistaken for a separator) with quoted identifiers blanked on top of
 // it, since a column may legally be named `"a;b"`.
 export type HasNonTrailingSemicolon<S extends string> =
-  Trim<MaskQuotedIdentifiers<StripCommentsAndMaskLiterals<S>>> extends `${string};${infer After}`
-    ? Trim<After> extends ''
-      ? false
-      : true
+  S extends `${string};${string}`
+    ? Trim<MaskQuotedIdentifiers<StripCommentsAndMaskLiterals<S>>> extends `${string};${infer After}`
+      ? Trim<After> extends ''
+        ? false
+        : true
+      : false
     : false;
 
 export type Unquote<S extends string> = S extends `"${infer Inner}"`

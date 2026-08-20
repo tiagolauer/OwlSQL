@@ -11,7 +11,7 @@ import type {
   TableSourceIR,
 } from '../../language/ir/source.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
-import type { ResolveKey, TableRow } from '../schema/model.js';
+import type { ResolveKey } from '../schema/model.js';
 import type { InferExpression } from './infer-expression.js';
 import type { ResolveColumn } from './resolve-column.js';
 import type { ResolveBinding } from './resolve-source.js';
@@ -50,7 +50,9 @@ type SourceColumns<DB, Source extends SourceIR> =
   >
     ? ResolveKey<DB, Name> extends never
       ? ProjectionResult<{}, [UnknownTable<Name>]>
-      : ProjectionResult<Nullify<TableRow<DB, Name>, Nullable>, []>
+      : ResolveKey<DB, Name> extends infer Key extends keyof DB
+        ? ProjectionResult<Nullify<DB[Key], Nullable>, []>
+        : never
     : Source extends DerivedSourceIR<
           string,
           infer Row,
@@ -136,9 +138,10 @@ type InferColumn<
     : Resolution extends {
           kind: 'error';
           diagnostic: infer Error extends Diagnostic;
+          value: infer Value;
         }
       ? ProjectionResult<
-          AddProperty<Row, Projection['outputName'], unknown>,
+          AddProperty<Row, Projection['outputName'], Value>,
           [...Diagnostics, Error]
         >
       : never

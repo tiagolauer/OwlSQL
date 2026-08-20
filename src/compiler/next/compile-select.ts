@@ -1,4 +1,5 @@
 import type { PredicateIR } from '../../language/ir/predicate.js';
+import type { IsKeyword, Trim } from '../../string.js';
 import type {
   SelectQueryIR,
   SetOperationIR,
@@ -15,6 +16,7 @@ import type {
   CompileOk,
 } from '../contracts/compilation.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
+import type { ResolveKey } from '../schema/model.js';
 import type { InferProjections } from './infer-projection.js';
 import type { InferExpression } from './infer-expression.js';
 import type { ChildScope, Scope } from './scope.js';
@@ -27,6 +29,14 @@ type CompiledSources<
   diagnostics: Diagnostics;
 };
 
+type UnknownTable<Name extends string> = Diagnostic<
+  'UNKNOWN_TABLE',
+  `unknown table: ${Name}`,
+  'error',
+  'from',
+  Name
+>;
+
 type StripLeadingPunctuation<Value extends string> =
   Value extends `(${infer Rest}` ? StripLeadingPunctuation<Rest> : Value;
 
@@ -35,12 +45,35 @@ type StripTrailingPunctuation<Value extends string> =
     ? StripTrailingPunctuation<Rest>
     : Value;
 
+type StripPredicateCast<Token extends string> =
+  Token extends `${infer Operand}::${string}` ? Operand : Token;
+
 type CleanPredicateToken<Token extends string> =
-  StripTrailingPunctuation<StripLeadingPunctuation<Token>> extends infer Clean extends string
-    ? Clean extends `${infer Operand}::${string}`
-      ? Operand
-      : Clean
+  StripLeadingPunctuation<Token> extends infer Leading extends string
+    ? StripPredicateCast<
+        Leading extends `${string}(${string}`
+          ? Leading
+          : StripTrailingPunctuation<Leading>
+      >
     : never;
+
+type BeforeNestedSelect<
+  Sql extends string,
+  Before extends string = '',
+> = Sql extends `${infer Head} ${infer Tail}`
+  ? IsKeyword<CleanPredicateToken<Head>, 'select'> extends true
+    ? Trim<Before>
+    : BeforeNestedSelect<
+        Tail,
+        Before extends '' ? Head : `${Before} ${Head}`
+      >
+  : IsKeyword<CleanPredicateToken<Sql>, 'select'> extends true
+    ? Trim<Before>
+    : never;
+
+type PredicateText<Sql extends string> = [BeforeNestedSelect<Sql>] extends [never]
+  ? Sql
+  : BeforeNestedSelect<Sql>;
 
 type IgnoredPredicateWord =
   | ''
@@ -117,7 +150,7 @@ export type AnalyzePredicate<
   DB,
   CurrentScope,
   Predicate extends PredicateIR,
-> = AnalyzePredicateTokens<DB, CurrentScope, Predicate['fragment']>;
+> = AnalyzePredicateTokens<DB, CurrentScope, PredicateText<Predicate['fragment']>>;
 
 type AnalyzePredicates<
   DB,
@@ -128,45 +161,50 @@ type AnalyzePredicates<
   infer Head extends PredicateIR,
   ...infer Tail extends PredicateIR[],
 ]
-  ? AnalyzePredicate<DB, CurrentScope, Head> extends infer PredicateDiagnostics extends readonly Diagnostic[]
-    ? AnalyzePredicates<
-        DB,
-        CurrentScope,
-        Tail,
-        [...Diagnostics, ...PredicateDiagnostics]
-      >
-    : never
+  ? Head['location'] extends 'having'
+    ? AnalyzePredicates<DB, CurrentScope, Tail, Diagnostics>
+    : AnalyzePredicate<DB, CurrentScope, Head> extends infer PredicateDiagnostics extends readonly Diagnostic[]
+      ? AnalyzePredicates<
+          DB,
+          CurrentScope,
+          Tail,
+          [...Diagnostics, ...PredicateDiagnostics]
+        >
+      : never
   : Diagnostics;
 
 type CompileSetOperations<
   DB,
   Operations extends readonly SetOperationIR[],
   ParentScope,
+  ValidatePredicates extends boolean,
   Diagnostics extends readonly Diagnostic[] = [],
 > = Operations extends readonly [
   infer Head extends SetOperationIR,
   ...infer Tail extends SetOperationIR[],
 ]
   ? Head['query'] extends infer Query extends SelectQueryIR
-    ? CompileIR<DB, Query, ParentScope> extends infer Compiled
+    ? CompileIR<DB, Query, ParentScope, ValidatePredicates> extends infer Compiled
       ? Compiled extends CompileOk<readonly unknown[], infer BranchDiagnostics>
         ? CompileSetOperations<
             DB,
             Tail,
             ParentScope,
+            ValidatePredicates,
             [...Diagnostics, ...BranchDiagnostics]
           >
         : Compiled extends CompileFatal<unknown[], infer BranchDiagnostics>
           ? [...Diagnostics, ...BranchDiagnostics]
           : never
       : never
-    : CompileSetOperations<DB, Tail, ParentScope, Diagnostics>
+    : CompileSetOperations<DB, Tail, ParentScope, ValidatePredicates, Diagnostics>
   : Diagnostics;
 
 type CompileSourceList<
   DB,
   Sources extends readonly SourceIR[],
   ParentScope,
+  ValidatePredicates extends boolean,
   Result extends readonly SourceIR[] = [],
   Diagnostics extends readonly Diagnostic[] = [],
 > = Sources extends readonly [
@@ -179,12 +217,13 @@ type CompileSourceList<
       infer Nullable,
       infer Join extends JoinKind
     >
-    ? CompileIR<DB, Query, ChildScope<Result, ParentScope>> extends infer Nested
+    ? CompileIR<DB, Query, ChildScope<Result, ParentScope>, ValidatePredicates> extends infer Nested
       ? Nested extends CompileOk<infer Rows extends readonly unknown[], infer NestedDiagnostics>
         ? CompileSourceList<
             DB,
             Tail,
             ParentScope,
+            ValidatePredicates,
             [
               ...Result,
               DerivedSourceIR<Alias, Rows[number], Nullable, Join>,
@@ -196,13 +235,24 @@ type CompileSourceList<
           : never
       : never
     : Head extends TableSourceIR<
-        string,
+        infer Name,
         string,
         boolean,
         JoinKind,
         readonly string[]
       >
-      ? CompileSourceList<DB, Tail, ParentScope, [...Result, Head], Diagnostics>
+      ? CompileSourceList<
+          DB,
+          Tail,
+          ParentScope,
+          ValidatePredicates,
+          [...Result, Head],
+          ValidatePredicates extends true
+            ? ResolveKey<DB, Name> extends never
+              ? [...Diagnostics, UnknownTable<Name>]
+              : Diagnostics
+            : Diagnostics
+        >
       : never
   : CompiledSources<Result, Diagnostics>;
 
@@ -210,7 +260,8 @@ type CompileIR<
   DB,
   IR extends SelectQueryIR,
   ParentScope = null,
-> = CompileSourceList<DB, IR['sources'], ParentScope> extends infer Compiled
+  ValidatePredicates extends boolean = true,
+> = CompileSourceList<DB, IR['sources'], ParentScope, ValidatePredicates> extends infer Compiled
     ? Compiled extends CompiledSources<
         infer ResolvedSources,
         infer SourceDiagnostics
@@ -225,12 +276,19 @@ type CompileIR<
           row: infer Row;
           diagnostics: infer ProjectionDiagnostics extends readonly Diagnostic[];
         }
-        ? AnalyzePredicates<
-            DB,
-            Scope<ResolvedSources, ParentScope>,
-            IR['predicates']
-          > extends infer PredicateDiagnostics extends readonly Diagnostic[]
-          ? CompileSetOperations<DB, IR['setOperations'], ParentScope> extends infer SetDiagnostics extends readonly Diagnostic[]
+        ? (ValidatePredicates extends true
+            ? AnalyzePredicates<
+                DB,
+                Scope<ResolvedSources, ParentScope>,
+                IR['predicates']
+              >
+            : []) extends infer PredicateDiagnostics extends readonly Diagnostic[]
+          ? CompileSetOperations<
+              DB,
+              IR['setOperations'],
+              ParentScope,
+              ValidatePredicates
+            > extends infer SetDiagnostics extends readonly Diagnostic[]
             ? CompileOk<
                 Row[],
                 [
@@ -248,10 +306,15 @@ type CompileIR<
     : never
   ;
 
-export type CompileSelect<DB, Sql extends string, ParentScope = null> =
+export type CompileSelect<
+  DB,
+  Sql extends string,
+  ParentScope = null,
+  ValidatePredicates extends boolean = true,
+> =
   ParseSelectIR<Sql> extends infer Parsed
     ? Parsed extends { kind: 'ok'; value: infer IR extends SelectQueryIR }
-      ? CompileIR<DB, IR, ParentScope>
+      ? CompileIR<DB, IR, ParentScope, ValidatePredicates>
       : Parsed extends CompileFatal<SelectQueryIR, infer Diagnostics>
         ? CompileFatal<unknown[], Diagnostics>
         : never

@@ -218,7 +218,7 @@ type InferCase<
   before: infer Body extends string;
   last: infer End extends string;
 }
-  ? IsKeyword<End, 'end'> extends true
+  ? IsKeyword<StripTrailingParens<End>, 'end'> extends true
     ? ScanCase<Body, 'when', '', []> extends infer Segments extends readonly CaseSegment[]
       ? InferCaseBranches<DB, CurrentScope, Segments> extends ExpressionResult<
           infer Value,
@@ -323,7 +323,7 @@ export type InferExpression<
     ? IsCaseToken<FirstWord<Value>> extends true
     ? InferCase<DB, CurrentScope, Value>
     : Value extends `${infer Operand}::${string}`
-      ? InferReference<DB, CurrentScope, Trim<Operand>> extends ExpressionResult<
+      ? InferExpression<DB, CurrentScope, Trim<Operand>> extends ExpressionResult<
           unknown,
           infer Diagnostics
         >

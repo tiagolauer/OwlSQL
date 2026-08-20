@@ -42,6 +42,23 @@ type TakeClauseBody<
       >
   : { body: Trim<Body extends '' ? Sql : `${Body} ${Sql}`>; rest: '' };
 
+type HasFollowingClause<Sql extends string> = Lowercase<Sql> extends
+  | `${string} where ${string}`
+  | `${string} group ${string}`
+  | `${string} having ${string}`
+  | `${string} order ${string}`
+  | `${string} limit ${string}`
+  | `${string} offset ${string}`
+  | `${string} window ${string}`
+  | `${string} fetch ${string}`
+  | `${string} for ${string}`
+  ? true
+  : false;
+
+type ClauseBody<Sql extends string> = HasFollowingClause<Sql> extends false
+  ? { body: Trim<Sql>; rest: '' }
+  : TakeClauseBody<Sql>;
+
 type ParsedClauses<
   Predicates extends readonly PredicateIR[],
   Clauses extends SelectClausesIR<string, string, string, string, string>,
@@ -64,7 +81,7 @@ type ParseTail<
       SelectClausesIR<GroupBy, OrderBy, Limit, Offset, Window>
     >
   : FirstWord<Trim<Sql>> extends infer Keyword extends string
-    ? TakeClauseBody<DropFirstWord<Trim<Sql>>> extends {
+    ? ClauseBody<DropFirstWord<Trim<Sql>>> extends {
         body: infer Body extends string;
         rest: infer Rest extends string;
       }

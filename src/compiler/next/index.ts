@@ -16,25 +16,31 @@ type UnsupportedStatement<Sql extends string> = Diagnostic<
   Sql
 >;
 
-export type CompileNext<DB, Sql extends string> =
-  StatementKind<Sql> extends 'select'
+export type CompileNext<
+  DB,
+  Sql extends string,
+> = StatementKind<Sql> extends 'select'
     ? CompileSelect<DB, Sql>
     : CompileFatal<unknown[], [UnsupportedStatement<Sql>]>;
 
 export type NextQuery<DB, Sql extends string> =
-  ApplyLoosePolicy<CompileNext<DB, Sql>>;
+  ApplyLoosePolicy<CompileSelect<DB, Sql, null, false>>;
 
 export type NextStrictQuery<DB, Sql extends string> =
-  ApplyStrictPolicy<CompileNext<DB, Sql>>;
+  ApplyStrictPolicy<CompileSelect<DB, Sql>>;
 
 export type NextRow<DB, Sql extends string> =
-  NextQuery<DB, Sql> extends readonly (infer Row)[]
+  NextQuery<DB, Sql> extends infer Result
+  ? Result extends readonly (infer Row)[]
     ? Row
-    : NextQuery<DB, Sql>;
+    : Result
+  : never;
 
 export type NextStrictRow<DB, Sql extends string> =
-  NextStrictQuery<DB, Sql> extends readonly (infer Row)[]
+  NextStrictQuery<DB, Sql> extends infer Result
+  ? Result extends readonly (infer Row)[]
     ? Row
-    : NextStrictQuery<DB, Sql>;
+    : Result
+  : never;
 
 export type NextInferParams<DB, Sql extends string> = InferNextParams<DB, Sql>;
