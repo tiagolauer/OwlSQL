@@ -9,6 +9,18 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 - **Breaking (pre-v1):** removed the accidental advanced exports `ParseSelect`, `ParseStatement`, `ParsedStatement`, `Source`, and `FunctionReturnTypes`. They exposed the retired parser and compiler internals and have no supported replacement. Use `Query`, `Row`, `StrictQuery`, `StrictRow`, and `Params` for the public type-inference contract.
 - The reviewed v1 type-instantiation baseline is 135,217, down from 244,919 after the Legacy compiler and accidental parser exports were removed. The public hard ceiling is reduced from 250,000 to 150,000; eight isolated stress cases add a 10% relative gate and a 200,000 absolute ceiling.
 
+### Strict mode
+
+- Write targets, write columns, DML join predicates, and the SELECT half of `INSERT ... SELECT` now receive the strict checks listed under Fixed. Correlated subqueries that are valid SQL no longer produce an outer-scope error.
+
+### Type mapping
+
+- Corrected inferred row mappings for parenthesized columns, function-call projections, set-operation branches, and CTE shadowing are listed under Fixed. `Params` corrections are called out individually because tuple arity and element types are product API.
+
+### SQL and dialect support
+
+- The supported union now includes the documented PostgreSQL `DISTINCT ON` spellings, parenthesized set-operation branches, and T-SQL `OUTPUT ... FROM` forms. Dialect capability and placeholder differences are executable in the v1 dialect matrix.
+
 ### Fixed
 
 - `WITH t AS MATERIALIZED (...)` and its `NOT MATERIALIZED` twin parse again. The parser wanted the body's opening paren directly after `as`, so the Postgres 12 planner hint took the whole WITH clause down with it and the query degraded into an index signature row instead of reporting anything ([#283](https://github.com/tiagolauer/OwlSQL/issues/283)).
