@@ -5,7 +5,12 @@ import type {
   ProjectionIR,
 } from './projection.js';
 import type { SourceIR } from './source.js';
-import type { AssignmentIR, OutputIR, WriteTargetIR } from './write.js';
+import type {
+  AssignmentIR,
+  MergeActionIR,
+  OutputIR,
+  WriteTargetIR,
+} from './write.js';
 
 export type { ProjectionIR } from './projection.js';
 
@@ -142,4 +147,27 @@ export interface DeleteQueryIR<
   sources: Sources;
   predicates: Predicates;
   output: Output;
+}
+
+export interface MergeQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Sources extends readonly SourceIR[] = readonly SourceIR[],
+  Predicates extends readonly PredicateIR[] = readonly PredicateIR[],
+  Actions extends readonly MergeActionIR[] = readonly MergeActionIR[],
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+  SourceValues extends readonly string[] = readonly string[],
+> {
+  kind: 'merge';
+  target: Target;
+  sources: Sources;
+  predicates: Predicates;
+  actions: Actions;
+  output: Output;
+  sourceValues: SourceValues;
 }

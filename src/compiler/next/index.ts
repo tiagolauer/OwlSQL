@@ -9,6 +9,7 @@ import type { CompileSelect } from './compile-select.js';
 import type { CompileInsert, InferInsertParams } from './compile-insert.js';
 import type { CompileUpdate, InferUpdateParams } from './compile-update.js';
 import type { CompileDelete, InferDeleteParams } from './compile-delete.js';
+import type { CompileMerge, InferMergeParams } from './compile-merge.js';
 import type { CompileWith, InferWithParams } from './compile-with.js';
 import type { InferNextParams } from './infer-params.js';
 
@@ -33,6 +34,8 @@ export type CompileNext<
       ? CompileUpdate<DB, Sql>
     : StatementKind<Sql> extends 'delete'
       ? CompileDelete<DB, Sql>
+    : StatementKind<Sql> extends 'merge'
+      ? CompileMerge<DB, Sql>
     : StatementKind<Sql> extends 'with'
       ? CompileWith<DB, Sql>
       : CompileFatal<unknown[], [UnsupportedStatement<Sql>]>;
@@ -117,6 +120,29 @@ export type NextDeleteStrictRow<DB, Sql extends string> =
 
 export type NextDeleteInferParams<DB, Sql extends string> =
   InferDeleteParams<DB, Sql>;
+
+export type NextMergeQuery<DB, Sql extends string> =
+  ApplyLoosePolicy<CompileMerge<DB, Sql, null, false>>;
+
+export type NextMergeStrictQuery<DB, Sql extends string> =
+  ApplyStrictPolicy<CompileMerge<DB, Sql>>;
+
+export type NextMergeRow<DB, Sql extends string> =
+  NextMergeQuery<DB, Sql> extends infer Result
+    ? Result extends readonly (infer Row)[]
+      ? Row
+      : Result
+    : never;
+
+export type NextMergeStrictRow<DB, Sql extends string> =
+  NextMergeStrictQuery<DB, Sql> extends infer Result
+    ? Result extends readonly (infer Row)[]
+      ? Row
+      : Result
+    : never;
+
+export type NextMergeInferParams<DB, Sql extends string> =
+  InferMergeParams<DB, Sql>;
 
 export type NextRow<DB, Sql extends string> =
   NextQuery<DB, Sql> extends infer Result

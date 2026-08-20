@@ -24,3 +24,8 @@ export interface OutputIR<
   mode: Mode;
   projections: Projections;
 }
+
+export type MergeActionIR =
+  | { kind: 'update'; assignments: readonly AssignmentIR[] }
+  | { kind: 'insert'; columns: readonly string[]; values: readonly string[] }
+  | { kind: 'delete' };

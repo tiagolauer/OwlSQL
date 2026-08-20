@@ -124,7 +124,7 @@ type ColumnValue<
   ? Value
   : unknown;
 
-type ScanValues<
+export type ScanWriteValues<
   DB,
   Target extends WriteTargetIR,
   Columns extends readonly string[],
@@ -143,7 +143,7 @@ type ScanValues<
         ColumnValue<DB, Target, Column>,
         State
       > extends infer Next extends AnyParamState
-      ? ScanValues<DB, Target, ColumnTail, ValueTail, Next>
+      ? ScanWriteValues<DB, Target, ColumnTail, ValueTail, Next>
       : never
     : State
   : State;
@@ -158,7 +158,7 @@ type ScanRows<
   infer Head extends readonly string[],
   ...infer Tail extends readonly (readonly string[])[],
 ]
-  ? ScanValues<DB, Target, Columns, Head, State> extends infer Next extends AnyParamState
+  ? ScanWriteValues<DB, Target, Columns, Head, State> extends infer Next extends AnyParamState
     ? ScanRows<DB, Target, Columns, Tail, Next>
     : never
   : State;

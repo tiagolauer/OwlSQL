@@ -32,6 +32,10 @@ type ParseAssignments<
   ? ParseAssignments<Tail, [...Result, Assignment<Head>]>
   : Result;
 
+export type ParseAssignmentList<Sql extends string> = ParseAssignments<
+  SplitColumnList<Sql>
+>;
+
 type AssignmentText<Body extends string> = TakeUntilTopLevelKeyword<
   Body,
   'output' | 'from' | 'where' | 'returning'
@@ -106,7 +110,7 @@ type BuildUpdate<
         kind: 'ok';
         value: UpdateQueryIR<
           Target,
-          ParseAssignments<SplitColumnList<AssignmentText<Body>>>,
+          ParseAssignmentList<AssignmentText<Body>>,
           Sources,
           [...JoinPredicates, ...WherePredicate<Body>],
           ParseWriteOutput<Sql, 'where' | 'from'>
