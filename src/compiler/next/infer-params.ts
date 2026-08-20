@@ -1,6 +1,8 @@
 import type {
   Digit,
+  ExtractParenGroup,
   Qualifier,
+  SplitColumnList,
   StartsWithIdentifierChar,
   StripQualifier,
   Trim,
@@ -348,6 +350,41 @@ type ScanFragment<
           State
         >
       : State;
+
+export type ScanParamFragment<
+  DB,
+  CurrentScope,
+  Sql extends string,
+  State extends AnyParamState = EmptyParamState,
+> = ScanFragment<DB, CurrentScope, Sql, State>;
+
+type TypedCallArguments<Fragment extends string> =
+  Fragment extends `${string}(${infer AfterOpen}`
+    ? ExtractParenGroup<AfterOpen> extends { inner: infer Inner extends string }
+      ? SplitColumnList<Inner>
+      : []
+    : [];
+
+type ScanTypedParts<
+  Parts extends readonly string[],
+  Value,
+  State extends AnyParamState,
+> = Parts extends readonly [
+  infer Head extends string,
+  ...infer Tail extends string[],
+]
+  ? ScanTypedFragment<Head, Value, State> extends infer Next extends AnyParamState
+    ? ScanTypedParts<Tail, Value, Next>
+    : never
+  : State;
+
+export type ScanTypedFragment<
+  Fragment extends string,
+  Value,
+  State extends AnyParamState = EmptyParamState,
+> = IsPlaceholder<Trim<Fragment>> extends true
+  ? AddParam<Trim<Fragment>, Value, State>
+  : ScanTypedParts<TypedCallArguments<Trim<Fragment>>, Value, State>;
 
 type ScanPredicates<
   DB,

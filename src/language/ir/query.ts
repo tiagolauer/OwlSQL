@@ -5,6 +5,7 @@ import type {
   ProjectionIR,
 } from './projection.js';
 import type { SourceIR } from './source.js';
+import type { OutputIR, WriteTargetIR } from './write.js';
 
 export type { ProjectionIR } from './projection.js';
 
@@ -57,4 +58,48 @@ export interface SelectQueryIR<
   ctes: Ctes;
   clauses: Clauses;
   setOperations: SetOperations;
+}
+
+export interface InsertValuesIR<
+  Rows extends readonly (readonly string[])[] = readonly (readonly string[])[],
+  Tail extends string = string,
+> {
+  mode: 'values';
+  rows: Rows;
+  tail: Tail;
+}
+
+export interface InsertSelectIR<
+  Query extends SelectQueryIR = SelectQueryIR,
+> {
+  mode: 'select';
+  query: Query;
+}
+
+export interface InsertDefaultValuesIR {
+  mode: 'default-values';
+}
+
+export type InsertSourceIR =
+  | InsertValuesIR
+  | InsertSelectIR
+  | InsertDefaultValuesIR;
+
+export interface InsertQueryIR<
+  Target extends WriteTargetIR = WriteTargetIR,
+  Columns extends readonly string[] = readonly string[],
+  Source extends InsertSourceIR = InsertSourceIR,
+  Output extends OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  > = OutputIR<
+    'none' | 'returning' | 'output',
+    readonly ProjectionIR[]
+  >,
+> {
+  kind: 'insert';
+  target: Target;
+  columns: Columns;
+  source: Source;
+  output: Output;
 }

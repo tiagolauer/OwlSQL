@@ -483,3 +483,30 @@ export type ApplyParenDelta<Depth extends unknown[], Token extends string> = Pop
   [...Depth, ...OpenCount<Token>],
   CloseCount<Token>
 >;
+
+export type SplitAtTopLevelKeyword<
+  S extends string,
+  Keyword extends string,
+  Depth extends unknown[] = [],
+  Accumulated extends string = '',
+> = S extends `${infer Head} ${infer Tail}`
+  ? Depth extends []
+    ? IsKeyword<Head, Keyword> extends true
+      ? { before: Trim<Accumulated>; after: Trim<Tail> }
+      : SplitAtTopLevelKeyword<
+          Tail,
+          Keyword,
+          ApplyParenDelta<Depth, Head>,
+          Accumulated extends '' ? Head : `${Accumulated} ${Head}`
+        >
+    : SplitAtTopLevelKeyword<
+        Tail,
+        Keyword,
+        ApplyParenDelta<Depth, Head>,
+        Accumulated extends '' ? Head : `${Accumulated} ${Head}`
+      >
+  : Depth extends []
+    ? IsKeyword<S, Keyword> extends true
+      ? { before: Trim<Accumulated>; after: '' }
+      : never
+    : never;
