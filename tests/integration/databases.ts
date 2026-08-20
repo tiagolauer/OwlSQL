@@ -1,4 +1,4 @@
-import type { ExecutorResult, QueryMeta } from '../../src/index.js';
+import type { ExecutorResult, QueryMeta } from '../../packages/core/src/index.js';
 
 export const PG_URL_ENV = 'OWLSQL_PG_URL';
 export const MYSQL_URL_ENV = 'OWLSQL_MYSQL_URL';

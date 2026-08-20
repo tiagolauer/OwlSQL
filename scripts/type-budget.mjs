@@ -54,7 +54,7 @@ const SHAPE_REPEATS = 4;
 const MAX_INSTANTIATIONS = 250_000;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PERF_DIR = join(ROOT, 'tests', 'perf');
+const PERF_DIR = join(ROOT, 'tests', 'performance');
 const GENERATED_DIR = join(PERF_DIR, 'generated');
 const BASELINE_FILE = join(PERF_DIR, 'baseline.json');
 const NEXT_BASELINE_FILE = join(PERF_DIR, 'select-next-baseline.json');
@@ -110,7 +110,7 @@ const SHAPES = [
 
 function renderQueries() {
   const lines = [
-    "import type { Query, StrictQuery, Params } from '../../../src/index.js';",
+    "import type { Query, StrictQuery, Params } from '../../../packages/core/src/index.js';",
     "import type { DB } from './schema.js';",
     '',
     'type RowKeys<Result extends readonly unknown[]> = keyof Result[number];',

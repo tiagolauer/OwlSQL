@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { createPool, type Pool as MysqlPool } from 'mysql2/promise';
 import { ConnectionPool, type config as MssqlConfig } from 'mssql';
-import { generateSchema } from '../../src/tooling/schema-generator/generate.js';
-import { mssqlUrlToConfig } from '../../src/tooling/introspection/mssql.js';
+import { generateSchema } from '../../packages/core/src/tooling/schema-generator/generate.js';
+import { mssqlUrlToConfig } from '../../packages/core/src/tooling/introspection/mssql.js';
 import {
   MSSQL_URL_ENV,
   MYSQL_URL_ENV,

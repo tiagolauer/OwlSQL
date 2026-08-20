@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const PACKAGE_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
-const REPO_ROOT = join(PACKAGE_ROOT, '..');
+const REPO_ROOT = join(PACKAGE_ROOT, '..', '..');
 
 const PLUGIN_DIR = join(PACKAGE_ROOT, 'src');
 
@@ -69,7 +69,7 @@ export function buildLanguageService(
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     strict: true,
     baseUrl: REPO_ROOT,
-    paths: { '@owlsql/core': ['src/index.ts'] },
+    paths: { '@owlsql/core': ['packages/core/src/index.ts'] },
   };
 
   const host: ts.LanguageServiceHost = {
@@ -107,7 +107,7 @@ export function buildProgram(source: string, fixturePrefix: string): BuiltProgra
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     strict: true,
     baseUrl: REPO_ROOT,
-    paths: { '@owlsql/core': ['src/index.ts'] },
+    paths: { '@owlsql/core': ['packages/core/src/index.ts'] },
   });
 
   const sourceFile = program.getSourceFile(filePath);

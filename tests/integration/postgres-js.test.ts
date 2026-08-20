@@ -3,8 +3,8 @@ import postgres from 'postgres';
 import {
   createPostgresJsExecutor,
   createPostgresJsTransaction,
-} from '../../src/adapters/postgres.js';
-import { isOk } from '../../src/index.js';
+} from '../../packages/core/src/adapters/postgres.js';
+import { isOk } from '../../packages/core/src/index.js';
 import { PG_URL_ENV, metaOf, pgUrl, requireUrl, rowsOf } from './databases.js';
 
 interface DB {

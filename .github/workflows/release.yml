@@ -40,3 +40,4 @@ jobs:
       - run: npm ci
 
       - run: npm publish --loglevel verbose
+        working-directory: packages/core

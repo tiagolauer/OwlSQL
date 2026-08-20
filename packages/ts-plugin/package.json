@@ -42,9 +42,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tiagolauer/OwlSQL.git",
-    "directory": "ts-plugin"
+    "directory": "packages/ts-plugin"
   },
-  "homepage": "https://github.com/tiagolauer/OwlSQL/tree/master/ts-plugin#readme",
+  "homepage": "https://github.com/tiagolauer/OwlSQL/tree/master/packages/ts-plugin#readme",
   "bugs": {
     "url": "https://github.com/tiagolauer/OwlSQL/issues"
   },

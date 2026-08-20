@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
-import { createPgExecutor, createPgTransaction } from '../../src/adapters/pg.js';
-import { isOk } from '../../src/index.js';
+import { createPgExecutor, createPgTransaction } from '../../packages/core/src/adapters/pg.js';
+import { isOk } from '../../packages/core/src/index.js';
 import { PG_URL_ENV, metaOf, pgUrl, requireUrl, rowsOf } from './databases.js';
 
 interface DB {

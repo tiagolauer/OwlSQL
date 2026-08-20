@@ -10,7 +10,7 @@ import type {
 import type {
   DiagnosticLocation as PluginDiagnosticLocation,
   QueryDiagnosticCode as PluginQueryDiagnosticCode,
-} from '../../ts-plugin/src/analysis-contract.cjs';
+} from '../../../ts-plugin/src/analysis-contract.cjs';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends

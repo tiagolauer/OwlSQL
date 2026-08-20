@@ -134,16 +134,17 @@ check the source link and open an issue.
 - **Bundle**: zero runtime dependencies (`package.json` has no
   `dependencies` field), and the runtime surface is `createTypedDb`,
   `defineSchema`, and the `Result` helpers — about 175 lines of source
-  across [`src/index.ts`](src/index.ts) and [`src/result.ts`](src/result.ts)
+  across [`packages/core/src/index.ts`](packages/core/src/index.ts) and
+  [`packages/core/src/runtime/result.ts`](packages/core/src/runtime/result.ts)
   combined, most of which is type declarations erased at compile time. The
-  parser itself (a few thousand lines across `src/parse.ts`/`src/from.ts`/
-  etc.) is 100% types — it ships zero bytes to any runtime.
+  compiler under `packages/core/src/language` and `packages/core/src/compiler`
+  is 100% types — it ships zero bytes to any runtime.
 - **DX trade-off, stated plainly**: this is the smallest surface area of
   the five because it does the least. No migrations, no relation loading, no
   query builder ergonomics (autocomplete for chained methods) — you write
   SQL, you get a type back. If you want an ORM's feature set, this isn't
-  one; see the [Supported SQL subset](README.md#supported-sql-subset) and
-  [Limitations](README.md#limitations) for exactly where the parser's
+  one; see the [Supported SQL subset](packages/core/README.md#supported-sql-subset) and
+  [Limitations](packages/core/README.md#limitations) for exactly where the parser's
   coverage ends.
 
 ## Methodology notes

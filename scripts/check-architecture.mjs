@@ -3,54 +3,55 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_EXTENSIONS = ['.ts', '.cts', '.mts'];
-const SOURCE_DIRECTORIES = ['src', 'ts-plugin/src'];
+const SOURCE_DIRECTORIES = ['packages/core/src', 'packages/ts-plugin/src'];
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const RULES = [
   {
-    from: 'src/language/',
+    from: 'packages/core/src/language/',
     forbidden: [
-      'src/compiler/',
-      'src/runtime/',
-      'src/public/',
-      'src/parse.ts',
-      'src/params.ts',
+      'packages/core/src/compiler/',
+      'packages/core/src/runtime/',
+      'packages/core/src/public/',
+      'packages/core/src/parse.ts',
+      'packages/core/src/params.ts',
     ],
     name: 'language isolation',
   },
   {
-    from: 'src/runtime/',
+    from: 'packages/core/src/runtime/',
     forbidden: [
-      'src/compiler/',
-      'src/language/',
-      'src/parse.ts',
-      'src/params.ts',
-      'src/from.ts',
-      'src/where.ts',
-      'src/cte.ts',
-      'src/case.ts',
-      'src/functions.ts',
+      'packages/core/src/compiler/',
+      'packages/core/src/language/',
+      'packages/core/src/parse.ts',
+      'packages/core/src/params.ts',
+      'packages/core/src/from.ts',
+      'packages/core/src/where.ts',
+      'packages/core/src/cte.ts',
+      'packages/core/src/case.ts',
+      'packages/core/src/functions.ts',
     ],
     name: 'runtime isolation',
   },
   {
-    from: 'src/compiler/',
-    forbidden: ['src/runtime/'],
+    from: 'packages/core/src/compiler/',
+    forbidden: ['packages/core/src/runtime/'],
     name: 'compiler isolation',
   },
   {
-    from: 'src/tooling/',
+    from: 'packages/core/src/tooling/',
     forbidden: [
-      'src/compiler/next/',
-      'src/language/',
-      'src/runtime/',
-      'src/public/',
+      'packages/core/src/compiler/next/',
+      'packages/core/src/language/',
+      'packages/core/src/runtime/',
+      'packages/core/src/public/',
     ],
     name: 'tooling isolation',
   },
   {
-    from: 'ts-plugin/src/',
-    forbidden: ['src/compiler/'],
-    allowTargets: ['src/compiler/analysis.ts'],
+    from: 'packages/ts-plugin/src/',
+    forbidden: ['packages/core/src/compiler/'],
+    allowTargets: ['packages/core/src/compiler/analysis.ts'],
     name: 'editor plugin contract',
   },
 ];
@@ -138,7 +139,7 @@ export function checkArchitecture(root) {
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = checkArchitecture(process.cwd());
+  const violations = checkArchitecture(REPO_ROOT);
   for (const violation of violations) {
     process.stderr.write(`${violation}\n`);
   }

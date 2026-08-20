@@ -1,6 +1,6 @@
 import type {
   NextQuery,
-} from '../../src/compiler/next/index.js';
+} from '../../packages/core/src/compiler/next/index.js';
 import type { DB } from './generated/schema.js';
 
 export declare const simple: NextQuery<

@@ -14,7 +14,7 @@ npm install --save-dev @owlsql/ts-plugin
 > ```bash
 > git clone https://github.com/tiagolauer/OwlSQL
 > cd OwlSQL && npm install && npm run build --workspace @owlsql/ts-plugin
-> npm install --save-dev /path/to/OwlSQL/ts-plugin   # from your project
+> npm install --save-dev /path/to/OwlSQL/packages/ts-plugin   # from your project
 > ```
 
 ```json
@@ -37,7 +37,7 @@ The `peerDependencies` range enforces this, and the package stays on `0.x` for a
 
 ## What it does
 
-Full documentation, including the exact scope of what is and isn't completed or diagnosed, lives in the [Editor autocomplete section of the main README](../README.md#editor-autocomplete). [`examples/ts-plugin-demo`](../examples/ts-plugin-demo) is a ready-to-open VSCode project for trying it.
+Full documentation, including the exact scope of what is and isn't completed or diagnosed, lives in the [Editor autocomplete section of the main README](../core/README.md#editor-autocomplete). [`examples/ts-plugin-demo`](../../examples/ts-plugin-demo) is a ready-to-open VSCode project for trying it.
 
 ## License
 

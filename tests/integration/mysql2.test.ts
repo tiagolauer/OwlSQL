@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPool, type Pool } from 'mysql2/promise';
-import { createMysql2Executor, createMysql2Transaction } from '../../src/adapters/mysql2.js';
-import { isOk } from '../../src/index.js';
+import { createMysql2Executor, createMysql2Transaction } from '../../packages/core/src/adapters/mysql2.js';
+import { isOk } from '../../packages/core/src/index.js';
 import { MYSQL_URL_ENV, metaOf, mysqlUrl, requireUrl, rowsOf } from './databases.js';
 
 interface DB {

@@ -45,7 +45,7 @@ Notable changes to this project, following [Keep a Changelog](https://keepachang
 
 ### Changed
 
-- **Breaking:** the editor plugin moved out of this package into its own, [`@owlsql/ts-plugin`](ts-plugin/README.md). The `@owlsql/core/ts-plugin` subpath is gone. To migrate, install `@owlsql/ts-plugin` as a dev dependency and change the plugin name in your `tsconfig.json`:
+- **Breaking:** the editor plugin moved out of this package into its own, [`@owlsql/ts-plugin`](packages/ts-plugin/README.md). The `@owlsql/core/ts-plugin` subpath is gone. To migrate, install `@owlsql/ts-plugin` as a dev dependency and change the plugin name in your `tsconfig.json`:
 
   ```json
   {

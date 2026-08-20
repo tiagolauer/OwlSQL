@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = join(REPO_ROOT, 'packages', 'core');
 const CONSUMER_PACKAGES = [
   '@types/mssql',
   '@types/pg',
@@ -152,7 +153,7 @@ function main() {
     execFileSync(
       process.execPath,
       [
-        join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'),
+        join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc'),
         '--pretty',
         'false',
         '-p',

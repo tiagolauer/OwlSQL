@@ -26,7 +26,7 @@ Keep a PR to one fix or one feature. A PR that touches three unrelated things is
 
 If the change alters what a query infers to, say so in the description and name the bump it implies under [VERSIONING.md](VERSIONING.md). A row shape that gains, loses, or retypes a key is a breaking change even when no runtime signature moved.
 
-Every behavior change needs a test that would fail without the fix. If you're touching `src/parse.ts`, `src/where.ts`, or another type-level file, that usually means a `.test-d.ts` case with `@ts-expect-error` or an `Equal<>` assertion; runtime behavior (adapters, the CLI, the editor plugin) gets a `.test.ts` case instead. A PR without a regression test is a PR someone else will eventually re-break by accident.
+Every behavior change needs a test that would fail without the fix. If you're touching `packages/core/src/language`, `packages/core/src/compiler`, or another type-level file, that usually means a `.test-d.ts` case with `@ts-expect-error` or an `Equal<>` assertion; runtime behavior (adapters, the CLI, the editor plugin) gets a `.test.ts` case instead. A PR without a regression test is a PR someone else will eventually re-break by accident.
 
 ### Architecture changes
 
@@ -41,7 +41,7 @@ ADRs in `docs/adr/`. A change that supersedes one of those decisions needs a new
 
 You'll need Node 20 or later. The `node:sqlite` adapter and the CLI's SQLite introspection need Node 22.5+, since `node:sqlite` is newer than the rest of the runtime surface this library targets.
 
-This repository holds two packages, as an npm workspace: `@owlsql/core` at the root, and the editor plugin in [`ts-plugin/`](ts-plugin/README.md). They are apart because they don't reach the same TypeScript versions — the library type-checks clean on TypeScript 7, while the plugin needs the classic compiler API, which TypeScript 7 does not ship at all. One package can only declare one peer range, and either choice would have been a lie about half the code.
+This repository holds two npm workspaces: [`@owlsql/core`](packages/core) and the editor plugin in [`packages/ts-plugin/`](packages/ts-plugin/README.md). They are apart because they don't reach the same TypeScript versions — the library type-checks clean on TypeScript 7, while the plugin needs the classic compiler API, which TypeScript 7 does not ship at all. One package can only declare one peer range, and either choice would have been a lie about half the code.
 
 ```bash
 npm install
@@ -70,7 +70,7 @@ Open an issue before writing the implementation if the feature touches the publi
 ### Design preferences
 
 - No runtime SQL parsing, ever. If a change needs to inspect the query string at runtime to work, it probably belongs in the ts-plugin (which already does its own lightweight runtime scanning for editor support), not in the core library.
-- Adapters (`src/adapters/*.ts`) import the driver's types only, never the driver package itself as a value. This keeps `@owlsql/core/pg` usable without `pg` actually being installed, for anyone who only imports a different adapter.
+- Adapters (`packages/core/src/adapters/*.ts`) import the driver's types only, never the driver package itself as a value. This keeps `@owlsql/core/pg` usable without `pg` actually being installed, for anyone who only imports a different adapter.
 - If you extend the SQL subset the parser accepts, update the "Supported SQL subset" and "Limitations" sections in the README in the same PR. A parser change nobody can discover from the docs is half a feature.
 - Prefer a documented scope boundary over a half-correct implementation. Several existing features (LATERAL correlation, WHERE-clause diagnostics with parens) deliberately do less than a full SQL engine would, and say so in the README, rather than guessing.
 
@@ -78,8 +78,8 @@ Open an issue before writing the implementation if the feature touches the publi
 
 Three layers, and they test different things:
 
-- **Type tests** (`tests/*.test-d.ts`) are pure type assertions. If they compile, the inference is correct; there's no runtime assertion to run. They cover column/alias projection, `@ts-expect-error` cases for queries that should fail to type, permissive-inference locks, and deep-recursion stress.
-- **Runtime tests** (`tests/*.test.ts`) run under vitest and cover the executor/`Result` contract, adapter parameter handling, and the CLI. Drivers are faked here, so these prove the adapter's own logic, not what a real server sends back. The plugin's own tests live beside it in `ts-plugin/tests/`.
+- **Type tests** (`packages/core/tests/*.test-d.ts`) are pure type assertions. If they compile, the inference is correct; there's no runtime assertion to run. They cover column/alias projection, `@ts-expect-error` cases for queries that should fail to type, permissive-inference locks, and deep-recursion stress.
+- **Runtime tests** (`packages/core/tests/*.test.ts`) run under vitest and cover the executor/`Result` contract, adapter parameter handling, and the CLI. Drivers are faked here, so these prove the adapter's own logic, not what a real server sends back. The plugin's own tests live in `packages/ts-plugin/tests/`.
 - **Integration tests** (`tests/integration/*.test.ts`) run the adapters and the `generate` CLI against real PostgreSQL, MySQL, and SQL Server instances. They cover what a fake driver can't: how each driver actually decodes a column (`bigint`, `numeric`, `tinyint(1)`, `bit`), the metadata a real result carries, and whether a rolled-back transaction really left no rows behind.
 
 CI runs the type tests against a matrix of TypeScript versions, since a template-literal-type change that works on one TypeScript release can silently stop working (or start working differently) on another.
