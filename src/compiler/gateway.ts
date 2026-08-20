@@ -11,6 +11,7 @@ import type {
 } from './legacy.js';
 import type { CompileInsert, InferInsertParams } from './next/compile-insert.js';
 import type { CompileDelete, InferDeleteParams } from './next/compile-delete.js';
+import type { CompileMerge, InferMergeParams } from './next/compile-merge.js';
 import type { CompileSelect } from './next/compile-select.js';
 import type { CompileUpdate, InferUpdateParams } from './next/compile-update.js';
 import type { CompileWith, InferWithParams } from './next/compile-with.js';
@@ -30,7 +31,9 @@ type NextCompilation<
         ? CompileInsert<DB, Q, null, ValidatePredicates>
         : GatewayKind<Q> extends 'update'
           ? CompileUpdate<DB, Q, null, ValidatePredicates>
-          : CompileDelete<DB, Q, null, ValidatePredicates>;
+          : GatewayKind<Q> extends 'delete'
+            ? CompileDelete<DB, Q, null, ValidatePredicates>
+            : CompileMerge<DB, Q, null, ValidatePredicates>;
 
 type NextQuery<DB, Q extends string> =
   ApplyLoosePolicy<NextCompilation<DB, Q, false>>;
@@ -67,7 +70,9 @@ type UsesNext<Q extends string> = GatewayKind<Q> extends 'select'
         ? true
         : GatewayKind<Q> extends 'delete'
           ? true
-          : false;
+          : GatewayKind<Q> extends 'merge'
+            ? true
+            : false;
 
 export type InferViaGateway<DB extends SchemaLike, Q extends string> =
   UsesNext<Q> extends true
@@ -102,4 +107,6 @@ export type InferParamsViaGateway<DB extends SchemaLike, Q extends string> =
           ? InferUpdateParams<DB, Q>
           : GatewayKind<Q> extends 'delete'
             ? InferDeleteParams<DB, Q>
-            : LegacyInferParams<DB, Q>;
+            : GatewayKind<Q> extends 'merge'
+              ? InferMergeParams<DB, Q>
+              : LegacyInferParams<DB, Q>;

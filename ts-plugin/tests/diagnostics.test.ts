@@ -54,9 +54,15 @@ describe('ts-plugin diagnostics: getQueryDiagnostics', () => {
 
   // Regression for #250: `select id from USERS` compiles to { id: number }[],
   // so a warning on it is a false positive the user cannot act on.
-  it('accepts a table and a column written in a different case', () => {
+  it('accepts a table written in a different case', () => {
     expect(diagnosticsFor('select id from USERS')).toEqual([]);
+  });
+
+  it('accepts keywords and a column written in a different case', () => {
     expect(diagnosticsFor('SELECT ID FROM users')).toEqual([]);
+  });
+
+  it('accepts a predicate column written in a different case', () => {
     expect(diagnosticsFor('select id from users where NAME = $1')).toEqual([]);
   });
 
