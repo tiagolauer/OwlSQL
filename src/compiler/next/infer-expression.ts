@@ -14,6 +14,8 @@ import type {
   IsFunctionCall,
 } from '../semantics/functions.js';
 import type { Diagnostic } from '../contracts/diagnostic.js';
+import type { CompileFatal, CompileOk } from '../contracts/compilation.js';
+import type { CompileSelect } from './compile-select.js';
 import type { ResolveColumn } from './resolve-column.js';
 
 export type ExpressionResult<
@@ -260,12 +262,65 @@ type InferFunction<
   ? ExpressionResult<FunctionReturnType<Expression>, Diagnostics>
   : never;
 
+type ScalarSubqueryInner<Expression extends string> =
+  Trim<Expression> extends `(${infer AfterOpen}`
+    ? ExtractParenGroup<AfterOpen> extends {
+        inner: infer Inner extends string;
+        rest: infer Rest extends string;
+      }
+      ? Trim<Rest> extends ''
+        ? IsKeyword<FirstWord<Trim<Inner>>, 'select'> extends true
+          ? Trim<Inner>
+          : never
+        : never
+      : never
+    : never;
+
+type IsUnion<Value, Whole = Value> =
+  Value extends Whole ? ([Whole] extends [Value] ? false : true) : never;
+
+type IsCountQuery<Query extends string> = Lowercase<
+  FirstWord<DropFirstWord<Query>>
+> extends `count(${string}`
+  ? true
+  : false;
+
+type InvalidScalarSubquery = Diagnostic<
+  'INVALID_SCALAR_SUBQUERY',
+  'scalar subquery must select exactly one column',
+  'error',
+  'select',
+  'subquery'
+>;
+
+type InferScalarSubquery<
+  DB,
+  CurrentScope,
+  Query extends string,
+> = CompileSelect<DB, Query, CurrentScope> extends infer Compiled
+  ? Compiled extends CompileOk<infer Rows extends readonly unknown[], infer Diagnostics>
+    ? Rows[number] extends infer Row
+      ? IsUnion<keyof Row> extends true
+        ? ExpressionResult<unknown, [...Diagnostics, InvalidScalarSubquery]>
+        : ExpressionResult<
+            IsCountQuery<Query> extends true
+              ? Row[keyof Row]
+              : Row[keyof Row] | null,
+            Diagnostics
+          >
+      : ExpressionResult<unknown, Diagnostics>
+    : Compiled extends CompileFatal<unknown[], infer Diagnostics>
+      ? ExpressionResult<unknown, Diagnostics>
+      : never
+  : never;
+
 export type InferExpression<
   DB,
   CurrentScope,
   Expression extends string,
 > = Trim<Expression> extends infer Value extends string
-  ? IsCaseToken<FirstWord<Value>> extends true
+  ? [ScalarSubqueryInner<Value>] extends [never]
+    ? IsCaseToken<FirstWord<Value>> extends true
     ? InferCase<DB, CurrentScope, Value>
     : Value extends `${infer Operand}::${string}`
       ? InferReference<DB, CurrentScope, Trim<Operand>> extends ExpressionResult<
@@ -281,4 +336,5 @@ export type InferExpression<
             ? ExpressionResult<unknown>
             : InferReference<DB, CurrentScope, Value>
           : ExpressionResult<LiteralType<Value>>
+    : InferScalarSubquery<DB, CurrentScope, ScalarSubqueryInner<Value>>
   : never;

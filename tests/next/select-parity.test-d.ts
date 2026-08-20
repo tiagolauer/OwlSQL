@@ -249,3 +249,48 @@ type _setRow = Expect<Equal<
   NextRow<DB, 'select 1 as value union select 2'>,
   { value: number }
 >>;
+
+type _scalarSubquery = Expect<Equal<
+  LegacyInferResult<DB, 'select (select count(*) from posts where posts.user_id = users.id) as post_count from users'>,
+  NextQuery<DB, 'select (select count(*) from posts where posts.user_id = users.id) as post_count from users'>
+>>;
+
+type _scalarNullable = Expect<Equal<
+  LegacyInferResult<DB, 'select id, (select user_id from posts) as author from users'>,
+  NextQuery<DB, 'select id, (select user_id from posts) as author from users'>
+>>;
+
+type _lateralCorrelated = Expect<Equal<
+  LegacyInferResult<DB, 'select u.name, p.top_id from users u join lateral (select max(id) as top_id from posts where posts.user_id = u.id) p on true'>,
+  NextQuery<DB, 'select u.name, p.top_id from users u join lateral (select max(id) as top_id from posts where posts.user_id = u.id) p on true'>
+>>;
+
+type _derivedCorrelated = Expect<Equal<
+  LegacyInferResult<DB, 'select u.name, p.top_id from users u join (select max(id) as top_id from posts where posts.user_id = u.id) p on true'>,
+  NextQuery<DB, 'select u.name, p.top_id from users u join (select max(id) as top_id from posts where posts.user_id = u.id) p on true'>
+>>;
+
+type _scalarInnerTypo = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select (select count(*) from posts where posts.nope = users.id) as value from users'>,
+  NextStrictQuery<DB, 'select (select count(*) from posts where posts.nope = users.id) as value from users'>
+>>;
+
+type _derivedInnerTypo = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select u.name, p.top_id from users u join (select max(id) as top_id from posts where posts.nope = u.id) p on true'>,
+  NextStrictQuery<DB, 'select u.name, p.top_id from users u join (select max(id) as top_id from posts where posts.nope = u.id) p on true'>
+>>;
+
+type _noOuterScope = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select max(id) as top_id from posts where posts.user_id = u.id'>,
+  NextStrictQuery<DB, 'select max(id) as top_id from posts where posts.user_id = u.id'>
+>>;
+
+type _uncorrelatedScalar = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select (select count(*) from posts) as total from users'>,
+  NextStrictQuery<DB, 'select (select count(*) from posts) as total from users'>
+>>;
+
+type _invalidScalar = Expect<Equal<
+  LegacyInferResultStrict<DB, 'select (select id, user_id from posts) as invalid from users'>,
+  NextStrictQuery<DB, 'select (select id, user_id from posts) as invalid from users'>
+>>;

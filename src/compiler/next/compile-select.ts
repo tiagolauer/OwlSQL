@@ -17,7 +17,7 @@ import type {
 import type { Diagnostic } from '../contracts/diagnostic.js';
 import type { InferProjections } from './infer-projection.js';
 import type { InferExpression } from './infer-expression.js';
-import type { RootScope } from './scope.js';
+import type { ChildScope, Scope } from './scope.js';
 
 type CompiledSources<
   Sources extends readonly SourceIR[],
@@ -141,29 +141,32 @@ type AnalyzePredicates<
 type CompileSetOperations<
   DB,
   Operations extends readonly SetOperationIR[],
+  ParentScope,
   Diagnostics extends readonly Diagnostic[] = [],
 > = Operations extends readonly [
   infer Head extends SetOperationIR,
   ...infer Tail extends SetOperationIR[],
 ]
   ? Head['query'] extends infer Query extends SelectQueryIR
-    ? CompileIR<DB, Query> extends infer Compiled
+    ? CompileIR<DB, Query, ParentScope> extends infer Compiled
       ? Compiled extends CompileOk<readonly unknown[], infer BranchDiagnostics>
         ? CompileSetOperations<
             DB,
             Tail,
+            ParentScope,
             [...Diagnostics, ...BranchDiagnostics]
           >
         : Compiled extends CompileFatal<unknown[], infer BranchDiagnostics>
           ? [...Diagnostics, ...BranchDiagnostics]
           : never
       : never
-    : CompileSetOperations<DB, Tail, Diagnostics>
+    : CompileSetOperations<DB, Tail, ParentScope, Diagnostics>
   : Diagnostics;
 
 type CompileSourceList<
   DB,
   Sources extends readonly SourceIR[],
+  ParentScope,
   Result extends readonly SourceIR[] = [],
   Diagnostics extends readonly Diagnostic[] = [],
 > = Sources extends readonly [
@@ -172,15 +175,16 @@ type CompileSourceList<
 ]
   ? Head extends DerivedSourceIR<
       infer Alias,
-      infer Query extends string,
+      infer Query extends SelectQueryIR,
       infer Nullable,
       infer Join extends JoinKind
     >
-    ? CompileSelect<DB, Query> extends infer Nested
+    ? CompileIR<DB, Query, ChildScope<Result, ParentScope>> extends infer Nested
       ? Nested extends CompileOk<infer Rows extends readonly unknown[], infer NestedDiagnostics>
         ? CompileSourceList<
             DB,
             Tail,
+            ParentScope,
             [
               ...Result,
               DerivedSourceIR<Alias, Rows[number], Nullable, Join>,
@@ -198,21 +202,22 @@ type CompileSourceList<
         JoinKind,
         readonly string[]
       >
-      ? CompileSourceList<DB, Tail, [...Result, Head], Diagnostics>
+      ? CompileSourceList<DB, Tail, ParentScope, [...Result, Head], Diagnostics>
       : never
   : CompiledSources<Result, Diagnostics>;
 
 type CompileIR<
   DB,
   IR extends SelectQueryIR,
-> = CompileSourceList<DB, IR['sources']> extends infer Compiled
+  ParentScope = null,
+> = CompileSourceList<DB, IR['sources'], ParentScope> extends infer Compiled
     ? Compiled extends CompiledSources<
         infer ResolvedSources,
         infer SourceDiagnostics
       >
       ? InferProjections<
           DB,
-          RootScope<ResolvedSources>,
+          Scope<ResolvedSources, ParentScope>,
           IR['projections'],
           {},
           SourceDiagnostics
@@ -222,10 +227,10 @@ type CompileIR<
         }
         ? AnalyzePredicates<
             DB,
-            RootScope<ResolvedSources>,
+            Scope<ResolvedSources, ParentScope>,
             IR['predicates']
           > extends infer PredicateDiagnostics extends readonly Diagnostic[]
-          ? CompileSetOperations<DB, IR['setOperations']> extends infer SetDiagnostics extends readonly Diagnostic[]
+          ? CompileSetOperations<DB, IR['setOperations'], ParentScope> extends infer SetDiagnostics extends readonly Diagnostic[]
             ? CompileOk<
                 Row[],
                 [
@@ -243,10 +248,10 @@ type CompileIR<
     : never
   ;
 
-export type CompileSelect<DB, Sql extends string> =
+export type CompileSelect<DB, Sql extends string, ParentScope = null> =
   ParseSelectIR<Sql> extends infer Parsed
     ? Parsed extends { kind: 'ok'; value: infer IR extends SelectQueryIR }
-      ? CompileIR<DB, IR>
+      ? CompileIR<DB, IR, ParentScope>
       : Parsed extends CompileFatal<SelectQueryIR, infer Diagnostics>
         ? CompileFatal<unknown[], Diagnostics>
         : never

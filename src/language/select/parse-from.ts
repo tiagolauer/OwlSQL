@@ -11,12 +11,14 @@ import type {
   Unquote,
 } from '../../string.js';
 import type { PredicateIR } from '../ir/predicate.js';
+import type { SelectQueryIR } from '../ir/query.js';
 import type {
   DerivedSourceIR,
   JoinKind,
   SourceIR,
   TableSourceIR,
 } from '../ir/source.js';
+import type { ParseSelectIR } from './parse-select.js';
 
 type ClauseBoundary =
   | 'where'
@@ -171,7 +173,12 @@ type DerivedSource<
       rest: infer Rest extends string;
     }
     ? DerivedAlias<Rest> extends infer Alias extends string
-      ? DerivedSourceIR<Unquote<Alias>, Trim<Query>, IsNullable<Kind>, Kind>
+      ? ParseSelectIR<Trim<Query>> extends {
+          kind: 'ok';
+          value: infer Nested extends SelectQueryIR;
+        }
+        ? DerivedSourceIR<Unquote<Alias>, Nested, IsNullable<Kind>, Kind>
+        : never
       : never
     : never
   : never;
