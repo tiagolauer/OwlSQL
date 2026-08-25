@@ -111,11 +111,11 @@
   "devDependencies": {
     "@types/mssql": "^12.3.0",
     "@types/node": "^26.1.1",
-    "@types/pg": "^8.20.0",
+    "@types/pg": "^8.23.1",
     "kysely": "^0.29.4",
     "mssql": "^12.7.0",
     "mysql2": "^3.23.0",
-    "pg": "^8.22.0",
+    "pg": "^8.23.0",
     "postgres": "^3.4.9",
     "typescript": "^5.6.0",
     "vitest": "^4.1.10"
